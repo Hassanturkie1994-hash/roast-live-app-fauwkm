@@ -1,79 +1,80 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  TextInput,
   Image,
+  TextInput,
+  RefreshControl,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { router } from 'expo-router';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import LiveBadge from '@/components/LiveBadge';
+import { supabase } from '@/app/integrations/supabase/client';
+import { Tables } from '@/app/integrations/supabase/types';
 
-interface Category {
-  id: string;
-  name: string;
-  thumbnail: string;
-  viewerCount: number;
-}
-
-const categories: Category[] = [
-  {
-    id: '1',
-    name: 'Gaming',
-    thumbnail: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=400',
-    viewerCount: 45000,
-  },
-  {
-    id: '2',
-    name: 'Cooking',
-    thumbnail: 'https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=400',
-    viewerCount: 28000,
-  },
-  {
-    id: '3',
-    name: 'Music',
-    thumbnail: 'https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=400',
-    viewerCount: 35000,
-  },
-  {
-    id: '4',
-    name: 'Art',
-    thumbnail: 'https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?w=400',
-    viewerCount: 18000,
-  },
-  {
-    id: '5',
-    name: 'Fitness',
-    thumbnail: 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=400',
-    viewerCount: 22000,
-  },
-  {
-    id: '6',
-    name: 'Tech',
-    thumbnail: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=400',
-    viewerCount: 31000,
-  },
-];
+type Stream = Tables<'streams'> & {
+  users: Tables<'users'>;
+};
 
 export default function ExploreScreen() {
-  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
+  const [streams, setStreams] = useState<Stream[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const handleCategoryPress = (categoryId: string) => {
-    console.log('Category pressed:', categoryId);
+  useEffect(() => {
+    fetchStreams();
+  }, []);
+
+  const fetchStreams = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('streams')
+        .select('*, users(*)')
+        .eq('status', 'live')
+        .order('viewer_count', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching streams:', error);
+        return;
+      }
+
+      setStreams(data as Stream[]);
+    } catch (error) {
+      console.error('Error in fetchStreams:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchStreams();
+  };
+
+  const handleStreamPress = (stream: Stream) => {
+    router.push({
+      pathname: '/live-player',
+      params: { streamId: stream.id },
+    });
+  };
+
+  const filteredStreams = streams.filter(
+    (stream) =>
+      stream.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      stream.users.display_name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <View style={commonStyles.container}>
       <View style={styles.header}>
-        <View style={styles.logoContainer}>
-          <Text style={styles.logoText}>ROAST LIVE</Text>
-        </View>
+        <Text style={styles.headerTitle}>Explore</Text>
         <View style={styles.searchContainer}>
           <IconSymbol
             ios_icon_name="magnifyingglass"
@@ -83,119 +84,115 @@ export default function ExploreScreen() {
           />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search streams..."
-            placeholderTextColor={colors.textSecondary}
+            placeholder="Search streams or creators..."
+            placeholderTextColor={colors.placeholder}
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <IconSymbol
+                ios_icon_name="xmark.circle.fill"
+                android_material_icon_name="cancel"
+                size={20}
+                color={colors.textSecondary}
+              />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.text} />}
       >
-        <Text style={styles.sectionTitle}>Browse Categories</Text>
+        {loading ? (
+          <View style={styles.centerContent}>
+            <Text style={styles.loadingText}>Loading streams...</Text>
+          </View>
+        ) : filteredStreams.length === 0 ? (
+          <View style={styles.emptyState}>
+            <IconSymbol
+              ios_icon_name="video.slash"
+              android_material_icon_name="videocam_off"
+              size={64}
+              color={colors.textSecondary}
+            />
+            <Text style={styles.emptyText}>
+              {searchQuery ? 'No streams found' : 'No live streams'}
+            </Text>
+            <Text style={styles.emptySubtext}>
+              {searchQuery ? 'Try a different search' : 'Check back later!'}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.grid}>
+            {filteredStreams.map((stream, index) => (
+              <TouchableOpacity
+                key={index}
+                style={styles.streamCard}
+                onPress={() => handleStreamPress(stream)}
+                activeOpacity={0.9}
+              >
+                <Image
+                  source={{
+                    uri: stream.users.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400',
+                  }}
+                  style={styles.streamThumbnail}
+                />
+                <View style={styles.streamOverlay}>
+                  <View style={styles.streamTopBar}>
+                    <LiveBadge size="small" />
+                    <View style={styles.viewerBadge}>
+                      <IconSymbol
+                        ios_icon_name="eye.fill"
+                        android_material_icon_name="visibility"
+                        size={12}
+                        color={colors.text}
+                      />
+                      <Text style={styles.viewerCount}>{stream.viewer_count || 0}</Text>
+                    </View>
+                  </View>
 
-        <View style={styles.categoriesGrid}>
-          {categories.map((category, index) => (
-            <TouchableOpacity
-              key={index}
-              style={styles.categoryCard}
-              onPress={() => handleCategoryPress(category.id)}
-              activeOpacity={0.8}
-            >
-              <Image source={{ uri: category.thumbnail }} style={styles.categoryImage} />
-              <View style={styles.categoryOverlay}>
-                <View style={styles.categoryBadge}>
-                  <LiveBadge size="small" showPulse={false} />
-                </View>
-                <View style={styles.categoryInfo}>
-                  <Text style={styles.categoryName}>{category.name}</Text>
-                  <View style={styles.categoryViewers}>
-                    <IconSymbol
-                      ios_icon_name="eye.fill"
-                      android_material_icon_name="visibility"
-                      size={12}
-                      color={colors.text}
-                    />
-                    <Text style={styles.categoryViewerCount}>
-                      {formatCount(category.viewerCount)}
+                  <View style={styles.streamInfo}>
+                    <Text style={styles.broadcasterName}>{stream.users.display_name}</Text>
+                    <Text style={styles.streamTitle} numberOfLines={2}>
+                      {stream.title}
                     </Text>
                   </View>
                 </View>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <Text style={styles.sectionTitle}>Trending Now</Text>
-        <View style={styles.trendingContainer}>
-          {[1, 2, 3].map((item, index) => (
-            <TouchableOpacity key={index} style={styles.trendingCard}>
-              <View style={styles.trendingRank}>
-                <Text style={styles.trendingRankText}>{item}</Text>
-              </View>
-              <View style={styles.trendingInfo}>
-                <Text style={styles.trendingTitle}>Trending Stream #{item}</Text>
-                <Text style={styles.trendingSubtitle}>
-                  {formatCount(50000 - item * 5000)} viewers
-                </Text>
-              </View>
-              <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="chevron_right"
-                size={20}
-                color={colors.textSecondary}
-              />
-            </TouchableOpacity>
-          ))}
-        </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
       </ScrollView>
     </View>
   );
 }
 
-function formatCount(count: number): string {
-  if (count >= 1000000) {
-    return `${(count / 1000000).toFixed(1)}M`;
-  }
-  if (count >= 1000) {
-    return `${(count / 1000).toFixed(1)}K`;
-  }
-  return count.toString();
-}
-
 const styles = StyleSheet.create({
   header: {
     paddingTop: 60,
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingBottom: 16,
-    backgroundColor: colors.background,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  logoContainer: {
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  logoText: {
-    fontSize: 24,
+  headerTitle: {
+    fontSize: 28,
     fontWeight: '800',
     color: colors.text,
-    letterSpacing: 2,
+    marginBottom: 16,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.backgroundAlt,
-    borderRadius: 24,
+    borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
     gap: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   searchInput: {
     flex: 1,
@@ -206,100 +203,93 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 24,
     paddingBottom: 100,
   },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: 16,
+  centerContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 80,
   },
-  categoriesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 32,
+  loadingText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.textSecondary,
   },
-  categoryCard: {
-    width: '48%',
-    aspectRatio: 1,
-    borderRadius: 12,
-    overflow: 'hidden',
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 80,
+    paddingHorizontal: 40,
   },
-  categoryImage: {
-    width: '100%',
-    height: '100%',
-  },
-  categoryOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    padding: 12,
-    justifyContent: 'space-between',
-  },
-  categoryBadge: {
-    alignSelf: 'flex-start',
-  },
-  categoryInfo: {
-    gap: 4,
-  },
-  categoryName: {
+  emptyText: {
     fontSize: 18,
     fontWeight: '700',
     color: colors.text,
+    marginTop: 20,
+    textAlign: 'center',
   },
-  categoryViewers: {
+  emptySubtext: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: colors.textSecondary,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    gap: 12,
+  },
+  streamCard: {
+    width: '48%',
+    aspectRatio: 9 / 16,
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  streamThumbnail: {
+    width: '100%',
+    height: '100%',
+  },
+  streamOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'space-between',
+    padding: 12,
+  },
+  streamTopBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  viewerBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
     gap: 4,
   },
-  categoryViewerCount: {
+  viewerCount: {
     fontSize: 12,
     fontWeight: '600',
     color: colors.text,
   },
-  trendingContainer: {
-    gap: 12,
-  },
-  trendingCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 16,
-    gap: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  trendingRank: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.gradientEnd,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  trendingRankText: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: colors.text,
-  },
-  trendingInfo: {
-    flex: 1,
+  streamInfo: {
     gap: 4,
   },
-  trendingTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+  broadcasterName: {
+    fontSize: 14,
+    fontWeight: '700',
     color: colors.text,
   },
-  trendingSubtitle: {
-    fontSize: 14,
+  streamTitle: {
+    fontSize: 12,
     fontWeight: '400',
-    color: colors.textSecondary,
+    color: colors.text,
+    lineHeight: 16,
   },
 });

@@ -1,13 +1,17 @@
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, TextInput, Modal } from 'react-native';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import GradientButton from '@/components/GradientButton';
 import LiveBadge from '@/components/LiveBadge';
 import { IconSymbol } from '@/components/IconSymbol';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/app/integrations/supabase/client';
+import { router } from 'expo-router';
 
 export default function BroadcasterScreen() {
+  const { user } = useAuth();
   const [facing, setFacing] = useState<CameraType>('front');
   const [permission, requestPermission] = useCameraPermissions();
   const [isLive, setIsLive] = useState(false);
@@ -15,6 +19,15 @@ export default function BroadcasterScreen() {
   const [liveTime, setLiveTime] = useState(0);
   const [isMicOn, setIsMicOn] = useState(true);
   const [isCameraOn, setIsCameraOn] = useState(true);
+  const [showSetup, setShowSetup] = useState(false);
+  const [streamTitle, setStreamTitle] = useState('');
+  const [currentStreamId, setCurrentStreamId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user) {
+      router.replace('/auth/login');
+    }
+  }, [user]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -52,7 +65,7 @@ export default function BroadcasterScreen() {
     setFacing((current) => (current === 'back' ? 'front' : 'back'));
   };
 
-  const handleStartLive = () => {
+  const handleStartLiveSetup = () => {
     if (isLive) {
       Alert.alert(
         'End Stream',
@@ -62,17 +75,83 @@ export default function BroadcasterScreen() {
           {
             text: 'End Stream',
             style: 'destructive',
-            onPress: () => {
-              setIsLive(false);
-              setViewerCount(0);
-              setLiveTime(0);
-            },
+            onPress: endStream,
           },
         ]
       );
     } else {
+      setShowSetup(true);
+    }
+  };
+
+  const startStream = async () => {
+    if (!streamTitle.trim()) {
+      Alert.alert('Error', 'Please enter a stream title');
+      return;
+    }
+
+    if (!user) {
+      Alert.alert('Error', 'You must be logged in to start streaming');
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('streams')
+        .insert({
+          broadcaster_id: user.id,
+          title: streamTitle,
+          status: 'live',
+          viewer_count: 0,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating stream:', error);
+        Alert.alert('Error', 'Failed to start stream');
+        return;
+      }
+
+      setCurrentStreamId(data.id);
       setIsLive(true);
       setViewerCount(1);
+      setShowSetup(false);
+      setStreamTitle('');
+
+      await supabase
+        .from('notifications')
+        .insert({
+          type: 'stream_started',
+          sender_id: user.id,
+          receiver_id: user.id,
+          ref_stream_id: data.id,
+          message: `${user.email} started a live stream`,
+        });
+    } catch (error) {
+      console.error('Error in startStream:', error);
+      Alert.alert('Error', 'An unexpected error occurred');
+    }
+  };
+
+  const endStream = async () => {
+    if (!currentStreamId) return;
+
+    try {
+      await supabase
+        .from('streams')
+        .update({
+          status: 'ended',
+          ended_at: new Date().toISOString(),
+        })
+        .eq('id', currentStreamId);
+
+      setIsLive(false);
+      setViewerCount(0);
+      setLiveTime(0);
+      setCurrentStreamId(null);
+    } catch (error) {
+      console.error('Error ending stream:', error);
     }
   };
 
@@ -130,7 +209,7 @@ export default function BroadcasterScreen() {
               <View style={styles.startButtonContainer}>
                 <GradientButton
                   title={isLive ? 'END STREAM' : 'START LIVE'}
-                  onPress={handleStartLive}
+                  onPress={handleStartLiveSetup}
                   size="large"
                 />
               </View>
@@ -159,6 +238,43 @@ export default function BroadcasterScreen() {
           </View>
         </View>
       </CameraView>
+
+      <Modal
+        visible={showSetup}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowSetup(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Setup Your Stream</Text>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Stream Title</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="What are you streaming?"
+                placeholderTextColor={colors.placeholder}
+                value={streamTitle}
+                onChangeText={setStreamTitle}
+                maxLength={100}
+              />
+            </View>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setShowSetup(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <View style={styles.goLiveButtonContainer}>
+                <GradientButton title="GO LIVE" onPress={startStream} size="medium" />
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -247,5 +363,66 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: colors.border,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: colors.text,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  inputContainer: {
+    marginBottom: 24,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  input: {
+    backgroundColor: colors.backgroundAlt,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    color: colors.text,
+    fontSize: 16,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: colors.backgroundAlt,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: 25,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  goLiveButtonContainer: {
+    flex: 1,
   },
 });

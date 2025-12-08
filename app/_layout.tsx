@@ -16,6 +16,7 @@ import {
 } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
 import { WidgetProvider } from "@/contexts/WidgetContext";
+import { AuthProvider } from "@/contexts/AuthContext";
 import { colors } from "@/styles/commonStyles";
 
 SplashScreen.preventAutoHideAsync();
@@ -69,26 +70,30 @@ export default function RootLayout() {
     <>
       <StatusBar style="light" animated />
       <ThemeProvider value={RoastLiveDarkTheme}>
-        <WidgetProvider>
-          <GestureHandlerRootView>
-            <Stack
-              screenOptions={{
-                headerShown: false,
-                contentStyle: { backgroundColor: colors.background },
-              }}
-            >
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen
-                name="live-player"
-                options={{
-                  presentation: "fullScreenModal",
-                  animation: "slide_from_bottom",
+        <AuthProvider>
+          <WidgetProvider>
+            <GestureHandlerRootView>
+              <Stack
+                screenOptions={{
+                  headerShown: false,
+                  contentStyle: { backgroundColor: colors.background },
                 }}
-              />
-            </Stack>
-            <SystemBars style="light" />
-          </GestureHandlerRootView>
-        </WidgetProvider>
+              >
+                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                <Stack.Screen name="auth/login" options={{ headerShown: false }} />
+                <Stack.Screen name="auth/register" options={{ headerShown: false }} />
+                <Stack.Screen
+                  name="live-player"
+                  options={{
+                    presentation: "fullScreenModal",
+                    animation: "slide_from_bottom",
+                  }}
+                />
+              </Stack>
+              <SystemBars style="light" />
+            </GestureHandlerRootView>
+          </WidgetProvider>
+        </AuthProvider>
       </ThemeProvider>
     </>
   );

@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,204 +7,209 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
+  RefreshControl,
 } from 'react-native';
+import { router } from 'expo-router';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/app/integrations/supabase/client';
+import { Tables } from '@/app/integrations/supabase/types';
 
-interface Notification {
-  id: string;
-  type: 'like' | 'comment' | 'follow' | 'live';
-  user: {
-    name: string;
-    avatar: string;
-  };
-  message: string;
-  timestamp: string;
-  read: boolean;
-}
-
-const mockNotifications: Notification[] = [
-  {
-    id: '1',
-    type: 'live',
-    user: {
-      name: 'GamerPro',
-      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
-    },
-    message: 'started a live stream',
-    timestamp: '2m ago',
-    read: false,
-  },
-  {
-    id: '2',
-    type: 'follow',
-    user: {
-      name: 'ChefMaster',
-      avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200',
-    },
-    message: 'started following you',
-    timestamp: '15m ago',
-    read: false,
-  },
-  {
-    id: '3',
-    type: 'like',
-    user: {
-      name: 'BeatMaker',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
-    },
-    message: 'liked your stream',
-    timestamp: '1h ago',
-    read: true,
-  },
-  {
-    id: '4',
-    type: 'comment',
-    user: {
-      name: 'ArtistPro',
-      avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200',
-    },
-    message: 'commented on your stream',
-    timestamp: '2h ago',
-    read: true,
-  },
-  {
-    id: '5',
-    type: 'live',
-    user: {
-      name: 'FitCoach',
-      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200',
-    },
-    message: 'started a live stream',
-    timestamp: '3h ago',
-    read: true,
-  },
-];
+type Notification = Tables<'notifications'> & {
+  sender: Tables<'users'> | null;
+  stream: Tables<'streams'> | null;
+};
 
 export default function InboxScreen() {
-  const getNotificationIcon = (type: Notification['type']) => {
+  const { user } = useAuth();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    if (!user) {
+      router.replace('/auth/login');
+    } else {
+      fetchNotifications();
+      subscribeToNotifications();
+    }
+  }, [user]);
+
+  const fetchNotifications = async () => {
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*, sender:sender_id(*)' + ', stream:ref_stream_id(*)')
+        .eq('receiver_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) {
+        console.error('Error fetching notifications:', error);
+        return;
+      }
+
+      setNotifications(data as any);
+    } catch (error) {
+      console.error('Error in fetchNotifications:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  const subscribeToNotifications = () => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel(`notifications:${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `receiver_id=eq.${user.id}`,
+        },
+        () => {
+          fetchNotifications();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchNotifications();
+  };
+
+  const handleNotificationPress = async (notification: Notification) => {
+    if (!notification.read) {
+      await supabase
+        .from('notifications')
+        .update({ read: true })
+        .eq('id', notification.id);
+    }
+
+    if (notification.type === 'stream_started' && notification.stream) {
+      router.push({
+        pathname: '/live-player',
+        params: { streamId: notification.stream.id },
+      });
+    }
+  };
+
+  const getNotificationIcon = (type: string) => {
     switch (type) {
-      case 'live':
+      case 'stream_started':
         return { ios: 'video.fill', android: 'videocam' };
       case 'follow':
-        return { ios: 'person.badge.plus.fill', android: 'person_add' };
-      case 'like':
-        return { ios: 'heart.fill', android: 'favorite' };
-      case 'comment':
-        return { ios: 'bubble.left.fill', android: 'chat_bubble' };
+        return { ios: 'person.fill.badge.plus', android: 'person_add' };
+      case 'mention':
+        return { ios: 'at', android: 'alternate_email' };
       default:
         return { ios: 'bell.fill', android: 'notifications' };
     }
   };
 
+  const getNotificationText = (notification: Notification) => {
+    switch (notification.type) {
+      case 'stream_started':
+        return `${notification.sender?.display_name || 'Someone'} started a live stream`;
+      case 'follow':
+        return `${notification.sender?.display_name || 'Someone'} started following you`;
+      case 'mention':
+        return `${notification.sender?.display_name || 'Someone'} mentioned you in chat`;
+      default:
+        return notification.message || 'New notification';
+    }
+  };
+
+  const formatTime = (timestamp: string) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (days > 0) return `${days}d ago`;
+    if (hours > 0) return `${hours}h ago`;
+    if (minutes > 0) return `${minutes}m ago`;
+    return 'Just now';
+  };
+
   return (
     <View style={commonStyles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Inbox</Text>
-        <TouchableOpacity>
-          <IconSymbol
-            ios_icon_name="ellipsis.circle"
-            android_material_icon_name="more_horiz"
-            size={24}
-            color={colors.text}
-          />
-        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Notifications</Text>
       </View>
 
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.text} />}
       >
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Notifications</Text>
-          {mockNotifications.map((notification, index) => {
+        {loading ? (
+          <View style={styles.centerContent}>
+            <Text style={styles.loadingText}>Loading notifications...</Text>
+          </View>
+        ) : notifications.length === 0 ? (
+          <View style={styles.emptyState}>
+            <IconSymbol
+              ios_icon_name="bell.slash"
+              android_material_icon_name="notifications_off"
+              size={64}
+              color={colors.textSecondary}
+            />
+            <Text style={styles.emptyText}>No notifications yet</Text>
+            <Text style={styles.emptySubtext}>
+              You&apos;ll be notified when someone follows you or goes live
+            </Text>
+          </View>
+        ) : (
+          notifications.map((notification, index) => {
             const icon = getNotificationIcon(notification.type);
             return (
               <TouchableOpacity
                 key={index}
-                style={[
-                  styles.notificationCard,
-                  !notification.read && styles.notificationCardUnread,
-                ]}
+                style={[styles.notificationCard, !notification.read && styles.notificationUnread]}
+                onPress={() => handleNotificationPress(notification)}
                 activeOpacity={0.7}
               >
-                <Image
-                  source={{ uri: notification.user.avatar }}
-                  style={styles.notificationAvatar}
-                />
-                <View style={styles.notificationContent}>
-                  <Text style={styles.notificationText}>
-                    <Text style={styles.notificationUsername}>
-                      {notification.user.name}
-                    </Text>{' '}
-                    {notification.message}
-                  </Text>
-                  <Text style={styles.notificationTimestamp}>
-                    {notification.timestamp}
-                  </Text>
-                </View>
-                <View style={styles.notificationIconContainer}>
+                <View style={styles.notificationIcon}>
                   <IconSymbol
                     ios_icon_name={icon.ios}
                     android_material_icon_name={icon.android}
-                    size={20}
-                    color={notification.type === 'live' ? colors.gradientEnd : colors.textSecondary}
+                    size={24}
+                    color={notification.read ? colors.textSecondary : colors.gradientEnd}
                   />
                 </View>
-                {!notification.read && <View style={styles.unreadDot} />}
+
+                <View style={styles.notificationContent}>
+                  <Text style={styles.notificationText}>{getNotificationText(notification)}</Text>
+                  <Text style={styles.notificationTime}>
+                    {formatTime(notification.created_at || '')}
+                  </Text>
+                </View>
+
+                {notification.sender?.avatar && (
+                  <Image
+                    source={{ uri: notification.sender.avatar }}
+                    style={styles.notificationAvatar}
+                  />
+                )}
               </TouchableOpacity>
             );
-          })}
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Activity</Text>
-          <View style={styles.activityCard}>
-            <View style={styles.activityRow}>
-              <IconSymbol
-                ios_icon_name="eye.fill"
-                android_material_icon_name="visibility"
-                size={24}
-                color={colors.gradientEnd}
-              />
-              <View style={styles.activityInfo}>
-                <Text style={styles.activityLabel}>Total Views</Text>
-                <Text style={styles.activityValue}>125.4K</Text>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.activityCard}>
-            <View style={styles.activityRow}>
-              <IconSymbol
-                ios_icon_name="heart.fill"
-                android_material_icon_name="favorite"
-                size={24}
-                color={colors.gradientEnd}
-              />
-              <View style={styles.activityInfo}>
-                <Text style={styles.activityLabel}>Total Likes</Text>
-                <Text style={styles.activityValue}>45.2K</Text>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.activityCard}>
-            <View style={styles.activityRow}>
-              <IconSymbol
-                ios_icon_name="person.2.fill"
-                android_material_icon_name="people"
-                size={24}
-                color={colors.gradientEnd}
-              />
-              <View style={styles.activityInfo}>
-                <Text style={styles.activityLabel}>New Followers</Text>
-                <Text style={styles.activityValue}>+342</Text>
-              </View>
-            </View>
-          </View>
-        </View>
+          })
+        )}
       </ScrollView>
     </View>
   );
@@ -212,13 +217,9 @@ export default function InboxScreen() {
 
 const styles = StyleSheet.create({
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     paddingTop: 60,
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingBottom: 16,
-    backgroundColor: colors.background,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
@@ -231,40 +232,56 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 24,
     paddingBottom: 100,
   },
-  section: {
-    marginBottom: 32,
+  centerContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 80,
   },
-  sectionTitle: {
-    fontSize: 20,
+  loadingText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 80,
+    paddingHorizontal: 40,
+  },
+  emptyText: {
+    fontSize: 18,
     fontWeight: '700',
     color: colors.text,
-    marginBottom: 16,
+    marginTop: 20,
+    textAlign: 'center',
+  },
+  emptySubtext: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: colors.textSecondary,
+    marginTop: 8,
+    textAlign: 'center',
   },
   notificationCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-    gap: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    position: 'relative',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    gap: 16,
   },
-  notificationCardUnread: {
+  notificationUnread: {
     backgroundColor: colors.backgroundAlt,
-    borderColor: colors.gradientEnd + '40',
   },
-  notificationAvatar: {
+  notificationIcon: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: colors.backgroundAlt,
+    backgroundColor: colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   notificationContent: {
     flex: 1,
@@ -272,60 +289,19 @@ const styles = StyleSheet.create({
   },
   notificationText: {
     fontSize: 14,
-    fontWeight: '400',
+    fontWeight: '600',
     color: colors.text,
     lineHeight: 20,
   },
-  notificationUsername: {
-    fontWeight: '700',
-  },
-  notificationTimestamp: {
+  notificationTime: {
     fontSize: 12,
     fontWeight: '400',
     color: colors.textSecondary,
   },
-  notificationIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  notificationAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: colors.backgroundAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  unreadDot: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.gradientEnd,
-  },
-  activityCard: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  activityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  activityInfo: {
-    flex: 1,
-  },
-  activityLabel: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: colors.textSecondary,
-    marginBottom: 4,
-  },
-  activityValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.text,
   },
 });

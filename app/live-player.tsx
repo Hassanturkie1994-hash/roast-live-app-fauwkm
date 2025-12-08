@@ -1,243 +1,351 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   TextInput,
+  ScrollView,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
   Dimensions,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { colors, commonStyles } from '@/styles/commonStyles';
+import { router, useLocalSearchParams } from 'expo-router';
+import { VideoView, useVideoPlayer } from 'expo-video';
+import { colors } from '@/styles/commonStyles';
+import { IconSymbol } from '@/components/IconSymbol';
 import LiveBadge from '@/components/LiveBadge';
 import FollowButton from '@/components/FollowButton';
-import ChatBubble, { ChatMessage } from '@/components/ChatBubble';
-import { IconSymbol } from '@/components/IconSymbol';
-import { LinearGradient } from 'expo-linear-gradient';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/app/integrations/supabase/client';
+import { Tables } from '@/app/integrations/supabase/types';
 
 const { height: screenHeight } = Dimensions.get('window');
 
-const mockMessages: ChatMessage[] = [
-  { id: '1', username: 'User1', message: 'This is awesome!', timestamp: Date.now() },
-  { id: '2', username: 'User2', message: 'Great stream!', timestamp: Date.now() },
-  { id: '3', username: 'User3', message: 'Keep it up!', timestamp: Date.now() },
-];
+type ChatMessage = Tables<'chat_messages'> & {
+  users: Tables<'users'>;
+};
+
+type Stream = Tables<'streams'> & {
+  users: Tables<'users'>;
+};
 
 export default function LivePlayerScreen() {
-  const router = useRouter();
-  const params = useLocalSearchParams();
+  const { streamId } = useLocalSearchParams<{ streamId: string }>();
+  const { user } = useAuth();
+  const [stream, setStream] = useState<Stream | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messageText, setMessageText] = useState('');
   const [isFollowing, setIsFollowing] = useState(false);
-  const [viewerCount, setViewerCount] = useState(12500);
-  const [messages, setMessages] = useState<ChatMessage[]>(mockMessages);
-  const [inputMessage, setInputMessage] = useState('');
   const [showChat, setShowChat] = useState(true);
+  const scrollViewRef = useRef<ScrollView>(null);
+
+  const player = useVideoPlayer(stream?.playback_url || '', (player) => {
+    player.loop = false;
+    player.play();
+  });
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setViewerCount((prev) => prev + Math.floor(Math.random() * 10 - 3));
-      
-      if (Math.random() > 0.7) {
-        const newMessage: ChatMessage = {
-          id: Date.now().toString(),
-          username: `User${Math.floor(Math.random() * 1000)}`,
-          message: ['Amazing!', 'Love this!', 'So cool!', 'Keep going!'][Math.floor(Math.random() * 4)],
-          timestamp: Date.now(),
-        };
-        setMessages((prev) => [...prev.slice(-10), newMessage]);
+    if (streamId) {
+      fetchStream();
+      subscribeToChat();
+    }
+
+    return () => {
+      player.pause();
+    };
+  }, [streamId]);
+
+  const fetchStream = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('streams')
+        .select('*, users(*)')
+        .eq('id', streamId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching stream:', error);
+        return;
       }
-    }, 3000);
 
-    return () => clearInterval(interval);
-  }, []);
-
-  const handleSendMessage = () => {
-    if (inputMessage.trim()) {
-      const newMessage: ChatMessage = {
-        id: Date.now().toString(),
-        username: 'You',
-        message: inputMessage.trim(),
-        timestamp: Date.now(),
-      };
-      setMessages((prev) => [...prev, newMessage]);
-      setInputMessage('');
+      setStream(data as Stream);
+      checkFollowStatus(data.broadcaster_id);
+    } catch (error) {
+      console.error('Error in fetchStream:', error);
     }
   };
 
-  const handleFollowPress = () => {
-    setIsFollowing(!isFollowing);
-    console.log('Follow button pressed');
+  const checkFollowStatus = async (broadcasterId: string) => {
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('followers')
+        .select('*')
+        .eq('follower_id', user.id)
+        .eq('following_id', broadcasterId)
+        .single();
+
+      setIsFollowing(!!data);
+    } catch (error) {
+      console.log('Not following');
+    }
   };
 
-  return (
-    <View style={commonStyles.container}>
-      <View style={styles.videoContainer}>
-        <LinearGradient
-          colors={['#1a1a1a', '#0a0a0a']}
-          style={styles.videoPlaceholder}
-        >
-          <IconSymbol
-            ios_icon_name="play.circle.fill"
-            android_material_icon_name="play_circle_filled"
-            size={80}
-            color={colors.textSecondary}
-          />
-          <Text style={styles.videoPlaceholderText}>Live Stream Video</Text>
-          <Text style={styles.videoNote}>
-            Note: Video playback requires expo-video integration
-          </Text>
-        </LinearGradient>
+  const subscribeToChat = () => {
+    const channel = supabase
+      .channel(`stream:${streamId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'chat_messages',
+          filter: `stream_id=eq.${streamId}`,
+        },
+        async (payload) => {
+          const { data: userData } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', payload.new.user_id)
+            .single();
 
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <IconSymbol
-            ios_icon_name="chevron.left"
-            android_material_icon_name="arrow_back"
-            size={24}
-            color={colors.text}
-          />
-        </TouchableOpacity>
+          const newMessage = {
+            ...payload.new,
+            users: userData,
+          } as ChatMessage;
 
-        <View style={styles.topBar}>
-          <LiveBadge size="small" />
-          <View style={styles.viewerContainer}>
-            <IconSymbol
-              ios_icon_name="eye.fill"
-              android_material_icon_name="visibility"
-              size={14}
-              color={colors.text}
-            />
-            <Text style={styles.viewerCount}>{formatViewerCount(viewerCount)}</Text>
-          </View>
-        </View>
+          setMessages((prev) => [...prev, newMessage]);
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }
+      )
+      .subscribe();
 
-        <View style={styles.followButtonContainer}>
-          <FollowButton isFollowing={isFollowing} onPress={handleFollowPress} size="small" />
-        </View>
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  };
+
+  const handleSendMessage = async () => {
+    if (!messageText.trim() || !user || !streamId) return;
+
+    try {
+      const { error } = await supabase.from('chat_messages').insert({
+        stream_id: streamId,
+        user_id: user.id,
+        message: messageText.trim(),
+      });
+
+      if (error) {
+        console.error('Error sending message:', error);
+        return;
+      }
+
+      setMessageText('');
+    } catch (error) {
+      console.error('Error in handleSendMessage:', error);
+    }
+  };
+
+  const handleFollow = async () => {
+    if (!user || !stream) return;
+
+    try {
+      if (isFollowing) {
+        await supabase
+          .from('followers')
+          .delete()
+          .eq('follower_id', user.id)
+          .eq('following_id', stream.broadcaster_id);
+        setIsFollowing(false);
+      } else {
+        await supabase.from('followers').insert({
+          follower_id: user.id,
+          following_id: stream.broadcaster_id,
+        });
+        setIsFollowing(true);
+      }
+    } catch (error) {
+      console.error('Error toggling follow:', error);
+    }
+  };
+
+  if (!stream) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <Text style={styles.loadingText}>Loading stream...</Text>
       </View>
+    );
+  }
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.chatContainer}
-      >
-        <View style={styles.chatHeader}>
-          <Text style={styles.chatTitle}>Live Chat</Text>
-          <TouchableOpacity onPress={() => setShowChat(!showChat)}>
+  return (
+    <View style={styles.container}>
+      <VideoView
+        style={styles.video}
+        player={player}
+        allowsFullscreen
+        allowsPictureInPicture
+      />
+
+      <View style={styles.overlay}>
+        <View style={styles.topBar}>
+          <TouchableOpacity style={styles.closeButton} onPress={() => router.back()}>
             <IconSymbol
-              ios_icon_name={showChat ? 'chevron.down' : 'chevron.up'}
-              android_material_icon_name={showChat ? 'expand_more' : 'expand_less'}
+              ios_icon_name="xmark"
+              android_material_icon_name="close"
               size={24}
               color={colors.text}
             />
           </TouchableOpacity>
+
+          <View style={styles.topBarCenter}>
+            <LiveBadge size="small" />
+            <View style={styles.viewerBadge}>
+              <IconSymbol
+                ios_icon_name="eye.fill"
+                android_material_icon_name="visibility"
+                size={14}
+                color={colors.text}
+              />
+              <Text style={styles.viewerCount}>{stream.viewer_count || 0}</Text>
+            </View>
+          </View>
+
+          <View style={styles.placeholder} />
+        </View>
+
+        <View style={styles.rightActions}>
+          <TouchableOpacity style={styles.actionButton}>
+            <IconSymbol
+              ios_icon_name="heart.fill"
+              android_material_icon_name="favorite"
+              size={28}
+              color={colors.text}
+            />
+            <Text style={styles.actionText}>Like</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.actionButton} onPress={() => setShowChat(!showChat)}>
+            <IconSymbol
+              ios_icon_name="bubble.left.fill"
+              android_material_icon_name="chat"
+              size={28}
+              color={colors.text}
+            />
+            <Text style={styles.actionText}>Chat</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.actionButton}>
+            <IconSymbol
+              ios_icon_name="square.and.arrow.up.fill"
+              android_material_icon_name="share"
+              size={28}
+              color={colors.text}
+            />
+            <Text style={styles.actionText}>Share</Text>
+          </TouchableOpacity>
         </View>
 
         {showChat && (
-          <>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.chatContainer}
+          >
             <ScrollView
-              style={styles.messagesContainer}
-              contentContainerStyle={styles.messagesContent}
-              showsVerticalScrollIndicator={false}
+              ref={scrollViewRef}
+              style={styles.chatMessages}
+              contentContainerStyle={styles.chatMessagesContent}
             >
-              {messages.map((message, index) => (
-                <React.Fragment key={index}>
-                  <ChatBubble message={message} index={index} />
-                </React.Fragment>
+              {messages.map((msg, index) => (
+                <View key={index} style={styles.chatMessage}>
+                  <Text style={styles.chatUsername}>{msg.users.display_name}:</Text>
+                  <Text style={styles.chatText}>{msg.message}</Text>
+                </View>
               ))}
             </ScrollView>
 
-            <View style={styles.inputContainer}>
+            <View style={styles.chatInputContainer}>
               <TextInput
-                style={styles.input}
+                style={styles.chatInput}
                 placeholder="Send a message..."
                 placeholderTextColor={colors.placeholder}
-                value={inputMessage}
-                onChangeText={setInputMessage}
+                value={messageText}
+                onChangeText={setMessageText}
                 onSubmitEditing={handleSendMessage}
                 returnKeyType="send"
               />
               <TouchableOpacity style={styles.sendButton} onPress={handleSendMessage}>
-                <LinearGradient
-                  colors={[colors.gradientStart, colors.gradientEnd]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.sendButtonGradient}
-                >
-                  <IconSymbol
-                    ios_icon_name="paperplane.fill"
-                    android_material_icon_name="send"
-                    size={20}
-                    color={colors.text}
-                  />
-                </LinearGradient>
+                <IconSymbol
+                  ios_icon_name="paperplane.fill"
+                  android_material_icon_name="send"
+                  size={20}
+                  color={colors.text}
+                />
               </TouchableOpacity>
             </View>
-          </>
+          </KeyboardAvoidingView>
         )}
-      </KeyboardAvoidingView>
+
+        <View style={styles.bottomBar}>
+          <View style={styles.broadcasterInfo}>
+            <Text style={styles.broadcasterName}>{stream.users.display_name}</Text>
+            <Text style={styles.streamTitle} numberOfLines={1}>
+              {stream.title}
+            </Text>
+          </View>
+          {user?.id !== stream.broadcaster_id && (
+            <FollowButton isFollowing={isFollowing} onPress={handleFollow} />
+          )}
+        </View>
+      </View>
     </View>
   );
 }
 
-function formatViewerCount(count: number): string {
-  if (count >= 1000000) {
-    return `${(count / 1000000).toFixed(1)}M`;
-  }
-  if (count >= 1000) {
-    return `${(count / 1000).toFixed(1)}K`;
-  }
-  return count.toString();
-}
-
 const styles = StyleSheet.create({
-  videoContainer: {
-    width: '100%',
-    height: screenHeight * 0.4,
-    backgroundColor: colors.backgroundAlt,
-    position: 'relative',
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
   },
-  videoPlaceholder: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
+  centerContent: {
     justifyContent: 'center',
-    gap: 12,
+    alignItems: 'center',
   },
-  videoPlaceholderText: {
-    fontSize: 18,
+  loadingText: {
+    fontSize: 16,
     fontWeight: '600',
     color: colors.textSecondary,
   },
-  videoNote: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: colors.textSecondary,
-    textAlign: 'center',
-    paddingHorizontal: 40,
+  video: {
+    width: '100%',
+    height: '100%',
   },
-  backButton: {
-    position: 'absolute',
-    top: 60,
-    left: 16,
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'space-between',
+  },
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 60,
+    paddingHorizontal: 20,
+  },
+  closeButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 10,
   },
-  topBar: {
-    position: 'absolute',
-    top: 60,
-    right: 16,
+  topBarCenter: {
     flexDirection: 'row',
-    alignItems: 'center',
     gap: 12,
   },
-  viewerContainer: {
+  viewerBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
@@ -247,69 +355,96 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   viewerCount: {
-    color: colors.text,
     fontSize: 14,
     fontWeight: '600',
+    color: colors.text,
   },
-  followButtonContainer: {
+  placeholder: {
+    width: 40,
+  },
+  rightActions: {
     position: 'absolute',
-    bottom: 16,
     right: 16,
+    bottom: 200,
+    gap: 24,
+  },
+  actionButton: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  actionText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.text,
   },
   chatContainer: {
-    flex: 1,
-    backgroundColor: colors.background,
+    position: 'absolute',
+    left: 16,
+    bottom: 120,
+    width: '60%',
+    maxHeight: 300,
   },
-  chatHeader: {
+  chatMessages: {
+    maxHeight: 250,
+  },
+  chatMessagesContent: {
+    paddingBottom: 8,
+  },
+  chatMessage: {
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  chatUsername: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.gradientEnd,
+    marginBottom: 2,
+  },
+  chatText: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: colors.text,
+  },
+  chatInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    borderRadius: 25,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginTop: 8,
+  },
+  chatInput: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 14,
+  },
+  sendButton: {
+    marginLeft: 8,
+  },
+  bottomBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingHorizontal: 20,
+    paddingBottom: 40,
   },
-  chatTitle: {
-    fontSize: 18,
+  broadcasterInfo: {
+    flex: 1,
+    marginRight: 16,
+  },
+  broadcasterName: {
+    fontSize: 16,
     fontWeight: '700',
     color: colors.text,
+    marginBottom: 4,
   },
-  messagesContainer: {
-    flex: 1,
-  },
-  messagesContent: {
-    padding: 16,
-    paddingBottom: 100,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    gap: 12,
-    backgroundColor: colors.background,
-  },
-  input: {
-    flex: 1,
-    backgroundColor: colors.backgroundAlt,
-    borderRadius: 24,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    color: colors.text,
+  streamTitle: {
     fontSize: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  sendButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    overflow: 'hidden',
-  },
-  sendButtonGradient: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
+    fontWeight: '400',
+    color: colors.text,
   },
 });

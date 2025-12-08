@@ -1,330 +1,293 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Dimensions,
   TouchableOpacity,
+  ScrollView,
+  RefreshControl,
   Image,
-  FlatList,
-  Animated,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import { colors } from '@/styles/commonStyles';
-import LiveBadge from '@/components/LiveBadge';
+import { router } from 'expo-router';
+import { colors, commonStyles } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
-import { LinearGradient } from 'expo-linear-gradient';
+import LiveBadge from '@/components/LiveBadge';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/app/integrations/supabase/client';
+import { Tables } from '@/app/integrations/supabase/types';
 
-const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
+const { height: screenHeight } = Dimensions.get('window');
 
-interface StreamData {
-  id: string;
-  title: string;
-  thumbnail: string;
-  creatorName: string;
-  creatorAvatar: string;
-  viewerCount: number;
-  isLive: boolean;
-  likes: number;
-  comments: number;
-}
+type Stream = Tables<'streams'> & {
+  users: Tables<'users'>;
+};
 
-const mockStreams: StreamData[] = [
-  {
-    id: '1',
-    title: 'Epic Gaming Session - Come Join the Fun!',
-    thumbnail: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800',
-    creatorName: 'GamerPro',
-    creatorAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
-    viewerCount: 12500,
-    isLive: true,
-    likes: 8500,
-    comments: 342,
-  },
-  {
-    id: '2',
-    title: 'Cooking Stream - Making Pizza from Scratch',
-    thumbnail: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800',
-    creatorName: 'ChefMaster',
-    creatorAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200',
-    viewerCount: 8300,
-    isLive: true,
-    likes: 5200,
-    comments: 189,
-  },
-  {
-    id: '3',
-    title: 'Music Production Live - Creating Beats',
-    thumbnail: 'https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=800',
-    creatorName: 'BeatMaker',
-    creatorAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
-    viewerCount: 5600,
-    isLive: true,
-    likes: 3400,
-    comments: 156,
-  },
-  {
-    id: '4',
-    title: 'Art Stream - Digital Painting Tutorial',
-    thumbnail: 'https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?w=800',
-    creatorName: 'ArtistPro',
-    creatorAvatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200',
-    viewerCount: 3200,
-    isLive: true,
-    likes: 2100,
-    comments: 98,
-  },
-  {
-    id: '5',
-    title: 'Fitness Training - Full Body Workout',
-    thumbnail: 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=800',
-    creatorName: 'FitCoach',
-    creatorAvatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200',
-    viewerCount: 2100,
-    isLive: true,
-    likes: 1800,
-    comments: 67,
-  },
-];
-
-type FeedSegment = 'Following' | 'Recommended' | 'Explore';
+type TabType = 'following' | 'recommended' | 'explore';
 
 export default function HomeScreen() {
-  const router = useRouter();
-  const [selectedSegment, setSelectedSegment] = useState<FeedSegment>('Recommended');
-  const [likedStreams, setLikedStreams] = useState<Set<string>>(new Set());
+  const { user, loading: authLoading } = useAuth();
+  const [selectedTab, setSelectedTab] = useState<TabType>('recommended');
+  const [streams, setStreams] = useState<Stream[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const handleStreamPress = (streamId: string) => {
-    console.log('Stream pressed:', streamId);
-    router.push(`/live-player?id=${streamId}`);
+  useEffect(() => {
+    if (!authLoading) {
+      if (!user) {
+        router.replace('/auth/login');
+      } else {
+        fetchStreams();
+      }
+    }
+  }, [user, authLoading]);
+
+  const fetchStreams = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('streams')
+        .select('*, users(*)')
+        .eq('status', 'live')
+        .order('viewer_count', { ascending: false })
+        .limit(20);
+
+      if (error) {
+        console.error('Error fetching streams:', error);
+        return;
+      }
+
+      setStreams(data as Stream[]);
+    } catch (error) {
+      console.error('Error in fetchStreams:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   };
 
-  const handleLike = (streamId: string) => {
-    setLikedStreams((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(streamId)) {
-        newSet.delete(streamId);
-      } else {
-        newSet.add(streamId);
-      }
-      return newSet;
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchStreams();
+  };
+
+  const handleStreamPress = (stream: Stream) => {
+    router.push({
+      pathname: '/live-player',
+      params: { streamId: stream.id },
     });
   };
 
-  const renderStream = ({ item, index }: { item: StreamData; index: number }) => (
-    <TouchableOpacity
-      key={index}
-      style={styles.streamContainer}
-      activeOpacity={1}
-      onPress={() => handleStreamPress(item.id)}
-    >
-      <Image source={{ uri: item.thumbnail }} style={styles.thumbnail} />
-      <LinearGradient
-        colors={['transparent', 'rgba(0, 0, 0, 0.8)']}
-        style={styles.gradient}
-      />
+  if (authLoading || loading) {
+    return (
+      <View style={[commonStyles.container, styles.centerContent]}>
+        <Text style={styles.loadingText}>Loading...</Text>
+      </View>
+    );
+  }
 
-      <View style={styles.topBar}>
+  return (
+    <View style={commonStyles.container}>
+      <View style={styles.header}>
         <View style={styles.logoContainer}>
           <Text style={styles.logoText}>ROAST LIVE</Text>
         </View>
-        <View style={styles.viewerContainer}>
-          <IconSymbol
-            ios_icon_name="eye.fill"
-            android_material_icon_name="visibility"
-            size={14}
-            color={colors.text}
-          />
-          <Text style={styles.viewerCount}>{formatCount(item.viewerCount)}</Text>
-        </View>
       </View>
 
-      <View style={styles.liveBadgeContainer}>
-        <LiveBadge size="small" />
-      </View>
-
-      <View style={styles.rightActions}>
+      <View style={styles.tabsContainer}>
         <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => handleLike(item.id)}
+          style={[styles.tab, selectedTab === 'following' && styles.tabActive]}
+          onPress={() => setSelectedTab('following')}
         >
-          <IconSymbol
-            ios_icon_name={likedStreams.has(item.id) ? 'heart.fill' : 'heart'}
-            android_material_icon_name="favorite"
-            size={32}
-            color={likedStreams.has(item.id) ? colors.gradientEnd : colors.text}
-          />
-          <Text style={styles.actionText}>{formatCount(item.likes)}</Text>
+          <Text style={[styles.tabText, selectedTab === 'following' && styles.tabTextActive]}>
+            Following
+          </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionButton}>
-          <IconSymbol
-            ios_icon_name="bubble.left.fill"
-            android_material_icon_name="chat_bubble"
-            size={32}
-            color={colors.text}
-          />
-          <Text style={styles.actionText}>{formatCount(item.comments)}</Text>
+        <TouchableOpacity
+          style={[styles.tab, selectedTab === 'recommended' && styles.tabActive]}
+          onPress={() => setSelectedTab('recommended')}
+        >
+          <Text style={[styles.tabText, selectedTab === 'recommended' && styles.tabTextActive]}>
+            Recommended
+          </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionButton}>
-          <IconSymbol
-            ios_icon_name="arrowshape.turn.up.right.fill"
-            android_material_icon_name="share"
-            size={32}
-            color={colors.text}
-          />
-          <Text style={styles.actionText}>Share</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.creatorAvatarButton}>
-          <Image source={{ uri: item.creatorAvatar }} style={styles.creatorAvatar} />
+        <TouchableOpacity
+          style={[styles.tab, selectedTab === 'explore' && styles.tabActive]}
+          onPress={() => setSelectedTab('explore')}
+        >
+          <Text style={[styles.tabText, selectedTab === 'explore' && styles.tabTextActive]}>
+            Explore
+          </Text>
         </TouchableOpacity>
       </View>
 
-      <View style={styles.bottomInfo}>
-        <Text style={styles.creatorName}>@{item.creatorName}</Text>
-        <Text style={styles.streamTitle} numberOfLines={2}>
-          {item.title}
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
-
-  return (
-    <View style={styles.container}>
-      <View style={styles.segmentControl}>
-        {(['Following', 'Recommended', 'Explore'] as FeedSegment[]).map((segment, index) => (
-          <TouchableOpacity
-            key={index}
-            style={styles.segmentButton}
-            onPress={() => setSelectedSegment(segment)}
-          >
-            <Text
-              style={[
-                styles.segmentText,
-                selectedSegment === segment && styles.segmentTextActive,
-              ]}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.contentContainer}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.text} />}
+      >
+        {streams.length === 0 ? (
+          <View style={styles.emptyState}>
+            <IconSymbol
+              ios_icon_name="video.slash"
+              android_material_icon_name="videocam_off"
+              size={64}
+              color={colors.textSecondary}
+            />
+            <Text style={styles.emptyText}>No live streams at the moment</Text>
+            <Text style={styles.emptySubtext}>Check back later or start your own stream!</Text>
+          </View>
+        ) : (
+          streams.map((stream, index) => (
+            <TouchableOpacity
+              key={index}
+              style={styles.streamCard}
+              onPress={() => handleStreamPress(stream)}
+              activeOpacity={0.9}
             >
-              {segment}
-            </Text>
-            {selectedSegment === segment && (
-              <View style={styles.segmentIndicator} />
-            )}
-          </TouchableOpacity>
-        ))}
-      </View>
+              <Image
+                source={{
+                  uri: stream.users.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400',
+                }}
+                style={styles.streamThumbnail}
+              />
+              <View style={styles.streamOverlay}>
+                <View style={styles.streamTopBar}>
+                  <LiveBadge size="small" />
+                  <View style={styles.viewerBadge}>
+                    <IconSymbol
+                      ios_icon_name="eye.fill"
+                      android_material_icon_name="visibility"
+                      size={14}
+                      color={colors.text}
+                    />
+                    <Text style={styles.viewerCount}>{stream.viewer_count || 0}</Text>
+                  </View>
+                </View>
 
-      <FlatList
-        data={mockStreams}
-        renderItem={renderStream}
-        keyExtractor={(item) => item.id}
-        pagingEnabled
-        showsVerticalScrollIndicator={false}
-        snapToInterval={screenHeight - 140}
-        decelerationRate="fast"
-        snapToAlignment="start"
-        contentContainerStyle={styles.listContent}
-      />
+                <View style={styles.streamInfo}>
+                  <View style={styles.broadcasterInfo}>
+                    <Image
+                      source={{
+                        uri: stream.users.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100',
+                      }}
+                      style={styles.broadcasterAvatar}
+                    />
+                    <View style={styles.broadcasterDetails}>
+                      <Text style={styles.broadcasterName}>{stream.users.display_name}</Text>
+                      <Text style={styles.streamTitle} numberOfLines={2}>
+                        {stream.title}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </TouchableOpacity>
+          ))
+        )}
+      </ScrollView>
     </View>
   );
 }
 
-function formatCount(count: number): string {
-  if (count >= 1000000) {
-    return `${(count / 1000000).toFixed(1)}M`;
-  }
-  if (count >= 1000) {
-    return `${(count / 1000).toFixed(1)}K`;
-  }
-  return count.toString();
-}
-
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  segmentControl: {
-    position: 'absolute',
-    top: 60,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
+  centerContent: {
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 10,
-    paddingHorizontal: 20,
-    gap: 24,
   },
-  segmentButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    alignItems: 'center',
-  },
-  segmentText: {
+  loadingText: {
     fontSize: 16,
     fontWeight: '600',
     color: colors.textSecondary,
   },
-  segmentTextActive: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  segmentIndicator: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 2,
-    backgroundColor: colors.text,
-  },
-  listContent: {
-    paddingBottom: 80,
-  },
-  streamContainer: {
-    width: screenWidth,
-    height: screenHeight - 140,
-    position: 'relative',
-  },
-  thumbnail: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: colors.backgroundAlt,
-  },
-  gradient: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: '40%',
-  },
-  topBar: {
-    position: 'absolute',
-    top: 60,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    zIndex: 5,
+  header: {
+    paddingTop: 60,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   logoContainer: {
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
+    alignItems: 'center',
   },
   logoText: {
-    fontSize: 16,
+    fontSize: 24,
     fontWeight: '800',
     color: colors.text,
     letterSpacing: 2,
   },
-  viewerContainer: {
+  tabsContainer: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  tabActive: {
+    borderBottomWidth: 2,
+    borderBottomColor: colors.text,
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  tabTextActive: {
+    color: colors.text,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  contentContainer: {
+    paddingBottom: 100,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 80,
+    paddingHorizontal: 40,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+    marginTop: 20,
+    textAlign: 'center',
+  },
+  emptySubtext: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: colors.textSecondary,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  streamCard: {
+    width: '100%',
+    height: screenHeight * 0.6,
+    backgroundColor: colors.card,
+    marginBottom: 2,
+    position: 'relative',
+  },
+  streamThumbnail: {
+    width: '100%',
+    height: '100%',
+  },
+  streamOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'space-between',
+    padding: 16,
+  },
+  streamTopBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  viewerBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
@@ -334,57 +297,39 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   viewerCount: {
-    color: colors.text,
     fontSize: 14,
     fontWeight: '600',
-  },
-  liveBadgeContainer: {
-    position: 'absolute',
-    top: 120,
-    left: 16,
-  },
-  rightActions: {
-    position: 'absolute',
-    right: 12,
-    bottom: 140,
-    alignItems: 'center',
-    gap: 24,
-  },
-  actionButton: {
-    alignItems: 'center',
-    gap: 4,
-  },
-  actionText: {
     color: colors.text,
-    fontSize: 12,
-    fontWeight: '600',
   },
-  creatorAvatarButton: {
-    marginTop: 8,
+  streamInfo: {
+    gap: 12,
   },
-  creatorAvatar: {
+  broadcasterInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  broadcasterAvatar: {
     width: 48,
     height: 48,
     borderRadius: 24,
+    backgroundColor: colors.backgroundAlt,
     borderWidth: 2,
     borderColor: colors.text,
   },
-  bottomInfo: {
-    position: 'absolute',
-    bottom: 100,
-    left: 16,
-    right: 80,
+  broadcasterDetails: {
+    flex: 1,
   },
-  creatorName: {
+  broadcasterName: {
     fontSize: 16,
     fontWeight: '700',
     color: colors.text,
-    marginBottom: 8,
+    marginBottom: 4,
   },
   streamTitle: {
     fontSize: 14,
     fontWeight: '400',
     color: colors.text,
-    lineHeight: 20,
+    lineHeight: 18,
   },
 });

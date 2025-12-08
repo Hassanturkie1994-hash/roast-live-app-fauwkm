@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   ScrollView,
@@ -8,83 +8,137 @@ import {
   TouchableOpacity,
   Image,
   Dimensions,
+  Alert,
+  TextInput,
+  Modal,
 } from 'react-native';
+import { router } from 'expo-router';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import GradientButton from '@/components/GradientButton';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/app/integrations/supabase/client';
+import { Tables } from '@/app/integrations/supabase/types';
+import * as ImagePicker from 'expo-image-picker';
 
 const { width: screenWidth } = Dimensions.get('window');
 
-interface StreamClip {
-  id: string;
-  thumbnail: string;
-  views: number;
-  duration: string;
-}
-
-const mockUserProfile = {
-  avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
-  name: 'John Doe',
-  username: 'johndoe',
-  bio: 'Live streamer | Gamer | Content Creator 🎮',
-  link: 'roastlive.com/johndoe',
-  followersCount: 15000,
-  followingCount: 250,
-  likesCount: 125400,
-};
-
-const mockClips: StreamClip[] = [
-  {
-    id: '1',
-    thumbnail: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=400',
-    views: 8500,
-    duration: '12:34',
-  },
-  {
-    id: '2',
-    thumbnail: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=400',
-    views: 6200,
-    duration: '08:15',
-  },
-  {
-    id: '3',
-    thumbnail: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=400',
-    views: 4800,
-    duration: '15:42',
-  },
-  {
-    id: '4',
-    thumbnail: 'https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?w=400',
-    views: 3200,
-    duration: '10:20',
-  },
-  {
-    id: '5',
-    thumbnail: 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=400',
-    views: 2100,
-    duration: '06:45',
-  },
-  {
-    id: '6',
-    thumbnail: 'https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=400',
-    views: 1800,
-    duration: '09:30',
-  },
-];
-
-type TabType = 'streams' | 'likes';
+type Stream = Tables<'streams'>;
 
 export default function ProfileScreen() {
-  const [isOwnProfile] = useState(true);
-  const [selectedTab, setSelectedTab] = useState<TabType>('streams');
+  const { user, profile, signOut, refreshProfile } = useAuth();
+  const [streams, setStreams] = useState<Stream[]>([]);
+  const [followersCount, setFollowersCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editDisplayName, setEditDisplayName] = useState('');
+  const [editBio, setEditBio] = useState('');
+
+  useEffect(() => {
+    if (!user) {
+      router.replace('/auth/login');
+    } else {
+      fetchUserData();
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (profile) {
+      setEditDisplayName(profile.display_name);
+      setEditBio(profile.bio || '');
+    }
+  }, [profile]);
+
+  const fetchUserData = async () => {
+    if (!user) return;
+
+    try {
+      const [streamsData, followersData, followingData] = await Promise.all([
+        supabase
+          .from('streams')
+          .select('*')
+          .eq('broadcaster_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(20),
+        supabase
+          .from('followers')
+          .select('*', { count: 'exact', head: true })
+          .eq('following_id', user.id),
+        supabase
+          .from('followers')
+          .select('*', { count: 'exact', head: true })
+          .eq('follower_id', user.id),
+      ]);
+
+      if (streamsData.data) setStreams(streamsData.data);
+      if (followersData.count !== null) setFollowersCount(followersData.count);
+      if (followingData.count !== null) setFollowingCount(followingData.count);
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+    }
+  };
 
   const handleEditProfile = () => {
-    console.log('Edit profile pressed');
+    setShowEditModal(true);
   };
 
-  const handleClipPress = (clipId: string) => {
-    console.log('Clip pressed:', clipId);
+  const handleSaveProfile = async () => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({
+          display_name: editDisplayName,
+          bio: editBio,
+        })
+        .eq('id', user.id);
+
+      if (error) {
+        console.error('Error updating profile:', error);
+        Alert.alert('Error', 'Failed to update profile');
+        return;
+      }
+
+      await refreshProfile();
+      setShowEditModal(false);
+      Alert.alert('Success', 'Profile updated successfully');
+    } catch (error) {
+      console.error('Error in handleSaveProfile:', error);
+      Alert.alert('Error', 'An unexpected error occurred');
+    }
   };
+
+  const handleSignOut = async () => {
+    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign Out',
+        style: 'destructive',
+        onPress: async () => {
+          await signOut();
+          router.replace('/auth/login');
+        },
+      },
+    ]);
+  };
+
+  const handleStreamPress = (stream: Stream) => {
+    if (stream.status === 'live') {
+      router.push({
+        pathname: '/live-player',
+        params: { streamId: stream.id },
+      });
+    }
+  };
+
+  if (!profile) {
+    return (
+      <View style={[commonStyles.container, styles.centerContent]}>
+        <Text style={styles.loadingText}>Loading profile...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={commonStyles.container}>
@@ -94,147 +148,173 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <Image source={{ uri: mockUserProfile.avatar }} style={styles.avatar} />
-          <Text style={styles.name}>{mockUserProfile.name}</Text>
-          <Text style={styles.username}>@{mockUserProfile.username}</Text>
+          <Image
+            source={{
+              uri: profile.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
+            }}
+            style={styles.avatar}
+          />
+          <Text style={styles.name}>{profile.display_name}</Text>
+          {profile.verified_status && (
+            <View style={styles.verifiedBadge}>
+              <IconSymbol
+                ios_icon_name="checkmark.seal.fill"
+                android_material_icon_name="verified"
+                size={20}
+                color={colors.gradientEnd}
+              />
+            </View>
+          )}
 
           <View style={styles.statsContainer}>
             <View style={styles.stat}>
-              <Text style={styles.statValue}>{formatCount(mockUserProfile.followersCount)}</Text>
+              <Text style={styles.statValue}>{formatCount(followersCount)}</Text>
               <Text style={styles.statLabel}>Followers</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.stat}>
-              <Text style={styles.statValue}>{formatCount(mockUserProfile.followingCount)}</Text>
+              <Text style={styles.statValue}>{formatCount(followingCount)}</Text>
               <Text style={styles.statLabel}>Following</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.stat}>
-              <Text style={styles.statValue}>{formatCount(mockUserProfile.likesCount)}</Text>
-              <Text style={styles.statLabel}>Likes</Text>
+              <Text style={styles.statValue}>{streams.length}</Text>
+              <Text style={styles.statLabel}>Streams</Text>
             </View>
           </View>
 
-          {mockUserProfile.bio && (
-            <Text style={styles.bio}>{mockUserProfile.bio}</Text>
-          )}
+          {profile.bio && <Text style={styles.bio}>{profile.bio}</Text>}
 
-          {mockUserProfile.link && (
-            <TouchableOpacity style={styles.linkContainer}>
+          <View style={styles.buttonRow}>
+            <View style={styles.buttonFlex}>
+              <GradientButton title="Edit Profile" onPress={handleEditProfile} size="medium" />
+            </View>
+            <TouchableOpacity style={styles.iconButton} onPress={handleSignOut}>
               <IconSymbol
-                ios_icon_name="link"
-                android_material_icon_name="link"
-                size={16}
-                color={colors.gradientEnd}
+                ios_icon_name="rectangle.portrait.and.arrow.right"
+                android_material_icon_name="logout"
+                size={20}
+                color={colors.text}
               />
-              <Text style={styles.link}>{mockUserProfile.link}</Text>
             </TouchableOpacity>
-          )}
-
-          {isOwnProfile ? (
-            <View style={styles.buttonRow}>
-              <View style={styles.buttonFlex}>
-                <GradientButton
-                  title="Edit Profile"
-                  onPress={handleEditProfile}
-                  size="medium"
-                />
-              </View>
-              <TouchableOpacity style={styles.iconButton}>
-                <IconSymbol
-                  ios_icon_name="gear"
-                  android_material_icon_name="settings"
-                  size={20}
-                  color={colors.text}
-                />
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={styles.buttonRow}>
-              <View style={styles.buttonFlex}>
-                <GradientButton title="Follow" onPress={() => {}} size="medium" />
-              </View>
-              <TouchableOpacity style={styles.iconButton}>
-                <IconSymbol
-                  ios_icon_name="ellipsis"
-                  android_material_icon_name="more_horiz"
-                  size={20}
-                  color={colors.text}
-                />
-              </TouchableOpacity>
-            </View>
-          )}
+          </View>
         </View>
 
         <View style={styles.tabsContainer}>
-          <TouchableOpacity
-            style={[styles.tab, selectedTab === 'streams' && styles.tabActive]}
-            onPress={() => setSelectedTab('streams')}
-          >
+          <View style={[styles.tab, styles.tabActive]}>
             <IconSymbol
               ios_icon_name="play.rectangle.fill"
               android_material_icon_name="play_arrow"
               size={20}
-              color={selectedTab === 'streams' ? colors.text : colors.textSecondary}
+              color={colors.text}
             />
-            <Text
-              style={[
-                styles.tabText,
-                selectedTab === 'streams' && styles.tabTextActive,
-              ]}
-            >
-              Streams
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.tab, selectedTab === 'likes' && styles.tabActive]}
-            onPress={() => setSelectedTab('likes')}
-          >
-            <IconSymbol
-              ios_icon_name="heart.fill"
-              android_material_icon_name="favorite"
-              size={20}
-              color={selectedTab === 'likes' ? colors.text : colors.textSecondary}
-            />
-            <Text
-              style={[
-                styles.tabText,
-                selectedTab === 'likes' && styles.tabTextActive,
-              ]}
-            >
-              Likes
-            </Text>
-          </TouchableOpacity>
+            <Text style={[styles.tabText, styles.tabTextActive]}>Streams</Text>
+          </View>
         </View>
 
-        <View style={styles.clipsGrid}>
-          {mockClips.map((clip, index) => (
-            <TouchableOpacity
-              key={index}
-              style={styles.clipCard}
-              onPress={() => handleClipPress(clip.id)}
-              activeOpacity={0.8}
-            >
-              <Image source={{ uri: clip.thumbnail }} style={styles.clipThumbnail} />
-              <View style={styles.clipOverlay}>
-                <View style={styles.clipDuration}>
-                  <Text style={styles.clipDurationText}>{clip.duration}</Text>
-                </View>
-                <View style={styles.clipViews}>
+        <View style={styles.streamsGrid}>
+          {streams.length === 0 ? (
+            <View style={styles.emptyState}>
+              <IconSymbol
+                ios_icon_name="video.slash"
+                android_material_icon_name="videocam_off"
+                size={48}
+                color={colors.textSecondary}
+              />
+              <Text style={styles.emptyText}>No streams yet</Text>
+              <Text style={styles.emptySubtext}>Start your first live stream!</Text>
+            </View>
+          ) : (
+            streams.map((stream, index) => (
+              <TouchableOpacity
+                key={index}
+                style={styles.streamCard}
+                onPress={() => handleStreamPress(stream)}
+                activeOpacity={0.8}
+              >
+                <View style={styles.streamThumbnail}>
                   <IconSymbol
-                    ios_icon_name="eye.fill"
-                    android_material_icon_name="visibility"
-                    size={12}
+                    ios_icon_name="play.fill"
+                    android_material_icon_name="play_arrow"
+                    size={32}
                     color={colors.text}
                   />
-                  <Text style={styles.clipViewsText}>{formatCount(clip.views)}</Text>
                 </View>
-              </View>
-            </TouchableOpacity>
-          ))}
+                <View style={styles.streamOverlay}>
+                  {stream.status === 'live' && (
+                    <View style={styles.liveBadgeSmall}>
+                      <Text style={styles.liveBadgeText}>LIVE</Text>
+                    </View>
+                  )}
+                  <View style={styles.streamInfo}>
+                    <Text style={styles.streamTitle} numberOfLines={2}>
+                      {stream.title}
+                    </Text>
+                    <View style={styles.streamStats}>
+                      <IconSymbol
+                        ios_icon_name="eye.fill"
+                        android_material_icon_name="visibility"
+                        size={12}
+                        color={colors.text}
+                      />
+                      <Text style={styles.streamViewers}>{stream.viewer_count || 0}</Text>
+                    </View>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ))
+          )}
         </View>
       </ScrollView>
+
+      <Modal
+        visible={showEditModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowEditModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Edit Profile</Text>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Display Name</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Your display name"
+                placeholderTextColor={colors.placeholder}
+                value={editDisplayName}
+                onChangeText={setEditDisplayName}
+              />
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Bio</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="Tell us about yourself..."
+                placeholderTextColor={colors.placeholder}
+                value={editBio}
+                onChangeText={setEditBio}
+                multiline
+                numberOfLines={4}
+              />
+            </View>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setShowEditModal(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <View style={styles.saveButtonContainer}>
+                <GradientButton title="SAVE" onPress={handleSaveProfile} size="medium" />
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -250,6 +330,15 @@ function formatCount(count: number): string {
 }
 
 const styles = StyleSheet.create({
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
   scrollView: {
     flex: 1,
   },
@@ -277,10 +366,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: 4,
   },
-  username: {
-    fontSize: 16,
-    fontWeight: '400',
-    color: colors.textSecondary,
+  verifiedBadge: {
     marginBottom: 20,
   },
   statsContainer: {
@@ -313,19 +399,8 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: colors.text,
     textAlign: 'center',
-    marginBottom: 12,
-    lineHeight: 20,
-  },
-  linkContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
     marginBottom: 20,
-  },
-  link: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.gradientEnd,
+    lineHeight: 20,
   },
   buttonRow: {
     flexDirection: 'row',
@@ -371,52 +446,142 @@ const styles = StyleSheet.create({
   tabTextActive: {
     color: colors.text,
   },
-  clipsGrid: {
+  streamsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: 16,
     gap: 2,
   },
-  clipCard: {
+  emptyState: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+    marginTop: 16,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: colors.textSecondary,
+    marginTop: 8,
+  },
+  streamCard: {
     width: (screenWidth - 36) / 3,
     aspectRatio: 9 / 16,
     backgroundColor: colors.card,
     position: 'relative',
   },
-  clipThumbnail: {
+  streamThumbnail: {
     width: '100%',
     height: '100%',
+    backgroundColor: colors.backgroundAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  clipOverlay: {
+  streamOverlay: {
     ...StyleSheet.absoluteFillObject,
     padding: 8,
     justifyContent: 'space-between',
   },
-  clipDuration: {
-    alignSelf: 'flex-end',
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+  liveBadgeSmall: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.gradientEnd,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 4,
   },
-  clipDurationText: {
+  liveBadgeText: {
     fontSize: 10,
-    fontWeight: '600',
+    fontWeight: '800',
     color: colors.text,
   },
-  clipViews: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+  streamInfo: {
     gap: 4,
   },
-  clipViewsText: {
+  streamTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.text,
+    lineHeight: 16,
+  },
+  streamStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  streamViewers: {
     fontSize: 10,
     fontWeight: '600',
     color: colors.text,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: colors.text,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  inputContainer: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  input: {
+    backgroundColor: colors.backgroundAlt,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    color: colors.text,
+    fontSize: 16,
+  },
+  textArea: {
+    height: 100,
+    textAlignVertical: 'top',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: colors.backgroundAlt,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: 25,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  saveButtonContainer: {
+    flex: 1,
   },
 });
