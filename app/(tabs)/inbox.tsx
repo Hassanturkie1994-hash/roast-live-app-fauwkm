@@ -81,7 +81,8 @@ export default function InboxScreen() {
       router.replace('/auth/login');
     } else {
       fetchNotifications();
-      subscribeToNotifications();
+      const cleanup = subscribeToNotifications();
+      return cleanup;
     }
   }, [user, fetchNotifications, subscribeToNotifications]);
 
