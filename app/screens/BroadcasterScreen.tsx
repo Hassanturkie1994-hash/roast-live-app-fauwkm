@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, TextInput, Modal, Platform } from 'react-native';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { colors, commonStyles } from '@/styles/commonStyles';
@@ -12,7 +12,6 @@ import { supabase } from '@/app/integrations/supabase/client';
 import { cloudflareService } from '@/app/services/cloudflareService';
 import { router } from 'expo-router';
 import ChatOverlay from '@/components/ChatOverlay';
-import WebRTCLivePublisher from '@/components/WebRTCLivePublisher';
 
 export default function BroadcasterScreen() {
   const { user } = useAuth();
@@ -47,19 +46,7 @@ export default function BroadcasterScreen() {
     };
   }, [isLive]);
 
-  useEffect(() => {
-    if (isLive && currentStreamId) {
-      subscribeToViewerUpdates();
-    }
-    
-    return () => {
-      if (realtimeChannelRef.current) {
-        supabase.removeChannel(realtimeChannelRef.current);
-      }
-    };
-  }, [isLive, currentStreamId]);
-
-  const subscribeToViewerUpdates = () => {
+  const subscribeToViewerUpdates = useCallback(() => {
     if (!currentStreamId) return;
 
     const channel = supabase
@@ -71,7 +58,19 @@ export default function BroadcasterScreen() {
       .subscribe();
 
     realtimeChannelRef.current = channel;
-  };
+  }, [currentStreamId]);
+
+  useEffect(() => {
+    if (isLive && currentStreamId) {
+      subscribeToViewerUpdates();
+    }
+    
+    return () => {
+      if (realtimeChannelRef.current) {
+        supabase.removeChannel(realtimeChannelRef.current);
+      }
+    };
+  }, [isLive, currentStreamId, subscribeToViewerUpdates]);
 
   if (!permission) {
     return <View style={commonStyles.container} />;

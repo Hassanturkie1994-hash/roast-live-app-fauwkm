@@ -1,5 +1,5 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
 import RoastLiveLogo from '@/components/RoastLiveLogo';
@@ -7,8 +7,8 @@ import { colors } from '@/styles/commonStyles';
 
 export default function SplashScreen() {
   const router = useRouter();
-  const fadeAnim = React.useRef(new Animated.Value(0)).current;
-  const scaleAnim = React.useRef(new Animated.Value(0.8)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
 
   useEffect(() => {
     Animated.parallel([
@@ -30,7 +30,7 @@ export default function SplashScreen() {
     }, 2500);
 
     return () => clearTimeout(timeout);
-  }, []);
+  }, [fadeAnim, router, scaleAnim]);
 
   return (
     <View style={styles.container}>

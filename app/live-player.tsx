@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -65,25 +65,7 @@ export default function LivePlayerScreen() {
     }
   }, [status]);
 
-  useEffect(() => {
-    if (streamId) {
-      fetchStream();
-    }
-
-    return () => {
-      player.pause();
-      leaveViewerChannel();
-    };
-  }, [streamId]);
-
-  useEffect(() => {
-    if (stream && !hasJoinedChannel) {
-      joinViewerChannel();
-      setHasJoinedChannel(true);
-    }
-  }, [stream]);
-
-  const fetchStream = async () => {
+  const fetchStream = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('streams')
@@ -108,26 +90,9 @@ export default function LivePlayerScreen() {
     } catch (error) {
       console.error('Error in fetchStream:', error);
     }
-  };
+  }, [streamId, user]);
 
-  const checkFollowStatus = async (broadcasterId: string) => {
-    if (!user) return;
-
-    try {
-      const { data } = await supabase
-        .from('followers')
-        .select('*')
-        .eq('follower_id', user.id)
-        .eq('following_id', broadcasterId)
-        .single();
-
-      setIsFollowing(!!data);
-    } catch (error) {
-      console.log('Not following');
-    }
-  };
-
-  const joinViewerChannel = () => {
+  const joinViewerChannel = useCallback(() => {
     if (!streamId) return;
 
     // Join the viewer channel to track viewer count
@@ -162,6 +127,41 @@ export default function LivePlayerScreen() {
       });
 
     channelRef.current = channel;
+  }, [streamId, user]);
+
+  useEffect(() => {
+    if (streamId) {
+      fetchStream();
+    }
+
+    return () => {
+      player.pause();
+      leaveViewerChannel();
+    };
+  }, [streamId, fetchStream, player]);
+
+  useEffect(() => {
+    if (stream && !hasJoinedChannel) {
+      joinViewerChannel();
+      setHasJoinedChannel(true);
+    }
+  }, [stream, hasJoinedChannel, joinViewerChannel]);
+
+  const checkFollowStatus = async (broadcasterId: string) => {
+    if (!user) return;
+
+    try {
+      const { data } = await supabase
+        .from('followers')
+        .select('*')
+        .eq('follower_id', user.id)
+        .eq('following_id', broadcasterId)
+        .single();
+
+      setIsFollowing(!!data);
+    } catch (error) {
+      console.log('Not following');
+    }
   };
 
   const leaveViewerChannel = () => {

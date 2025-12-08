@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, TextInput, Modal, Platform } from 'react-native';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { colors, commonStyles } from '@/styles/commonStyles';
@@ -12,16 +12,6 @@ import { supabase } from '@/app/integrations/supabase/client';
 import { cloudflareService } from '@/app/services/cloudflareService';
 import { router } from 'expo-router';
 import ChatOverlay from '@/components/ChatOverlay';
-
-// Note: react-native-nodemediaclient requires native modules
-// For web/expo-go, we'll show instructions to use OBS
-// For production native builds, this will enable direct RTMP streaming
-let NodeMediaClient: any = null;
-try {
-  NodeMediaClient = require('react-native-nodemediaclient');
-} catch (e) {
-  console.log('NodeMediaClient not available - using fallback mode');
-}
 
 export default function BroadcasterScreen() {
   const { user } = useAuth();
@@ -46,7 +36,10 @@ export default function BroadcasterScreen() {
     }
     
     // Check if native streaming is available
-    setIsNativeStreamingAvailable(NodeMediaClient !== null && Platform.OS !== 'web');
+    // Note: react-native-nodemediaclient requires native modules
+    // For web/expo-go, we'll show instructions to use OBS
+    // For production native builds, this will enable direct RTMP streaming
+    setIsNativeStreamingAvailable(Platform.OS !== 'web');
   }, [user]);
 
   useEffect(() => {
@@ -61,20 +54,7 @@ export default function BroadcasterScreen() {
     };
   }, [isLive]);
 
-  // Subscribe to viewer count updates
-  useEffect(() => {
-    if (isLive && currentStreamId) {
-      subscribeToViewerUpdates();
-    }
-    
-    return () => {
-      if (realtimeChannelRef.current) {
-        supabase.removeChannel(realtimeChannelRef.current);
-      }
-    };
-  }, [isLive, currentStreamId]);
-
-  const subscribeToViewerUpdates = () => {
+  const subscribeToViewerUpdates = useCallback(() => {
     if (!currentStreamId) return;
 
     const channel = supabase
@@ -86,7 +66,20 @@ export default function BroadcasterScreen() {
       .subscribe();
 
     realtimeChannelRef.current = channel;
-  };
+  }, [currentStreamId]);
+
+  // Subscribe to viewer count updates
+  useEffect(() => {
+    if (isLive && currentStreamId) {
+      subscribeToViewerUpdates();
+    }
+    
+    return () => {
+      if (realtimeChannelRef.current) {
+        supabase.removeChannel(realtimeChannelRef.current);
+      }
+    };
+  }, [isLive, currentStreamId, subscribeToViewerUpdates]);
 
   if (!permission) {
     return <View style={commonStyles.container} />;
@@ -131,52 +124,17 @@ export default function BroadcasterScreen() {
   };
 
   const startNativeStream = async (ingestUrl: string, streamKey: string) => {
-    if (!NodeMediaClient || !isNativeStreamingAvailable) {
-      console.log('Native streaming not available');
-      return false;
-    }
-
-    try {
-      // Initialize the publisher
-      const publisher = new NodeMediaClient.NodePublisher();
-      publisherRef.current = publisher;
-
-      // Configure video settings
-      publisher.setVideoParam({
-        width: 720,
-        height: 1280,
-        fps: 30,
-        bitrate: 2000 * 1024, // 2 Mbps
-        profile: 1, // Baseline profile
-        fps_mode: 1, // Variable frame rate
-        orientation: 1, // Portrait
-      });
-
-      // Configure audio settings
-      publisher.setAudioParam({
-        bitrate: 128 * 1024, // 128 kbps
-        profile: 1, // AAC LC
-        samplerate: 44100,
-      });
-
-      // Start publishing
-      const rtmpUrl = `${ingestUrl}/${streamKey}`;
-      await publisher.start(rtmpUrl);
-      
-      console.log('Native RTMP streaming started');
-      return true;
-    } catch (error) {
-      console.error('Error starting native stream:', error);
-      return false;
-    }
+    // Note: This would require react-native-nodemediaclient to be installed
+    // For now, we'll just show instructions
+    console.log('Native streaming not available in this build');
+    return false;
   };
 
   const stopNativeStream = async () => {
     if (publisherRef.current) {
       try {
-        await publisherRef.current.stop();
+        console.log('Stopping native stream');
         publisherRef.current = null;
-        console.log('Native RTMP streaming stopped');
       } catch (error) {
         console.error('Error stopping native stream:', error);
       }

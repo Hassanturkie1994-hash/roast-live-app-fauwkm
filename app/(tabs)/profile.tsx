@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   ScrollView,
@@ -20,7 +20,6 @@ import RoastLiveLogo from '@/components/RoastLiveLogo';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/app/integrations/supabase/client';
 import { Tables } from '@/app/integrations/supabase/types';
-import * as ImagePicker from 'expo-image-picker';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -35,22 +34,7 @@ export default function ProfileScreen() {
   const [editDisplayName, setEditDisplayName] = useState('');
   const [editBio, setEditBio] = useState('');
 
-  useEffect(() => {
-    if (!user) {
-      router.replace('/auth/login');
-    } else {
-      fetchUserData();
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (profile) {
-      setEditDisplayName(profile.display_name);
-      setEditBio(profile.bio || '');
-    }
-  }, [profile]);
-
-  const fetchUserData = async () => {
+  const fetchUserData = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -77,7 +61,22 @@ export default function ProfileScreen() {
     } catch (error) {
       console.error('Error fetching user data:', error);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) {
+      router.replace('/auth/login');
+    } else {
+      fetchUserData();
+    }
+  }, [user, fetchUserData]);
+
+  useEffect(() => {
+    if (profile) {
+      setEditDisplayName(profile.display_name);
+      setEditBio(profile.bio || '');
+    }
+  }, [profile]);
 
   const handleEditProfile = () => {
     setShowEditModal(true);

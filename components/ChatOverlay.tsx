@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -35,27 +35,7 @@ export default function ChatOverlay({ streamId, isBroadcaster = false }: ChatOve
   const channelRef = useRef<any>(null);
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
-  useEffect(() => {
-    fetchRecentMessages();
-    subscribeToChat();
-
-    return () => {
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
-      }
-    };
-  }, [streamId]);
-
-  useEffect(() => {
-    // Auto-scroll to bottom when new messages arrive
-    if (messages.length > 0) {
-      setTimeout(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: true });
-      }, 100);
-    }
-  }, [messages]);
-
-  const fetchRecentMessages = async () => {
+  const fetchRecentMessages = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('chat_messages')
@@ -73,9 +53,9 @@ export default function ChatOverlay({ streamId, isBroadcaster = false }: ChatOve
     } catch (error) {
       console.error('Error in fetchRecentMessages:', error);
     }
-  };
+  }, [streamId]);
 
-  const subscribeToChat = () => {
+  const subscribeToChat = useCallback(() => {
     // Use broadcast for real-time chat (more scalable than postgres_changes)
     const channel = supabase
       .channel(`stream:${streamId}:chat`)
@@ -103,7 +83,27 @@ export default function ChatOverlay({ streamId, isBroadcaster = false }: ChatOve
       .subscribe();
 
     channelRef.current = channel;
-  };
+  }, [streamId, fadeAnim]);
+
+  useEffect(() => {
+    fetchRecentMessages();
+    subscribeToChat();
+
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+      }
+    };
+  }, [fetchRecentMessages, subscribeToChat]);
+
+  useEffect(() => {
+    // Auto-scroll to bottom when new messages arrive
+    if (messages.length > 0) {
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }
+  }, [messages]);
 
   const handleSendMessage = async () => {
     if (!messageText.trim() || !user) return;

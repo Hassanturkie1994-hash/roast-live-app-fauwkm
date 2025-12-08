@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { router } from 'expo-router';
 import { colors, commonStyles } from '@/styles/commonStyles';
@@ -21,45 +21,7 @@ export default function HomeScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    fetchLiveStreams();
-    
-    // Subscribe to new streams
-    const channel = supabase
-      .channel('live-streams')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'streams',
-          filter: 'status=eq.live',
-        },
-        () => {
-          console.log('New live stream detected');
-          fetchLiveStreams();
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'streams',
-        },
-        () => {
-          console.log('Stream updated');
-          fetchLiveStreams();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [activeTab, user]);
-
-  const fetchLiveStreams = async () => {
+  const fetchLiveStreams = useCallback(async () => {
     try {
       let query = supabase
         .from('streams')
@@ -99,7 +61,45 @@ export default function HomeScreen() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  };
+  }, [activeTab, user]);
+
+  useEffect(() => {
+    fetchLiveStreams();
+    
+    // Subscribe to new streams
+    const channel = supabase
+      .channel('live-streams')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'streams',
+          filter: 'status=eq.live',
+        },
+        () => {
+          console.log('New live stream detected');
+          fetchLiveStreams();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'streams',
+        },
+        () => {
+          console.log('Stream updated');
+          fetchLiveStreams();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchLiveStreams]);
 
   const handleRefresh = () => {
     setIsRefreshing(true);

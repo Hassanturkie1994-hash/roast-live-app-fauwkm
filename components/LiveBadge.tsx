@@ -1,5 +1,5 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
@@ -30,7 +30,7 @@ export default function LiveBadge({ size = 'medium', showPulse = true }: LiveBad
         false
       );
     }
-  }, [showPulse]);
+  }, [showPulse, pulseAnim]);
 
   const animatedStyle = useAnimatedStyle(() => {
     return {

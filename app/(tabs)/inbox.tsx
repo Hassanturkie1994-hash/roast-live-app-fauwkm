@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -27,16 +27,7 @@ export default function InboxScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    if (!user) {
-      router.replace('/auth/login');
-    } else {
-      fetchNotifications();
-      subscribeToNotifications();
-    }
-  }, [user]);
-
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -59,9 +50,9 @@ export default function InboxScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [user]);
 
-  const subscribeToNotifications = () => {
+  const subscribeToNotifications = useCallback(() => {
     if (!user) return;
 
     const channel = supabase
@@ -83,7 +74,16 @@ export default function InboxScreen() {
     return () => {
       supabase.removeChannel(channel);
     };
-  };
+  }, [user, fetchNotifications]);
+
+  useEffect(() => {
+    if (!user) {
+      router.replace('/auth/login');
+    } else {
+      fetchNotifications();
+      subscribeToNotifications();
+    }
+  }, [user, fetchNotifications, subscribeToNotifications]);
 
   const onRefresh = () => {
     setRefreshing(true);

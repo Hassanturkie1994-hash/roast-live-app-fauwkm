@@ -1,5 +1,5 @@
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { View, StyleSheet, Platform, Text } from 'react-native';
 import { CameraView, CameraType } from 'expo-camera';
 import { colors } from '@/styles/commonStyles';
@@ -34,17 +34,7 @@ export default function WebRTCLivePublisher({
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
 
-  useEffect(() => {
-    if (rtcPublishUrl) {
-      initializeWebRTCStream();
-    }
-
-    return () => {
-      cleanup();
-    };
-  }, [rtcPublishUrl]);
-
-  const initializeWebRTCStream = async () => {
+  const initializeWebRTCStream = useCallback(async () => {
     try {
       console.log('Initializing WebRTC stream to:', rtcPublishUrl);
 
@@ -70,7 +60,17 @@ export default function WebRTCLivePublisher({
         onStreamError(error);
       }
     }
-  };
+  }, [rtcPublishUrl, onStreamStarted, onStreamError]);
+
+  useEffect(() => {
+    if (rtcPublishUrl) {
+      initializeWebRTCStream();
+    }
+
+    return () => {
+      cleanup();
+    };
+  }, [rtcPublishUrl, initializeWebRTCStream]);
 
   const startWebRTCStream = async () => {
     try {
