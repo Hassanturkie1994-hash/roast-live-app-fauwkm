@@ -1,147 +1,171 @@
 
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { colors, commonStyles } from '@/styles/commonStyles';
-import LiveBadge from './LiveBadge';
-import { IconSymbol } from './IconSymbol';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { colors } from '@/styles/commonStyles';
+import { IconSymbol } from '@/components/IconSymbol';
+import LiveBadge from '@/components/LiveBadge';
+import { Tables } from '@/app/integrations/supabase/types';
 
-export interface StreamData {
-  id: string;
-  title: string;
-  thumbnail: string;
-  creatorName: string;
-  creatorAvatar: string;
-  viewerCount: number;
-  isLive: boolean;
-}
+type Stream = Tables<'streams'> & {
+  users: Tables<'users'>;
+};
 
 interface StreamPreviewCardProps {
-  stream: StreamData;
+  stream: Stream;
   onPress: () => void;
 }
 
 export default function StreamPreviewCard({ stream, onPress }: StreamPreviewCardProps) {
+  // Generate a placeholder thumbnail (in production, use actual thumbnails)
+  const thumbnailUrl = stream.users.avatar || 'https://images.unsplash.com/photo-1614680376593-902f74cf0d41?w=400&h=600&fit=crop';
+
   return (
-    <TouchableOpacity
-      style={styles.container}
-      onPress={onPress}
-      activeOpacity={0.9}
-    >
+    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.8}>
       <View style={styles.thumbnailContainer}>
-        <Image source={{ uri: stream.thumbnail }} style={styles.thumbnail} />
-        <LinearGradient
-          colors={['transparent', 'rgba(0, 0, 0, 0.7)']}
-          style={styles.gradient}
+        <Image
+          source={{ uri: thumbnailUrl }}
+          style={styles.thumbnail}
+          resizeMode="cover"
         />
-        <View style={styles.badgeContainer}>
-          {stream.isLive && <LiveBadge size="small" />}
-        </View>
-        <View style={styles.viewerCountContainer}>
-          <IconSymbol
-            ios_icon_name="eye.fill"
-            android_material_icon_name="visibility"
-            size={14}
-            color={colors.text}
-          />
-          <Text style={styles.viewerCount}>{formatViewerCount(stream.viewerCount)}</Text>
+        <View style={styles.overlay}>
+          <View style={styles.topRow}>
+            <LiveBadge size="small" />
+            <View style={styles.viewerBadge}>
+              <IconSymbol
+                ios_icon_name="eye.fill"
+                android_material_icon_name="visibility"
+                size={12}
+                color={colors.text}
+              />
+              <Text style={styles.viewerCount}>{stream.viewer_count || 0}</Text>
+            </View>
+          </View>
         </View>
       </View>
-      <View style={styles.infoContainer}>
-        <Image source={{ uri: stream.creatorAvatar }} style={styles.avatar} />
-        <View style={styles.textContainer}>
+
+      <View style={styles.info}>
+        <View style={styles.avatarContainer}>
+          {stream.users.avatar ? (
+            <Image
+              source={{ uri: stream.users.avatar }}
+              style={styles.avatar}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={[styles.avatar, styles.avatarPlaceholder]}>
+              <IconSymbol
+                ios_icon_name="person.fill"
+                android_material_icon_name="person"
+                size={20}
+                color={colors.textSecondary}
+              />
+            </View>
+          )}
+        </View>
+
+        <View style={styles.textInfo}>
           <Text style={styles.title} numberOfLines={2}>
             {stream.title}
           </Text>
-          <Text style={styles.creatorName}>{stream.creatorName}</Text>
+          <View style={styles.broadcasterRow}>
+            <Text style={styles.broadcasterName} numberOfLines={1}>
+              {stream.users.display_name}
+            </Text>
+            {stream.users.verified_status && (
+              <IconSymbol
+                ios_icon_name="checkmark.seal.fill"
+                android_material_icon_name="verified"
+                size={14}
+                color={colors.gradientEnd}
+              />
+            )}
+          </View>
         </View>
       </View>
     </TouchableOpacity>
   );
 }
 
-function formatViewerCount(count: number): string {
-  if (count >= 1000000) {
-    return `${(count / 1000000).toFixed(1)}M`;
-  }
-  if (count >= 1000) {
-    return `${(count / 1000).toFixed(1)}K`;
-  }
-  return count.toString();
-}
-
 const styles = StyleSheet.create({
-  container: {
+  card: {
     backgroundColor: colors.card,
-    borderRadius: 12,
-    marginBottom: 16,
+    borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: colors.border,
   },
   thumbnailContainer: {
     width: '100%',
-    aspectRatio: 16 / 9,
+    aspectRatio: 9 / 16,
+    backgroundColor: colors.backgroundAlt,
     position: 'relative',
   },
   thumbnail: {
     width: '100%',
     height: '100%',
-    backgroundColor: colors.backgroundAlt,
   },
-  gradient: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: '50%',
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    padding: 12,
   },
-  badgeContainer: {
-    position: 'absolute',
-    top: 12,
-    left: 12,
+  topRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
-  viewerCountContainer: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
+  viewerBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: 16,
     gap: 4,
   },
   viewerCount: {
-    color: colors.text,
     fontSize: 12,
     fontWeight: '600',
+    color: colors.text,
   },
-  infoContainer: {
+  info: {
     flexDirection: 'row',
     padding: 12,
     gap: 12,
+  },
+  avatarContainer: {
+    width: 40,
+    height: 40,
   },
   avatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.backgroundAlt,
+    borderWidth: 2,
+    borderColor: colors.gradientEnd,
   },
-  textContainer: {
-    flex: 1,
+  avatarPlaceholder: {
+    backgroundColor: colors.backgroundAlt,
+    alignItems: 'center',
     justifyContent: 'center',
   },
+  textInfo: {
+    flex: 1,
+    gap: 4,
+  },
   title: {
-    color: colors.text,
     fontSize: 14,
     fontWeight: '600',
-    marginBottom: 4,
+    color: colors.text,
+    lineHeight: 18,
   },
-  creatorName: {
-    color: colors.textSecondary,
+  broadcasterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  broadcasterName: {
     fontSize: 12,
     fontWeight: '400',
+    color: colors.textSecondary,
   },
 });

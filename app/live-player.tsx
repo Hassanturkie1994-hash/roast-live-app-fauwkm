@@ -5,11 +5,8 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  TextInput,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { VideoView, useVideoPlayer } from 'expo-video';
@@ -19,13 +16,10 @@ import { IconSymbol } from '@/components/IconSymbol';
 import LiveBadge from '@/components/LiveBadge';
 import FollowButton from '@/components/FollowButton';
 import RoastLiveLogo from '@/components/RoastLiveLogo';
+import ChatOverlay from '@/components/ChatOverlay';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/app/integrations/supabase/client';
 import { Tables } from '@/app/integrations/supabase/types';
-
-type ChatMessage = Tables<'chat_messages'> & {
-  users: Tables<'users'>;
-};
 
 type Stream = Tables<'streams'> & {
   users: Tables<'users'>;
@@ -35,19 +29,17 @@ export default function LivePlayerScreen() {
   const { streamId } = useLocalSearchParams<{ streamId: string }>();
   const { user } = useAuth();
   const [stream, setStream] = useState<Stream | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [messageText, setMessageText] = useState('');
   const [isFollowing, setIsFollowing] = useState(false);
-  const [showChat, setShowChat] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
-  const scrollViewRef = useRef<ScrollView>(null);
+  const [viewerCount, setViewerCount] = useState(0);
+  const [hasJoinedChannel, setHasJoinedChannel] = useState(false);
+  const channelRef = useRef<any>(null);
 
   // Create video player with HLS support
   const player = useVideoPlayer(
     stream?.playback_url
       ? {
           uri: stream.playback_url,
-          contentType: 'hls', // Explicitly set HLS content type
         }
       : null,
     (player) => {
@@ -69,19 +61,27 @@ export default function LivePlayerScreen() {
     } else if (status === 'error') {
       console.error('Video player error');
       setIsLoading(false);
+      Alert.alert('Playback Error', 'Unable to play the stream. Please try again later.');
     }
   }, [status]);
 
   useEffect(() => {
     if (streamId) {
       fetchStream();
-      subscribeToChat();
     }
 
     return () => {
       player.pause();
+      leaveViewerChannel();
     };
   }, [streamId]);
+
+  useEffect(() => {
+    if (stream && !hasJoinedChannel) {
+      joinViewerChannel();
+      setHasJoinedChannel(true);
+    }
+  }, [stream]);
 
   const fetchStream = async () => {
     try {
@@ -93,43 +93,20 @@ export default function LivePlayerScreen() {
 
       if (error) {
         console.error('Error fetching stream:', error);
+        Alert.alert('Error', 'Stream not found');
+        router.back();
         return;
       }
 
       console.log('Stream data:', data);
       setStream(data as Stream);
-      
-      if (data.broadcaster_id) {
+      setViewerCount(data.viewer_count || 0);
+
+      if (data.broadcaster_id && user) {
         checkFollowStatus(data.broadcaster_id);
       }
-
-      // Fetch existing chat messages
-      fetchChatMessages();
     } catch (error) {
       console.error('Error in fetchStream:', error);
-    }
-  };
-
-  const fetchChatMessages = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('chat_messages')
-        .select('*, users(*)')
-        .eq('stream_id', streamId)
-        .order('created_at', { ascending: true })
-        .limit(50);
-
-      if (error) {
-        console.error('Error fetching chat messages:', error);
-        return;
-      }
-
-      setMessages(data as ChatMessage[]);
-      setTimeout(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: false });
-      }, 100);
-    } catch (error) {
-      console.error('Error in fetchChatMessages:', error);
     }
   };
 
@@ -137,7 +114,7 @@ export default function LivePlayerScreen() {
     if (!user) return;
 
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('followers')
         .select('*')
         .eq('follower_id', user.id)
@@ -150,63 +127,56 @@ export default function LivePlayerScreen() {
     }
   };
 
-  const subscribeToChat = () => {
+  const joinViewerChannel = () => {
+    if (!streamId) return;
+
+    // Join the viewer channel to track viewer count
     const channel = supabase
-      .channel(`stream:${streamId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'chat_messages',
-          filter: `stream_id=eq.${streamId}`,
-        },
-        async (payload) => {
-          const { data: userData } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', payload.new.user_id)
-            .single();
+      .channel(`stream:${streamId}:viewers`)
+      .on('presence', { event: 'sync' }, () => {
+        const state = channel.presenceState();
+        const count = Object.keys(state).length;
+        setViewerCount(count);
 
-          const newMessage = {
-            ...payload.new,
-            users: userData,
-          } as ChatMessage;
-
-          setMessages((prev) => [...prev, newMessage]);
-          scrollViewRef.current?.scrollToEnd({ animated: true });
+        // Broadcast viewer count to broadcaster
+        channel.send({
+          type: 'broadcast',
+          event: 'viewer_count',
+          payload: { count },
+        });
+      })
+      .on('presence', { event: 'join' }, () => {
+        console.log('Viewer joined');
+      })
+      .on('presence', { event: 'leave' }, () => {
+        console.log('Viewer left');
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          // Track this viewer's presence
+          await channel.track({
+            user_id: user?.id || 'anonymous',
+            online_at: new Date().toISOString(),
+          });
         }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  };
-
-  const handleSendMessage = async () => {
-    if (!messageText.trim() || !user || !streamId) return;
-
-    try {
-      const { error } = await supabase.from('chat_messages').insert({
-        stream_id: streamId,
-        user_id: user.id,
-        message: messageText.trim(),
       });
 
-      if (error) {
-        console.error('Error sending message:', error);
-        return;
-      }
+    channelRef.current = channel;
+  };
 
-      setMessageText('');
-    } catch (error) {
-      console.error('Error in handleSendMessage:', error);
+  const leaveViewerChannel = () => {
+    if (channelRef.current) {
+      channelRef.current.untrack();
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
     }
   };
 
   const handleFollow = async () => {
-    if (!user || !stream) return;
+    if (!user || !stream) {
+      Alert.alert('Login Required', 'Please login to follow streamers');
+      return;
+    }
 
     try {
       if (isFollowing) {
@@ -222,10 +192,54 @@ export default function LivePlayerScreen() {
           following_id: stream.broadcaster_id,
         });
         setIsFollowing(true);
+
+        // Create notification
+        await supabase.from('notifications').insert({
+          type: 'follow',
+          sender_id: user.id,
+          receiver_id: stream.broadcaster_id,
+          message: 'started following you',
+        });
       }
     } catch (error) {
       console.error('Error toggling follow:', error);
+      Alert.alert('Error', 'Failed to update follow status');
     }
+  };
+
+  const handleLike = async () => {
+    if (!user) {
+      Alert.alert('Login Required', 'Please login to like streams');
+      return;
+    }
+
+    // Send a like animation via broadcast
+    if (channelRef.current) {
+      await channelRef.current.send({
+        type: 'broadcast',
+        event: 'like',
+        payload: {
+          user_id: user.id,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    }
+
+    // Show local feedback
+    Alert.alert('❤️', 'Like sent!');
+  };
+
+  const handleShare = () => {
+    if (!stream) return;
+
+    Alert.alert(
+      'Share Stream',
+      `Share this live stream with your friends!\n\nStream: ${stream.title}\nBy: ${stream.users.display_name}`,
+      [
+        { text: 'Copy Link', onPress: () => console.log('Copy link') },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
   };
 
   if (!stream) {
@@ -247,6 +261,9 @@ export default function LivePlayerScreen() {
           color={colors.gradientEnd}
         />
         <Text style={styles.errorText}>Stream not available</Text>
+        <Text style={styles.errorSubtext}>
+          The broadcaster hasn&apos;t started streaming yet
+        </Text>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <Text style={styles.backButtonText}>Go Back</Text>
         </TouchableOpacity>
@@ -292,7 +309,7 @@ export default function LivePlayerScreen() {
                 size={14}
                 color={colors.text}
               />
-              <Text style={styles.viewerCount}>{stream.viewer_count || 0}</Text>
+              <Text style={styles.viewerCount}>{viewerCount}</Text>
             </View>
           </View>
 
@@ -304,7 +321,7 @@ export default function LivePlayerScreen() {
         </View>
 
         <View style={styles.rightActions}>
-          <TouchableOpacity style={styles.actionButton}>
+          <TouchableOpacity style={styles.actionButton} onPress={handleLike}>
             <IconSymbol
               ios_icon_name="heart.fill"
               android_material_icon_name="favorite"
@@ -314,17 +331,7 @@ export default function LivePlayerScreen() {
             <Text style={styles.actionText}>Like</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionButton} onPress={() => setShowChat(!showChat)}>
-            <IconSymbol
-              ios_icon_name="bubble.left.fill"
-              android_material_icon_name="chat"
-              size={28}
-              color={colors.text}
-            />
-            <Text style={styles.actionText}>Chat</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.actionButton}>
+          <TouchableOpacity style={styles.actionButton} onPress={handleShare}>
             <IconSymbol
               ios_icon_name="square.and.arrow.up.fill"
               android_material_icon_name="share"
@@ -335,45 +342,7 @@ export default function LivePlayerScreen() {
           </TouchableOpacity>
         </View>
 
-        {showChat && (
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={styles.chatContainer}
-          >
-            <ScrollView
-              ref={scrollViewRef}
-              style={styles.chatMessages}
-              contentContainerStyle={styles.chatMessagesContent}
-            >
-              {messages.map((msg, index) => (
-                <View key={index} style={styles.chatMessage}>
-                  <Text style={styles.chatUsername}>{msg.users.display_name}:</Text>
-                  <Text style={styles.chatText}>{msg.message}</Text>
-                </View>
-              ))}
-            </ScrollView>
-
-            <View style={styles.chatInputContainer}>
-              <TextInput
-                style={styles.chatInput}
-                placeholder="Send a message..."
-                placeholderTextColor={colors.placeholder}
-                value={messageText}
-                onChangeText={setMessageText}
-                onSubmitEditing={handleSendMessage}
-                returnKeyType="send"
-              />
-              <TouchableOpacity style={styles.sendButton} onPress={handleSendMessage}>
-                <IconSymbol
-                  ios_icon_name="paperplane.fill"
-                  android_material_icon_name="send"
-                  size={20}
-                  color={colors.text}
-                />
-              </TouchableOpacity>
-            </View>
-          </KeyboardAvoidingView>
-        )}
+        <ChatOverlay streamId={streamId} isBroadcaster={false} />
 
         <View style={styles.bottomBar}>
           <View style={styles.broadcasterInfo}>
@@ -400,6 +369,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: 16,
+    padding: 20,
   },
   loadingText: {
     fontSize: 16,
@@ -411,6 +381,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text,
     marginTop: 16,
+  },
+  errorSubtext: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 8,
   },
   backButton: {
     marginTop: 24,
@@ -478,7 +455,7 @@ const styles = StyleSheet.create({
   },
   watermarkContainer: {
     position: 'absolute',
-    bottom: 140,
+    bottom: 200,
     right: 20,
     pointerEvents: 'none',
   },
@@ -496,54 +473,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: colors.text,
-  },
-  chatContainer: {
-    position: 'absolute',
-    left: 16,
-    bottom: 120,
-    width: '60%',
-    maxHeight: 300,
-  },
-  chatMessages: {
-    maxHeight: 250,
-  },
-  chatMessagesContent: {
-    paddingBottom: 8,
-  },
-  chatMessage: {
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  chatUsername: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.gradientEnd,
-    marginBottom: 2,
-  },
-  chatText: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: colors.text,
-  },
-  chatInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    borderRadius: 25,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginTop: 8,
-  },
-  chatInput: {
-    flex: 1,
-    color: colors.text,
-    fontSize: 14,
-  },
-  sendButton: {
-    marginLeft: 8,
   },
   bottomBar: {
     flexDirection: 'row',

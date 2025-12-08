@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, TextInput, Modal } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, TextInput, Modal, Platform } from 'react-native';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import GradientButton from '@/components/GradientButton';
@@ -11,6 +11,17 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/app/integrations/supabase/client';
 import { cloudflareService } from '@/app/services/cloudflareService';
 import { router } from 'expo-router';
+import ChatOverlay from '@/components/ChatOverlay';
+
+// Note: react-native-nodemediaclient requires native modules
+// For web/expo-go, we'll show instructions to use OBS
+// For production native builds, this will enable direct RTMP streaming
+let NodeMediaClient: any = null;
+try {
+  NodeMediaClient = require('react-native-nodemediaclient');
+} catch (e) {
+  console.log('NodeMediaClient not available - using fallback mode');
+}
 
 export default function BroadcasterScreen() {
   const { user } = useAuth();
@@ -24,14 +35,18 @@ export default function BroadcasterScreen() {
   const [showSetup, setShowSetup] = useState(false);
   const [streamTitle, setStreamTitle] = useState('');
   const [currentStreamId, setCurrentStreamId] = useState<string | null>(null);
-  const [rtmpUrl, setRtmpUrl] = useState<string | null>(null);
-  const [streamKey, setStreamKey] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isNativeStreamingAvailable, setIsNativeStreamingAvailable] = useState(false);
+  const publisherRef = useRef<any>(null);
+  const realtimeChannelRef = useRef<any>(null);
 
   useEffect(() => {
     if (!user) {
       router.replace('/auth/login');
     }
+    
+    // Check if native streaming is available
+    setIsNativeStreamingAvailable(NodeMediaClient !== null && Platform.OS !== 'web');
   }, [user]);
 
   useEffect(() => {
@@ -39,14 +54,39 @@ export default function BroadcasterScreen() {
     if (isLive) {
       interval = setInterval(() => {
         setLiveTime((prev) => prev + 1);
-        // In production, fetch real viewer count from Supabase
-        setViewerCount((prev) => prev + Math.floor(Math.random() * 3));
       }, 1000);
     }
     return () => {
       if (interval) clearInterval(interval);
     };
   }, [isLive]);
+
+  // Subscribe to viewer count updates
+  useEffect(() => {
+    if (isLive && currentStreamId) {
+      subscribeToViewerUpdates();
+    }
+    
+    return () => {
+      if (realtimeChannelRef.current) {
+        supabase.removeChannel(realtimeChannelRef.current);
+      }
+    };
+  }, [isLive, currentStreamId]);
+
+  const subscribeToViewerUpdates = () => {
+    if (!currentStreamId) return;
+
+    const channel = supabase
+      .channel(`stream:${currentStreamId}:broadcaster`)
+      .on('broadcast', { event: 'viewer_count' }, (payload) => {
+        console.log('Viewer count update:', payload);
+        setViewerCount(payload.payload.count);
+      })
+      .subscribe();
+
+    realtimeChannelRef.current = channel;
+  };
 
   if (!permission) {
     return <View style={commonStyles.container} />;
@@ -90,6 +130,59 @@ export default function BroadcasterScreen() {
     }
   };
 
+  const startNativeStream = async (ingestUrl: string, streamKey: string) => {
+    if (!NodeMediaClient || !isNativeStreamingAvailable) {
+      console.log('Native streaming not available');
+      return false;
+    }
+
+    try {
+      // Initialize the publisher
+      const publisher = new NodeMediaClient.NodePublisher();
+      publisherRef.current = publisher;
+
+      // Configure video settings
+      publisher.setVideoParam({
+        width: 720,
+        height: 1280,
+        fps: 30,
+        bitrate: 2000 * 1024, // 2 Mbps
+        profile: 1, // Baseline profile
+        fps_mode: 1, // Variable frame rate
+        orientation: 1, // Portrait
+      });
+
+      // Configure audio settings
+      publisher.setAudioParam({
+        bitrate: 128 * 1024, // 128 kbps
+        profile: 1, // AAC LC
+        samplerate: 44100,
+      });
+
+      // Start publishing
+      const rtmpUrl = `${ingestUrl}/${streamKey}`;
+      await publisher.start(rtmpUrl);
+      
+      console.log('Native RTMP streaming started');
+      return true;
+    } catch (error) {
+      console.error('Error starting native stream:', error);
+      return false;
+    }
+  };
+
+  const stopNativeStream = async () => {
+    if (publisherRef.current) {
+      try {
+        await publisherRef.current.stop();
+        publisherRef.current = null;
+        console.log('Native RTMP streaming stopped');
+      } catch (error) {
+        console.error('Error stopping native stream:', error);
+      }
+    }
+  };
+
   const startStream = async () => {
     if (!streamTitle.trim()) {
       Alert.alert('Error', 'Please enter a stream title');
@@ -113,19 +206,32 @@ export default function BroadcasterScreen() {
 
       // Store stream data
       setCurrentStreamId(response.stream.id);
-      setRtmpUrl(response.ingest_url);
-      setStreamKey(response.stream_key);
       setIsLive(true);
       setViewerCount(0);
       setShowSetup(false);
       setStreamTitle('');
 
-      // Show RTMP credentials to user
-      Alert.alert(
-        'Stream Started!',
-        `Your stream is now live!\n\nRTMP URL: ${response.ingest_url}\nStream Key: ${response.stream_key}\n\nUse these credentials in your streaming software (OBS, etc.)`,
-        [{ text: 'OK' }]
-      );
+      // Try to start native streaming if available
+      if (isNativeStreamingAvailable) {
+        const nativeStarted = await startNativeStream(
+          response.ingest_url,
+          response.stream_key
+        );
+
+        if (nativeStarted) {
+          Alert.alert(
+            '🔴 You are LIVE!',
+            'Your stream is now broadcasting. Viewers can watch you live!',
+            [{ text: 'OK' }]
+          );
+        } else {
+          // Fallback to showing instructions
+          showStreamingInstructions(response.ingest_url, response.stream_key);
+        }
+      } else {
+        // Show instructions for OBS or other streaming software
+        showStreamingInstructions(response.ingest_url, response.stream_key);
+      }
 
       console.log('Stream started successfully:', {
         streamId: response.stream.id,
@@ -142,12 +248,42 @@ export default function BroadcasterScreen() {
     }
   };
 
+  const showStreamingInstructions = (ingestUrl: string, streamKey: string) => {
+    Alert.alert(
+      '🎥 Stream Setup Required',
+      `Your stream session is ready!\n\nTo broadcast, use streaming software like OBS:\n\n` +
+      `Server: ${ingestUrl}\n` +
+      `Stream Key: ${streamKey}\n\n` +
+      `Note: In production native apps, streaming will happen automatically from your camera.`,
+      [
+        {
+          text: 'Copy Server URL',
+          onPress: () => {
+            // In production, implement clipboard copy
+            console.log('Copy:', ingestUrl);
+          },
+        },
+        {
+          text: 'Copy Stream Key',
+          onPress: () => {
+            // In production, implement clipboard copy
+            console.log('Copy:', streamKey);
+          },
+        },
+        { text: 'OK' },
+      ]
+    );
+  };
+
   const endStream = async () => {
     if (!currentStreamId) return;
 
     setIsLoading(true);
 
     try {
+      // Stop native streaming if active
+      await stopNativeStream();
+
       // Call Cloudflare Stream API via Edge Function
       await cloudflareService.stopLive(currentStreamId);
 
@@ -155,8 +291,6 @@ export default function BroadcasterScreen() {
       setViewerCount(0);
       setLiveTime(0);
       setCurrentStreamId(null);
-      setRtmpUrl(null);
-      setStreamKey(null);
 
       Alert.alert('Stream Ended', 'Your live stream has been ended successfully.');
     } catch (error) {
@@ -177,69 +311,44 @@ export default function BroadcasterScreen() {
     return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const copyToClipboard = (text: string, label: string) => {
-    // Note: Clipboard API would need to be implemented
-    Alert.alert('Copied', `${label} copied to clipboard`);
-  };
-
   return (
     <View style={commonStyles.container}>
       <CameraView style={styles.camera} facing={facing}>
         <View style={styles.overlay}>
           {isLive && (
-            <View style={styles.topBar}>
-              <LiveBadge size="small" />
-              <View style={styles.statsContainer}>
-                <View style={styles.stat}>
-                  <IconSymbol
-                    ios_icon_name="eye.fill"
-                    android_material_icon_name="visibility"
-                    size={16}
-                    color={colors.text}
-                  />
-                  <Text style={styles.statText}>{viewerCount}</Text>
-                </View>
-                <View style={styles.stat}>
-                  <IconSymbol
-                    ios_icon_name="clock.fill"
-                    android_material_icon_name="schedule"
-                    size={16}
-                    color={colors.text}
-                  />
-                  <Text style={styles.statText}>{formatTime(liveTime)}</Text>
+            <>
+              <View style={styles.topBar}>
+                <LiveBadge size="small" />
+                <View style={styles.statsContainer}>
+                  <View style={styles.stat}>
+                    <IconSymbol
+                      ios_icon_name="eye.fill"
+                      android_material_icon_name="visibility"
+                      size={16}
+                      color={colors.text}
+                    />
+                    <Text style={styles.statText}>{viewerCount}</Text>
+                  </View>
+                  <View style={styles.stat}>
+                    <IconSymbol
+                      ios_icon_name="clock.fill"
+                      android_material_icon_name="schedule"
+                      size={16}
+                      color={colors.text}
+                    />
+                    <Text style={styles.statText}>{formatTime(liveTime)}</Text>
+                  </View>
                 </View>
               </View>
-            </View>
-          )}
 
-          {isLive && (
-            <View style={styles.watermarkContainer}>
-              <RoastLiveLogo size="small" opacity={0.25} />
-            </View>
-          )}
+              <View style={styles.watermarkContainer}>
+                <RoastLiveLogo size="small" opacity={0.25} />
+              </View>
 
-          {isLive && rtmpUrl && streamKey && (
-            <View style={styles.credentialsContainer}>
-              <Text style={styles.credentialsTitle}>RTMP Credentials</Text>
-              <TouchableOpacity
-                style={styles.credentialRow}
-                onPress={() => copyToClipboard(rtmpUrl, 'RTMP URL')}
-              >
-                <Text style={styles.credentialLabel}>URL:</Text>
-                <Text style={styles.credentialValue} numberOfLines={1}>
-                  {rtmpUrl}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.credentialRow}
-                onPress={() => copyToClipboard(streamKey, 'Stream Key')}
-              >
-                <Text style={styles.credentialLabel}>Key:</Text>
-                <Text style={styles.credentialValue} numberOfLines={1}>
-                  {streamKey}
-                </Text>
-              </TouchableOpacity>
-            </View>
+              {currentStreamId && (
+                <ChatOverlay streamId={currentStreamId} isBroadcaster={true} />
+              )}
+            </>
           )}
 
           <View style={styles.controlsContainer}>
@@ -247,6 +356,7 @@ export default function BroadcasterScreen() {
               <TouchableOpacity
                 style={[styles.controlButton, !isMicOn && styles.controlButtonOff]}
                 onPress={() => setIsMicOn(!isMicOn)}
+                disabled={!isLive}
               >
                 <IconSymbol
                   ios_icon_name={isMicOn ? 'mic.fill' : 'mic.slash.fill'}
@@ -258,7 +368,7 @@ export default function BroadcasterScreen() {
 
               <View style={styles.startButtonContainer}>
                 <GradientButton
-                  title={isLive ? 'END STREAM' : 'START LIVE'}
+                  title={isLive ? 'END STREAM' : 'GO LIVE'}
                   onPress={handleStartLiveSetup}
                   size="large"
                   disabled={isLoading}
@@ -267,25 +377,17 @@ export default function BroadcasterScreen() {
 
               <TouchableOpacity
                 style={[styles.controlButton, !isCameraOn && styles.controlButtonOff]}
-                onPress={() => setIsCameraOn(!isCameraOn)}
+                onPress={toggleCameraFacing}
+                disabled={!isLive}
               >
                 <IconSymbol
-                  ios_icon_name={isCameraOn ? 'video.fill' : 'video.slash.fill'}
-                  android_material_icon_name={isCameraOn ? 'videocam' : 'videocam_off'}
+                  ios_icon_name="arrow.triangle.2.circlepath.camera.fill"
+                  android_material_icon_name="flip_camera_ios"
                   size={24}
                   color={colors.text}
                 />
               </TouchableOpacity>
             </View>
-
-            <TouchableOpacity style={styles.flipButton} onPress={toggleCameraFacing}>
-              <IconSymbol
-                ios_icon_name="arrow.triangle.2.circlepath.camera.fill"
-                android_material_icon_name="flip_camera_ios"
-                size={28}
-                color={colors.text}
-              />
-            </TouchableOpacity>
           </View>
         </View>
       </CameraView>
@@ -310,6 +412,7 @@ export default function BroadcasterScreen() {
                 value={streamTitle}
                 onChangeText={setStreamTitle}
                 maxLength={100}
+                autoFocus
               />
             </View>
 
@@ -321,7 +424,9 @@ export default function BroadcasterScreen() {
                 color={colors.gradientEnd}
               />
               <Text style={styles.infoText}>
-                After starting, you&apos;ll receive RTMP credentials to use with streaming software like OBS.
+                {isNativeStreamingAvailable
+                  ? 'Your camera will automatically start streaming when you go live. No additional software needed!'
+                  : 'You\'ll need streaming software like OBS to broadcast. RTMP credentials will be provided after you start.'}
               </Text>
             </View>
 
@@ -396,42 +501,9 @@ const styles = StyleSheet.create({
   },
   watermarkContainer: {
     position: 'absolute',
-    bottom: 140,
+    bottom: 200,
     right: 20,
     pointerEvents: 'none',
-  },
-  credentialsContainer: {
-    position: 'absolute',
-    top: 120,
-    left: 20,
-    right: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.gradientEnd,
-  },
-  credentialsTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.gradientEnd,
-    marginBottom: 12,
-    textTransform: 'uppercase',
-  },
-  credentialRow: {
-    marginBottom: 8,
-  },
-  credentialLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    marginBottom: 4,
-  },
-  credentialValue: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: colors.text,
-    fontFamily: 'monospace',
   },
   controlsContainer: {
     position: 'absolute',
@@ -462,16 +534,6 @@ const styles = StyleSheet.create({
   },
   startButtonContainer: {
     marginHorizontal: 20,
-  },
-  flipButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: colors.border,
   },
   modalOverlay: {
     flex: 1,
