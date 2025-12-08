@@ -11,6 +11,7 @@ export interface StartLiveResponse {
     ingest_url: string;
     stream_key: string;
     playback_url: string;
+    rtc_publish_url?: string;
     status: string;
     viewer_count: number;
     started_at: string;
@@ -18,6 +19,7 @@ export interface StartLiveResponse {
   ingest_url: string;
   stream_key: string;
   playback_url: string;
+  rtc_publish_url?: string;
 }
 
 export interface StopLiveResponse {
@@ -35,6 +37,8 @@ export interface StopLiveResponse {
  * This service provides methods to interact with Cloudflare Stream
  * for live streaming functionality. All API calls go through Supabase
  * Edge Functions to keep credentials secure.
+ * 
+ * Supports both RTMP and WebRTC (WHIP) streaming protocols.
  */
 class CloudflareService {
   private supabaseUrl: string;
@@ -50,21 +54,19 @@ class CloudflareService {
    * stream metadata in Supabase.
    * 
    * @param title - The title of the stream
-   * @param broadcasterId - The ID of the broadcaster
-   * @returns Promise with stream data including RTMP ingest URL and stream key
+   * @param userId - The ID of the user starting the stream
+   * @returns Promise with stream data including RTMP/WebRTC URLs
    */
-  async startLive(title: string, broadcasterId: string): Promise<StartLiveResponse> {
+  async startLive(title: string, userId: string): Promise<StartLiveResponse> {
     try {
-      console.log('Starting live stream:', { title, broadcasterId });
+      console.log('Starting live stream:', { title, userId });
 
-      // Get the current session
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) {
         throw new Error('Not authenticated');
       }
 
-      // Call the Edge Function
       const response = await fetch(
         `${this.supabaseUrl}/functions/v1/start-live`,
         {
@@ -75,7 +77,7 @@ class CloudflareService {
           },
           body: JSON.stringify({
             title,
-            broadcaster_id: broadcasterId,
+            user_id: userId,
           }),
         }
       );
@@ -109,14 +111,12 @@ class CloudflareService {
     try {
       console.log('Stopping live stream:', streamId);
 
-      // Get the current session
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) {
         throw new Error('Not authenticated');
       }
 
-      // Call the Edge Function
       const response = await fetch(
         `${this.supabaseUrl}/functions/v1/stop-live`,
         {
@@ -148,19 +148,30 @@ class CloudflareService {
   }
 
   /**
-   * Get stream status from Cloudflare
+   * Get stream status from database
    * 
-   * Note: This is a placeholder for future implementation.
-   * You can add this method to check the live status of a stream
-   * directly from Cloudflare if needed.
+   * @param streamId - The ID of the stream
+   * @returns Promise with stream data
    */
-  async getStreamStatus(cloudflareStreamId: string): Promise<any> {
-    // This would require another Edge Function to call Cloudflare API
-    // For now, we rely on the database status
-    console.log('getStreamStatus not yet implemented for:', cloudflareStreamId);
-    return null;
+  async getStreamStatus(streamId: string): Promise<any> {
+    try {
+      const { data, error } = await supabase
+        .from('streams')
+        .select('*')
+        .eq('id', streamId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching stream status:', error);
+        return null;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error in getStreamStatus:', error);
+      return null;
+    }
   }
 }
 
-// Export a singleton instance
 export const cloudflareService = new CloudflareService();
