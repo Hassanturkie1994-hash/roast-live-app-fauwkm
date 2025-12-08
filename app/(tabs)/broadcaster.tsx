@@ -25,6 +25,10 @@ export default function BroadcasterScreen() {
   const [showSetup, setShowSetup] = useState(false);
   const [streamTitle, setStreamTitle] = useState('');
   const [currentStreamId, setCurrentStreamId] = useState<string | null>(null);
+  const [ingestUrl, setIngestUrl] = useState<string | null>(null);
+  const [streamKey, setStreamKey] = useState<string | null>(null);
+  const [rtcPublishUrl, setRtcPublishUrl] = useState<string | null>(null);
+  const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isNativeStreamingAvailable, setIsNativeStreamingAvailable] = useState(false);
   const publisherRef = useRef<any>(null);
@@ -155,22 +159,42 @@ export default function BroadcasterScreen() {
     setIsLoading(true);
 
     try {
+      console.log('Starting live stream with title:', streamTitle);
+      
       // Call Cloudflare Stream API via Edge Function
       const response = await cloudflareService.startLive(streamTitle, user.id);
 
-      if (!response.success) {
-        throw new Error('Failed to start stream');
+      // TASK 3 — Improve Logging
+      console.log('SERVER RESPONSE:', response);
+
+      // TASK 2 — Update App-side Validation
+      if (!response.success || !response.stream?.id) {
+        console.error('SERVER RESPONSE:', response);
+        throw new Error('Invalid response from server: missing stream.id');
       }
 
-      // Store stream data
+      // TASK 2 — Store all values for later use
       setCurrentStreamId(response.stream.id);
+      setIngestUrl(response.ingest_url);
+      setStreamKey(response.stream_key);
+      setRtcPublishUrl(response.rtc_publish_url || null);
+      setPlaybackUrl(response.playback_url);
+      
       setIsLive(true);
       setViewerCount(0);
       setShowSetup(false);
       setStreamTitle('');
 
+      console.log('Stream started successfully:', {
+        streamId: response.stream.id,
+        ingestUrl: response.ingest_url,
+        streamKey: response.stream_key,
+        rtcPublishUrl: response.rtc_publish_url,
+        playbackUrl: response.playback_url,
+      });
+
       // Try to start native streaming if available
-      if (isNativeStreamingAvailable) {
+      if (isNativeStreamingAvailable && response.ingest_url && response.stream_key) {
         const nativeStarted = await startNativeStream(
           response.ingest_url,
           response.stream_key
@@ -190,11 +214,6 @@ export default function BroadcasterScreen() {
         // Show instructions for OBS or other streaming software
         showStreamingInstructions(response.ingest_url, response.stream_key);
       }
-
-      console.log('Stream started successfully:', {
-        streamId: response.stream.id,
-        playbackUrl: response.playback_url,
-      });
     } catch (error) {
       console.error('Error starting stream:', error);
       Alert.alert(
@@ -249,6 +268,10 @@ export default function BroadcasterScreen() {
       setViewerCount(0);
       setLiveTime(0);
       setCurrentStreamId(null);
+      setIngestUrl(null);
+      setStreamKey(null);
+      setRtcPublishUrl(null);
+      setPlaybackUrl(null);
 
       Alert.alert('Stream Ended', 'Your live stream has been ended successfully.');
     } catch (error) {

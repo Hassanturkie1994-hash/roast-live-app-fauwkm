@@ -24,7 +24,10 @@ export default function BroadcasterScreen() {
   const [showSetup, setShowSetup] = useState(false);
   const [streamTitle, setStreamTitle] = useState('');
   const [currentStreamId, setCurrentStreamId] = useState<string | null>(null);
+  const [ingestUrl, setIngestUrl] = useState<string | null>(null);
+  const [streamKey, setStreamKey] = useState<string | null>(null);
   const [rtcPublishUrl, setRtcPublishUrl] = useState<string | null>(null);
+  const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const realtimeChannelRef = useRef<any>(null);
 
@@ -130,26 +133,37 @@ export default function BroadcasterScreen() {
     try {
       console.log('Starting live stream with title:', streamTitle);
       
-      const session = await cloudflareService.startLive(streamTitle, user.id);
+      // Call Cloudflare Stream API via Edge Function
+      const response = await cloudflareService.startLive(streamTitle, user.id);
 
-      // Validate response structure
-      if (!session.success) {
-        throw new Error('Failed to start stream: Server returned success=false');
+      // TASK 3 — Improve Logging
+      console.log('SERVER RESPONSE:', response);
+
+      // TASK 2 — Update App-side Validation
+      if (!response.success || !response.stream?.id) {
+        console.error('SERVER RESPONSE:', response);
+        throw new Error('Invalid response from server: missing stream.id');
       }
 
-      if (!session.stream || !session.stream.id) {
-        console.error('Invalid response structure:', session);
-        throw new Error('Failed to start stream: Missing stream.id in response');
-      }
-
-      console.log('Stream started successfully with ID:', session.stream.id);
-
-      // Set the stream ID from the response
-      setCurrentStreamId(session.stream.id);
+      // TASK 2 — Store all values for later use
+      setCurrentStreamId(response.stream.id);
+      setIngestUrl(response.ingest_url);
+      setStreamKey(response.stream_key);
+      setRtcPublishUrl(response.rtc_publish_url || null);
+      setPlaybackUrl(response.playback_url);
+      
       setIsLive(true);
       setViewerCount(0);
       setShowSetup(false);
       setStreamTitle('');
+
+      console.log('Stream started successfully:', {
+        streamId: response.stream.id,
+        ingestUrl: response.ingest_url,
+        streamKey: response.stream_key,
+        rtcPublishUrl: response.rtc_publish_url,
+        playbackUrl: response.playback_url,
+      });
 
       Alert.alert(
         '🔴 You are LIVE!',
@@ -159,7 +173,6 @@ export default function BroadcasterScreen() {
     } catch (error) {
       console.error('Error starting stream:', error);
       
-      // Show detailed error message to user
       const errorMessage = error instanceof Error 
         ? error.message 
         : 'Failed to start stream. Please try again.';
@@ -189,7 +202,10 @@ export default function BroadcasterScreen() {
       setViewerCount(0);
       setLiveTime(0);
       setCurrentStreamId(null);
+      setIngestUrl(null);
+      setStreamKey(null);
       setRtcPublishUrl(null);
+      setPlaybackUrl(null);
 
       Alert.alert('Stream Ended', 'Your live stream has been ended successfully.');
     } catch (error) {
