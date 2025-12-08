@@ -1,91 +1,148 @@
-import React from "react";
-import { View, Text, StyleSheet, ScrollView, Platform } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { IconSymbol } from "@/components/IconSymbol";
-import { GlassView } from "expo-glass-effect";
-import { useTheme } from "@react-navigation/native";
+
+import React from 'react';
+import { View, ScrollView, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { colors, commonStyles } from '@/styles/commonStyles';
+import ProfileHeader from '@/components/ProfileHeader';
+import StreamPreviewCard, { StreamData } from '@/components/StreamPreviewCard';
+import { IconSymbol } from '@/components/IconSymbol';
+
+const mockUserProfile = {
+  avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
+  name: 'John Doe',
+  username: 'johndoe',
+  followersCount: 15000,
+  followingCount: 250,
+};
+
+const mockPastStreams: StreamData[] = [
+  {
+    id: '1',
+    title: 'My Last Epic Stream',
+    thumbnail: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800',
+    creatorName: 'John Doe',
+    creatorAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
+    viewerCount: 8500,
+    isLive: false,
+  },
+  {
+    id: '2',
+    title: 'Gaming Marathon Stream',
+    thumbnail: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=800',
+    creatorName: 'John Doe',
+    creatorAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
+    viewerCount: 6200,
+    isLive: false,
+  },
+];
 
 export default function ProfileScreen() {
-  const theme = useTheme();
+  const [isFollowing, setIsFollowing] = React.useState(false);
+
+  const handleFollowPress = () => {
+    setIsFollowing(!isFollowing);
+    console.log('Follow button pressed');
+  };
+
+  const handleStreamPress = (streamId: string) => {
+    console.log('Past stream pressed:', streamId);
+  };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top']}>
+    <View style={commonStyles.container}>
       <ScrollView
-        style={styles.container}
-        contentContainerStyle={[
-          styles.contentContainer,
-          Platform.OS !== 'ios' && styles.contentContainerWithTabBar
-        ]}
+        style={styles.scrollView}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
       >
-        <GlassView style={[
-          styles.profileHeader,
-          Platform.OS !== 'ios' && { backgroundColor: theme.dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }
-        ]} glassEffectStyle="regular">
-          <IconSymbol ios_icon_name="person.circle.fill" android_material_icon_name="person" size={80} color={theme.colors.primary} />
-          <Text style={[styles.name, { color: theme.colors.text }]}>John Doe</Text>
-          <Text style={[styles.email, { color: theme.dark ? '#98989D' : '#666' }]}>john.doe@example.com</Text>
-        </GlassView>
+        <ProfileHeader
+          avatar={mockUserProfile.avatar}
+          name={mockUserProfile.name}
+          username={mockUserProfile.username}
+          followersCount={mockUserProfile.followersCount}
+          followingCount={mockUserProfile.followingCount}
+          isFollowing={isFollowing}
+          onFollowPress={handleFollowPress}
+          isOwnProfile={true}
+        />
 
-        <GlassView style={[
-          styles.section,
-          Platform.OS !== 'ios' && { backgroundColor: theme.dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }
-        ]} glassEffectStyle="regular">
-          <View style={styles.infoRow}>
-            <IconSymbol ios_icon_name="phone.fill" android_material_icon_name="phone" size={20} color={theme.dark ? '#98989D' : '#666'} />
-            <Text style={[styles.infoText, { color: theme.colors.text }]}>+1 (555) 123-4567</Text>
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <IconSymbol
+              ios_icon_name="clock.fill"
+              android_material_icon_name="history"
+              size={20}
+              color={colors.text}
+            />
+            <Text style={styles.sectionTitle}>Past Streams</Text>
           </View>
-          <View style={styles.infoRow}>
-            <IconSymbol ios_icon_name="location.fill" android_material_icon_name="location-on" size={20} color={theme.dark ? '#98989D' : '#666'} />
-            <Text style={[styles.infoText, { color: theme.colors.text }]}>San Francisco, CA</Text>
-          </View>
-        </GlassView>
+
+          {mockPastStreams.map((stream, index) => (
+            <React.Fragment key={index}>
+              <StreamPreviewCard
+                stream={stream}
+                onPress={() => handleStreamPress(stream.id)}
+              />
+            </React.Fragment>
+          ))}
+        </View>
+
+        <View style={styles.settingsSection}>
+          <TouchableOpacity style={styles.settingsButton}>
+            <IconSymbol
+              ios_icon_name="gear"
+              android_material_icon_name="settings"
+              size={20}
+              color={colors.textSecondary}
+            />
+            <Text style={styles.settingsText}>Settings</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    // backgroundColor handled dynamically
-  },
-  container: {
+  scrollView: {
     flex: 1,
   },
   contentContainer: {
-    padding: 20,
-  },
-  contentContainerWithTabBar: {
-    paddingBottom: 100, // Extra padding for floating tab bar
-  },
-  profileHeader: {
-    alignItems: 'center',
-    borderRadius: 12,
-    padding: 32,
-    marginBottom: 16,
-    gap: 12,
-  },
-  name: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    // color handled dynamically
-  },
-  email: {
-    fontSize: 16,
-    // color handled dynamically
+    paddingTop: 60,
+    paddingBottom: 120,
   },
   section: {
-    borderRadius: 12,
-    padding: 20,
-    gap: 12,
+    paddingHorizontal: 16,
+    marginTop: 24,
   },
-  infoRow: {
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 16,
+    gap: 8,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  settingsSection: {
+    paddingHorizontal: 16,
+    marginTop: 32,
+    marginBottom: 20,
+  },
+  settingsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
     gap: 12,
   },
-  infoText: {
+  settingsText: {
     fontSize: 16,
-    // color handled dynamically
+    fontWeight: '600',
+    color: colors.textSecondary,
   },
 });
