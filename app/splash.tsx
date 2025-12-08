@@ -1,8 +1,8 @@
 
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import { View, StyleSheet, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
+import RoastLiveLogo from '@/components/RoastLiveLogo';
 import { colors } from '@/styles/commonStyles';
 
 export default function SplashScreen() {
@@ -43,15 +43,7 @@ export default function SplashScreen() {
           },
         ]}
       >
-        <Text style={styles.roastText}>ROAST</Text>
-        <LinearGradient
-          colors={[colors.gradientStart, colors.gradientEnd]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.liveBadge}
-        >
-          <Text style={styles.liveText}>LIVE</Text>
-        </LinearGradient>
+        <RoastLiveLogo size="xlarge" />
       </Animated.View>
     </View>
   );
@@ -65,25 +57,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   logoContainer: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
-  },
-  roastText: {
-    fontSize: 48,
-    fontWeight: '800',
-    color: colors.text,
-    letterSpacing: 2,
-  },
-  liveBadge: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 30,
-  },
-  liveText: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: colors.text,
-    letterSpacing: 2,
+    justifyContent: 'center',
   },
 });

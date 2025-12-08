@@ -16,6 +16,7 @@ import { router } from 'expo-router';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import GradientButton from '@/components/GradientButton';
+import RoastLiveLogo from '@/components/RoastLiveLogo';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/app/integrations/supabase/client';
 import { Tables } from '@/app/integrations/supabase/types';
@@ -147,6 +148,10 @@ export default function ProfileScreen() {
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
+        <View style={styles.logoHeader}>
+          <RoastLiveLogo size="small" />
+        </View>
+
         <View style={styles.header}>
           <Image
             source={{
@@ -346,9 +351,16 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingBottom: 100,
   },
+  logoHeader: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
   header: {
     alignItems: 'center',
     paddingHorizontal: 20,
+    paddingTop: 24,
     paddingBottom: 24,
   },
   avatar: {

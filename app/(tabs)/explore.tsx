@@ -14,6 +14,7 @@ import { router } from 'expo-router';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import LiveBadge from '@/components/LiveBadge';
+import RoastLiveLogo from '@/components/RoastLiveLogo';
 import { supabase } from '@/app/integrations/supabase/client';
 import { Tables } from '@/app/integrations/supabase/types';
 
@@ -74,7 +75,7 @@ export default function ExploreScreen() {
   return (
     <View style={commonStyles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Explore</Text>
+        <RoastLiveLogo size="medium" />
         <View style={styles.searchContainer}>
           <IconSymbol
             ios_icon_name="magnifyingglass"
@@ -178,12 +179,8 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: colors.text,
-    marginBottom: 16,
+    alignItems: 'center',
+    gap: 16,
   },
   searchContainer: {
     flexDirection: 'row',
@@ -193,6 +190,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     gap: 12,
+    width: '100%',
   },
   searchInput: {
     flex: 1,

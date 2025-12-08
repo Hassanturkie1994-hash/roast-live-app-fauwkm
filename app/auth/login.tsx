@@ -14,8 +14,8 @@ import {
 import { router } from 'expo-router';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import GradientButton from '@/components/GradientButton';
+import RoastLiveLogo from '@/components/RoastLiveLogo';
 import { useAuth } from '@/contexts/AuthContext';
-import { LinearGradient } from 'expo-linear-gradient';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -50,14 +50,7 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
-          <LinearGradient
-            colors={[colors.gradientStart, colors.gradientEnd]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.logoContainer}
-          >
-            <Text style={styles.logoText}>ROAST LIVE</Text>
-          </LinearGradient>
+          <RoastLiveLogo size="xlarge" />
           <Text style={styles.subtitle}>Welcome back to the live experience</Text>
         </View>
 
@@ -129,23 +122,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 48,
   },
-  logoContainer: {
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderRadius: 25,
-    marginBottom: 16,
-  },
-  logoText: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: colors.text,
-    letterSpacing: 2,
-  },
   subtitle: {
     fontSize: 16,
     fontWeight: '400',
     color: colors.textSecondary,
     textAlign: 'center',
+    marginTop: 24,
   },
   form: {
     width: '100%',

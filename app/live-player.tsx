@@ -17,6 +17,7 @@ import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import LiveBadge from '@/components/LiveBadge';
 import FollowButton from '@/components/FollowButton';
+import RoastLiveLogo from '@/components/RoastLiveLogo';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/app/integrations/supabase/client';
 import { Tables } from '@/app/integrations/supabase/types';
@@ -216,6 +217,10 @@ export default function LivePlayerScreen() {
           <View style={styles.placeholder} />
         </View>
 
+        <View style={styles.watermarkContainer}>
+          <RoastLiveLogo size="small" opacity={0.25} />
+        </View>
+
         <View style={styles.rightActions}>
           <TouchableOpacity style={styles.actionButton}>
             <IconSymbol
@@ -361,6 +366,12 @@ const styles = StyleSheet.create({
   },
   placeholder: {
     width: 40,
+  },
+  watermarkContainer: {
+    position: 'absolute',
+    bottom: 140,
+    right: 20,
+    pointerEvents: 'none',
   },
   rightActions: {
     position: 'absolute',

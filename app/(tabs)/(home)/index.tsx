@@ -14,6 +14,7 @@ import { router } from 'expo-router';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import LiveBadge from '@/components/LiveBadge';
+import RoastLiveLogo from '@/components/RoastLiveLogo';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/app/integrations/supabase/client';
 import { Tables } from '@/app/integrations/supabase/types';
@@ -89,9 +90,7 @@ export default function HomeScreen() {
   return (
     <View style={commonStyles.container}>
       <View style={styles.header}>
-        <View style={styles.logoContainer}>
-          <Text style={styles.logoText}>ROAST LIVE</Text>
-        </View>
+        <RoastLiveLogo size="medium" />
       </View>
 
       <View style={styles.tabsContainer}>
@@ -208,15 +207,7 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
-  },
-  logoContainer: {
     alignItems: 'center',
-  },
-  logoText: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: colors.text,
-    letterSpacing: 2,
   },
   tabsContainer: {
     flexDirection: 'row',

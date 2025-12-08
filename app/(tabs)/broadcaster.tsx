@@ -5,6 +5,7 @@ import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import GradientButton from '@/components/GradientButton';
 import LiveBadge from '@/components/LiveBadge';
+import RoastLiveLogo from '@/components/RoastLiveLogo';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/app/integrations/supabase/client';
@@ -192,6 +193,12 @@ export default function BroadcasterScreen() {
             </View>
           )}
 
+          {isLive && (
+            <View style={styles.watermarkContainer}>
+              <RoastLiveLogo size="small" opacity={0.25} />
+            </View>
+          )}
+
           <View style={styles.controlsContainer}>
             <View style={styles.controls}>
               <TouchableOpacity
@@ -247,6 +254,7 @@ export default function BroadcasterScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
+            <RoastLiveLogo size="medium" style={styles.modalLogo} />
             <Text style={styles.modalTitle}>Setup Your Stream</Text>
 
             <View style={styles.inputContainer}>
@@ -324,6 +332,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  watermarkContainer: {
+    position: 'absolute',
+    bottom: 140,
+    right: 20,
+    pointerEvents: 'none',
+  },
   controlsContainer: {
     position: 'absolute',
     bottom: 40,
@@ -377,6 +391,9 @@ const styles = StyleSheet.create({
     padding: 24,
     width: '100%',
     maxWidth: 400,
+  },
+  modalLogo: {
+    marginBottom: 16,
   },
   modalTitle: {
     fontSize: 24,
