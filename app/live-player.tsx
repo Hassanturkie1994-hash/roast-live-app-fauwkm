@@ -9,10 +9,11 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { VideoView, useVideoPlayer } from 'expo-video';
+import { useEvent } from 'expo';
 import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import LiveBadge from '@/components/LiveBadge';
@@ -21,8 +22,6 @@ import RoastLiveLogo from '@/components/RoastLiveLogo';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/app/integrations/supabase/client';
 import { Tables } from '@/app/integrations/supabase/types';
-
-const { height: screenHeight } = Dimensions.get('window');
 
 type ChatMessage = Tables<'chat_messages'> & {
   users: Tables<'users'>;
@@ -40,12 +39,38 @@ export default function LivePlayerScreen() {
   const [messageText, setMessageText] = useState('');
   const [isFollowing, setIsFollowing] = useState(false);
   const [showChat, setShowChat] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const scrollViewRef = useRef<ScrollView>(null);
 
-  const player = useVideoPlayer(stream?.playback_url || '', (player) => {
-    player.loop = false;
-    player.play();
+  // Create video player with HLS support
+  const player = useVideoPlayer(
+    stream?.playback_url
+      ? {
+          uri: stream.playback_url,
+          contentType: 'hls', // Explicitly set HLS content type
+        }
+      : null,
+    (player) => {
+      player.loop = false;
+      player.staysActiveInBackground = false;
+      player.play();
+    }
+  );
+
+  // Listen to player status changes
+  const { status } = useEvent(player, 'statusChange', {
+    status: player.status,
   });
+
+  useEffect(() => {
+    console.log('Player status:', status);
+    if (status === 'readyToPlay') {
+      setIsLoading(false);
+    } else if (status === 'error') {
+      console.error('Video player error');
+      setIsLoading(false);
+    }
+  }, [status]);
 
   useEffect(() => {
     if (streamId) {
@@ -71,10 +96,40 @@ export default function LivePlayerScreen() {
         return;
       }
 
+      console.log('Stream data:', data);
       setStream(data as Stream);
-      checkFollowStatus(data.broadcaster_id);
+      
+      if (data.broadcaster_id) {
+        checkFollowStatus(data.broadcaster_id);
+      }
+
+      // Fetch existing chat messages
+      fetchChatMessages();
     } catch (error) {
       console.error('Error in fetchStream:', error);
+    }
+  };
+
+  const fetchChatMessages = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .select('*, users(*)')
+        .eq('stream_id', streamId)
+        .order('created_at', { ascending: true })
+        .limit(50);
+
+      if (error) {
+        console.error('Error fetching chat messages:', error);
+        return;
+      }
+
+      setMessages(data as ChatMessage[]);
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: false });
+      }, 100);
+    } catch (error) {
+      console.error('Error in fetchChatMessages:', error);
     }
   };
 
@@ -176,18 +231,45 @@ export default function LivePlayerScreen() {
   if (!stream) {
     return (
       <View style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator size="large" color={colors.gradientEnd} />
         <Text style={styles.loadingText}>Loading stream...</Text>
+      </View>
+    );
+  }
+
+  if (!stream.playback_url) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <IconSymbol
+          ios_icon_name="exclamationmark.triangle.fill"
+          android_material_icon_name="warning"
+          size={48}
+          color={colors.gradientEnd}
+        />
+        <Text style={styles.errorText}>Stream not available</Text>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <Text style={styles.backButtonText}>Go Back</Text>
+        </TouchableOpacity>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
+      {isLoading && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color={colors.gradientEnd} />
+          <Text style={styles.loadingText}>Loading video...</Text>
+        </View>
+      )}
+
       <VideoView
         style={styles.video}
         player={player}
         allowsFullscreen
         allowsPictureInPicture
+        contentFit="contain"
+        nativeControls={false}
       />
 
       <View style={styles.overlay}>
@@ -317,11 +399,38 @@ const styles = StyleSheet.create({
   centerContent: {
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 16,
   },
   loadingText: {
     fontSize: 16,
     fontWeight: '600',
     color: colors.textSecondary,
+  },
+  errorText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text,
+    marginTop: 16,
+  },
+  backButton: {
+    marginTop: 24,
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    backgroundColor: colors.gradientEnd,
+    borderRadius: 25,
+  },
+  backButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+    gap: 16,
   },
   video: {
     width: '100%',

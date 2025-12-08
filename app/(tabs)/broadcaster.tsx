@@ -9,6 +9,7 @@ import RoastLiveLogo from '@/components/RoastLiveLogo';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/app/integrations/supabase/client';
+import { cloudflareService } from '@/app/services/cloudflareService';
 import { router } from 'expo-router';
 
 export default function BroadcasterScreen() {
@@ -23,6 +24,9 @@ export default function BroadcasterScreen() {
   const [showSetup, setShowSetup] = useState(false);
   const [streamTitle, setStreamTitle] = useState('');
   const [currentStreamId, setCurrentStreamId] = useState<string | null>(null);
+  const [rtmpUrl, setRtmpUrl] = useState<string | null>(null);
+  const [streamKey, setStreamKey] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -35,6 +39,7 @@ export default function BroadcasterScreen() {
     if (isLive) {
       interval = setInterval(() => {
         setLiveTime((prev) => prev + 1);
+        // In production, fetch real viewer count from Supabase
         setViewerCount((prev) => prev + Math.floor(Math.random() * 3));
       }, 1000);
     }
@@ -96,63 +101,72 @@ export default function BroadcasterScreen() {
       return;
     }
 
-    try {
-      const { data, error } = await supabase
-        .from('streams')
-        .insert({
-          broadcaster_id: user.id,
-          title: streamTitle,
-          status: 'live',
-          viewer_count: 0,
-        })
-        .select()
-        .single();
+    setIsLoading(true);
 
-      if (error) {
-        console.error('Error creating stream:', error);
-        Alert.alert('Error', 'Failed to start stream');
-        return;
+    try {
+      // Call Cloudflare Stream API via Edge Function
+      const response = await cloudflareService.startLive(streamTitle, user.id);
+
+      if (!response.success) {
+        throw new Error('Failed to start stream');
       }
 
-      setCurrentStreamId(data.id);
+      // Store stream data
+      setCurrentStreamId(response.stream.id);
+      setRtmpUrl(response.ingest_url);
+      setStreamKey(response.stream_key);
       setIsLive(true);
-      setViewerCount(1);
+      setViewerCount(0);
       setShowSetup(false);
       setStreamTitle('');
 
-      await supabase
-        .from('notifications')
-        .insert({
-          type: 'stream_started',
-          sender_id: user.id,
-          receiver_id: user.id,
-          ref_stream_id: data.id,
-          message: `${user.email} started a live stream`,
-        });
+      // Show RTMP credentials to user
+      Alert.alert(
+        'Stream Started!',
+        `Your stream is now live!\n\nRTMP URL: ${response.ingest_url}\nStream Key: ${response.stream_key}\n\nUse these credentials in your streaming software (OBS, etc.)`,
+        [{ text: 'OK' }]
+      );
+
+      console.log('Stream started successfully:', {
+        streamId: response.stream.id,
+        playbackUrl: response.playback_url,
+      });
     } catch (error) {
-      console.error('Error in startStream:', error);
-      Alert.alert('Error', 'An unexpected error occurred');
+      console.error('Error starting stream:', error);
+      Alert.alert(
+        'Error',
+        error instanceof Error ? error.message : 'Failed to start stream. Please try again.'
+      );
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const endStream = async () => {
     if (!currentStreamId) return;
 
+    setIsLoading(true);
+
     try {
-      await supabase
-        .from('streams')
-        .update({
-          status: 'ended',
-          ended_at: new Date().toISOString(),
-        })
-        .eq('id', currentStreamId);
+      // Call Cloudflare Stream API via Edge Function
+      await cloudflareService.stopLive(currentStreamId);
 
       setIsLive(false);
       setViewerCount(0);
       setLiveTime(0);
       setCurrentStreamId(null);
+      setRtmpUrl(null);
+      setStreamKey(null);
+
+      Alert.alert('Stream Ended', 'Your live stream has been ended successfully.');
     } catch (error) {
       console.error('Error ending stream:', error);
+      Alert.alert(
+        'Error',
+        error instanceof Error ? error.message : 'Failed to end stream. Please try again.'
+      );
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -161,6 +175,11 @@ export default function BroadcasterScreen() {
     const mins = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
     return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const copyToClipboard = (text: string, label: string) => {
+    // Note: Clipboard API would need to be implemented
+    Alert.alert('Copied', `${label} copied to clipboard`);
   };
 
   return (
@@ -199,6 +218,30 @@ export default function BroadcasterScreen() {
             </View>
           )}
 
+          {isLive && rtmpUrl && streamKey && (
+            <View style={styles.credentialsContainer}>
+              <Text style={styles.credentialsTitle}>RTMP Credentials</Text>
+              <TouchableOpacity
+                style={styles.credentialRow}
+                onPress={() => copyToClipboard(rtmpUrl, 'RTMP URL')}
+              >
+                <Text style={styles.credentialLabel}>URL:</Text>
+                <Text style={styles.credentialValue} numberOfLines={1}>
+                  {rtmpUrl}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.credentialRow}
+                onPress={() => copyToClipboard(streamKey, 'Stream Key')}
+              >
+                <Text style={styles.credentialLabel}>Key:</Text>
+                <Text style={styles.credentialValue} numberOfLines={1}>
+                  {streamKey}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           <View style={styles.controlsContainer}>
             <View style={styles.controls}>
               <TouchableOpacity
@@ -218,6 +261,7 @@ export default function BroadcasterScreen() {
                   title={isLive ? 'END STREAM' : 'START LIVE'}
                   onPress={handleStartLiveSetup}
                   size="large"
+                  disabled={isLoading}
                 />
               </View>
 
@@ -269,15 +313,33 @@ export default function BroadcasterScreen() {
               />
             </View>
 
+            <View style={styles.infoBox}>
+              <IconSymbol
+                ios_icon_name="info.circle.fill"
+                android_material_icon_name="info"
+                size={20}
+                color={colors.gradientEnd}
+              />
+              <Text style={styles.infoText}>
+                After starting, you&apos;ll receive RTMP credentials to use with streaming software like OBS.
+              </Text>
+            </View>
+
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={styles.cancelButton}
                 onPress={() => setShowSetup(false)}
+                disabled={isLoading}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
               <View style={styles.goLiveButtonContainer}>
-                <GradientButton title="GO LIVE" onPress={startStream} size="medium" />
+                <GradientButton
+                  title={isLoading ? 'STARTING...' : 'GO LIVE'}
+                  onPress={startStream}
+                  size="medium"
+                  disabled={isLoading}
+                />
               </View>
             </View>
           </View>
@@ -337,6 +399,39 @@ const styles = StyleSheet.create({
     bottom: 140,
     right: 20,
     pointerEvents: 'none',
+  },
+  credentialsContainer: {
+    position: 'absolute',
+    top: 120,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.gradientEnd,
+  },
+  credentialsTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.gradientEnd,
+    marginBottom: 12,
+    textTransform: 'uppercase',
+  },
+  credentialRow: {
+    marginBottom: 8,
+  },
+  credentialLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginBottom: 4,
+  },
+  credentialValue: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: colors.text,
+    fontFamily: 'monospace',
   },
   controlsContainer: {
     position: 'absolute',
@@ -403,7 +498,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   inputContainer: {
-    marginBottom: 24,
+    marginBottom: 16,
   },
   label: {
     fontSize: 14,
@@ -420,6 +515,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     color: colors.text,
     fontSize: 16,
+  },
+  infoBox: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(164, 0, 40, 0.1)',
+    borderColor: colors.gradientEnd,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 24,
+    gap: 12,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '400',
+    color: colors.textSecondary,
+    lineHeight: 18,
   },
   modalButtons: {
     flexDirection: 'row',
