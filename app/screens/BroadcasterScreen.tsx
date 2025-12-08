@@ -131,16 +131,22 @@ export default function BroadcasterScreen() {
     try {
       console.log('Starting live stream with title:', streamTitle);
       
-      const response = await cloudflareService.startLive(streamTitle, user.id);
+      const session = await cloudflareService.startLive(streamTitle, user.id);
 
-      if (!response.success) {
-        throw new Error('Failed to start stream');
+      // Validate response structure
+      if (!session.success) {
+        throw new Error('Failed to start stream: Server returned success=false');
       }
 
-      console.log('Stream started successfully:', response);
+      if (!session.stream || !session.stream.id) {
+        console.error('Invalid response structure:', session);
+        throw new Error('Failed to start stream: Missing stream.id in response');
+      }
 
-      setCurrentStreamId(response.stream.id);
-      setRtcPublishUrl(response.rtc_publish_url || null);
+      console.log('Stream started successfully with ID:', session.stream.id);
+
+      // Set the stream ID from the response
+      setCurrentStreamId(session.stream.id);
       setIsLive(true);
       setViewerCount(0);
       setShowSetup(false);
@@ -153,9 +159,16 @@ export default function BroadcasterScreen() {
       );
     } catch (error) {
       console.error('Error starting stream:', error);
+      
+      // Show detailed error message to user
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'Failed to start stream. Please try again.';
+      
       Alert.alert(
-        'Error',
-        error instanceof Error ? error.message : 'Failed to start stream. Please try again.'
+        'Cannot Start Stream',
+        errorMessage,
+        [{ text: 'OK' }]
       );
     } finally {
       setIsLoading(false);
@@ -163,7 +176,10 @@ export default function BroadcasterScreen() {
   };
 
   const endStream = async () => {
-    if (!currentStreamId) return;
+    if (!currentStreamId) {
+      Alert.alert('Error', 'No active stream to end');
+      return;
+    }
 
     setIsLoading(true);
 
@@ -179,9 +195,15 @@ export default function BroadcasterScreen() {
       Alert.alert('Stream Ended', 'Your live stream has been ended successfully.');
     } catch (error) {
       console.error('Error ending stream:', error);
+      
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'Failed to end stream. Please try again.';
+      
       Alert.alert(
         'Error',
-        error instanceof Error ? error.message : 'Failed to end stream. Please try again.'
+        errorMessage,
+        [{ text: 'OK' }]
       );
     } finally {
       setIsLoading(false);
@@ -197,16 +219,7 @@ export default function BroadcasterScreen() {
 
   return (
     <View style={commonStyles.container}>
-      {isLive && rtcPublishUrl ? (
-        <WebRTCLivePublisher
-          rtcPublishUrl={rtcPublishUrl}
-          facing={facing}
-          onStreamStarted={() => console.log('WebRTC stream started')}
-          onStreamError={(error) => console.error('WebRTC error:', error)}
-        />
-      ) : (
-        <CameraView style={styles.camera} facing={facing} />
-      )}
+      <CameraView style={styles.camera} facing={facing} />
 
       <View style={styles.overlay}>
         {isLive && (
@@ -317,7 +330,7 @@ export default function BroadcasterScreen() {
                 color={colors.gradientEnd}
               />
               <Text style={styles.infoText}>
-                Your stream will use WebRTC for low-latency broadcasting. Viewers will be able to watch in real-time!
+                Your stream will be broadcast live to all viewers. Make sure you have a stable internet connection!
               </Text>
             </View>
 

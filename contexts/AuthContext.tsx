@@ -2,14 +2,19 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/app/integrations/supabase/client';
 import { Session, User } from '@supabase/supabase-js';
-import { Tables } from '@/app/integrations/supabase/types';
 
-type UserProfile = Tables<'users'>;
+interface Profile {
+  id: string;
+  username: string;
+  avatar_url: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
 
 interface AuthContextType {
   session: Session | null;
   user: User | null;
-  profile: UserProfile | null;
+  profile: Profile | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signUp: (email: string, password: string, displayName: string) => Promise<{ error: any }>;
@@ -22,22 +27,52 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchProfile = async (userId: string) => {
+  const fetchProfile = async (userId: string, userEmail?: string) => {
     try {
+      console.log('Fetching profile for user:', userId);
+      
+      // Use maybeSingle() instead of single() to handle missing profiles
       const { data, error } = await supabase
-        .from('users')
+        .from('profiles')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error('Error fetching profile:', error);
         return null;
       }
 
+      // If profile doesn't exist, auto-create one
+      if (!data) {
+        console.log('Profile not found, creating new profile for user:', userId);
+        
+        // Use email as username if available, otherwise use a default
+        const username = userEmail ? userEmail.split('@')[0] : `user_${userId.substring(0, 8)}`;
+        
+        const { data: newProfile, error: createError } = await supabase
+          .from('profiles')
+          .insert({
+            id: userId,
+            username: username,
+            avatar_url: null,
+          })
+          .select()
+          .single();
+
+        if (createError) {
+          console.error('Error creating profile:', createError);
+          return null;
+        }
+
+        console.log('Profile created successfully:', newProfile);
+        return newProfile;
+      }
+
+      console.log('Profile fetched successfully:', data);
       return data;
     } catch (error) {
       console.error('Error in fetchProfile:', error);
@@ -47,7 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshProfile = async () => {
     if (user) {
-      const profileData = await fetchProfile(user.id);
+      const profileData = await fetchProfile(user.id, user.email);
       setProfile(profileData);
     }
   };
@@ -57,7 +92,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchProfile(session.user.id).then(setProfile);
+        fetchProfile(session.user.id, session.user.email).then(setProfile);
       }
       setLoading(false);
     });
@@ -68,7 +103,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchProfile(session.user.id).then(setProfile);
+        fetchProfile(session.user.id, session.user.email).then(setProfile);
       } else {
         setProfile(null);
       }
@@ -102,11 +137,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (data.user) {
-      const { error: profileError } = await supabase.from('users').insert({
+      // Create profile with username from displayName or email
+      const username = displayName || email.split('@')[0];
+      
+      const { error: profileError } = await supabase.from('profiles').insert({
         id: data.user.id,
-        display_name: displayName,
-        avatar: null,
-        bio: null,
+        username: username,
+        avatar_url: null,
       });
 
       if (profileError) {

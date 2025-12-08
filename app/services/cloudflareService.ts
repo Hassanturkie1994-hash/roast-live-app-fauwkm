@@ -5,21 +5,10 @@ export interface StartLiveResponse {
   success: boolean;
   stream: {
     id: string;
-    broadcaster_id: string;
-    title: string;
-    cloudflare_stream_id: string;
-    ingest_url: string;
-    stream_key: string;
-    playback_url: string;
-    rtc_publish_url?: string;
-    status: string;
-    viewer_count: number;
-    started_at: string;
   };
   ingest_url: string;
   stream_key: string;
   playback_url: string;
-  rtc_publish_url?: string;
 }
 
 export interface StopLiveResponse {
@@ -90,6 +79,22 @@ class CloudflareService {
 
       const data: StartLiveResponse = await response.json();
       console.log('Live stream started successfully:', data);
+      
+      // Validate that we have the required stream.id field
+      if (!data.success || !data.stream || !data.stream.id) {
+        console.error('Invalid response structure:', data);
+        throw new Error('Invalid response from server: missing stream.id');
+      }
+
+      // Validate all required fields are present and not undefined
+      if (!data.ingest_url || !data.stream_key || !data.playback_url) {
+        console.error('Missing required fields in response:', {
+          ingest_url: !!data.ingest_url,
+          stream_key: !!data.stream_key,
+          playback_url: !!data.playback_url,
+        });
+        throw new Error('Invalid response from server: missing required fields');
+      }
       
       return data;
     } catch (error) {
