@@ -6,18 +6,18 @@ import { Stack, router } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { SystemBars } from "react-native-edge-to-edge";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { useColorScheme, Alert } from "react-native";
+import { Alert } from "react-native";
 import { useNetworkState } from "expo-network";
 import {
   DarkTheme,
   DefaultTheme,
   Theme,
-  ThemeProvider,
+  ThemeProvider as NavigationThemeProvider,
 } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
 import { WidgetProvider } from "@/contexts/WidgetContext";
 import { AuthProvider } from "@/contexts/AuthContext";
-import { colors } from "@/styles/commonStyles";
+import { ThemeProvider, useTheme } from "@/contexts/ThemeContext";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -25,8 +25,8 @@ export const unstable_settings = {
   initialRouteName: "(tabs)",
 };
 
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
+function RootLayoutContent() {
+  const { colors, theme } = useTheme();
   const networkState = useNetworkState();
   const [loaded] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
@@ -54,22 +54,32 @@ export default function RootLayout() {
     return null;
   }
 
-  const RoastLiveDarkTheme: Theme = {
+  const navigationTheme: Theme = theme === 'dark' ? {
     ...DarkTheme,
     colors: {
-      primary: colors.gradientEnd,
+      primary: colors.brandPrimary,
       background: colors.background,
       card: colors.card,
       text: colors.text,
       border: colors.border,
-      notification: colors.gradientEnd,
+      notification: colors.brandPrimary,
+    },
+  } : {
+    ...DefaultTheme,
+    colors: {
+      primary: colors.brandPrimary,
+      background: colors.background,
+      card: colors.card,
+      text: colors.text,
+      border: colors.border,
+      notification: colors.brandPrimary,
     },
   };
 
   return (
     <>
-      <StatusBar style="light" animated />
-      <ThemeProvider value={RoastLiveDarkTheme}>
+      <StatusBar style={colors.statusBarStyle === 'light' ? 'light' : 'dark'} animated />
+      <NavigationThemeProvider value={navigationTheme}>
         <AuthProvider>
           <WidgetProvider>
             <GestureHandlerRootView>
@@ -90,11 +100,19 @@ export default function RootLayout() {
                   }}
                 />
               </Stack>
-              <SystemBars style="light" />
+              <SystemBars style={colors.statusBarStyle === 'light' ? 'light' : 'dark'} />
             </GestureHandlerRootView>
           </WidgetProvider>
         </AuthProvider>
-      </ThemeProvider>
+      </NavigationThemeProvider>
     </>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <ThemeProvider>
+      <RootLayoutContent />
+    </ThemeProvider>
   );
 }

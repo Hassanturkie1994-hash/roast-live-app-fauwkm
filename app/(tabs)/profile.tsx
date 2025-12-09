@@ -11,11 +11,11 @@ import {
   Alert,
 } from 'react-native';
 import { router } from 'expo-router';
-import { colors, commonStyles } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import GradientButton from '@/components/GradientButton';
 import RoastLiveLogo from '@/components/RoastLiveLogo';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { supabase } from '@/app/integrations/supabase/client';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -31,6 +31,7 @@ interface Post {
 
 export default function ProfileScreen() {
   const { user, profile, signOut } = useAuth();
+  const { colors } = useTheme();
   const [activeTab, setActiveTab] = useState<'replays' | 'posts' | 'stories'>('replays');
   const [posts, setPosts] = useState<Post[]>([]);
   const [likedPosts, setLikedPosts] = useState<Post[]>([]);
@@ -129,11 +130,11 @@ export default function ProfileScreen() {
             size={48}
             color={colors.textSecondary}
           />
-          <Text style={styles.emptyText}>No live replays yet</Text>
-          <Text style={styles.emptySubtext}>
+          <Text style={[styles.emptyText, { color: colors.text }]}>No live replays yet</Text>
+          <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>
             Your past livestreams will appear here
           </Text>
-          <TouchableOpacity style={styles.viewAllButton} onPress={handleArchivedStreams}>
+          <TouchableOpacity style={[styles.viewAllButton, { backgroundColor: colors.brandPrimary }]} onPress={handleArchivedStreams}>
             <Text style={styles.viewAllButtonText}>View Stream History</Text>
           </TouchableOpacity>
         </View>
@@ -150,9 +151,12 @@ export default function ProfileScreen() {
               size={48}
               color={colors.textSecondary}
             />
-            <Text style={styles.emptyText}>No posts yet</Text>
-            <TouchableOpacity style={styles.createButton} onPress={handleCreatePost}>
-              <Text style={styles.createButtonText}>Create your first post</Text>
+            <Text style={[styles.emptyText, { color: colors.text }]}>No posts yet</Text>
+            <TouchableOpacity 
+              style={[styles.createButton, { backgroundColor: colors.backgroundAlt, borderColor: colors.border }]} 
+              onPress={handleCreatePost}
+            >
+              <Text style={[styles.createButtonText, { color: colors.text }]}>Create your first post</Text>
             </TouchableOpacity>
           </View>
         );
@@ -163,7 +167,7 @@ export default function ProfileScreen() {
           {posts.map((post, index) => (
             <TouchableOpacity
               key={index}
-              style={styles.postCard}
+              style={[styles.postCard, { backgroundColor: colors.card }]}
               activeOpacity={0.8}
             >
               <Image source={{ uri: post.media_url }} style={styles.postImage} />
@@ -204,9 +208,12 @@ export default function ProfileScreen() {
           size={48}
           color={colors.textSecondary}
         />
-        <Text style={styles.emptyText}>No story highlights</Text>
-        <TouchableOpacity style={styles.createButton} onPress={handleCreateStory}>
-          <Text style={styles.createButtonText}>Create a story</Text>
+        <Text style={[styles.emptyText, { color: colors.text }]}>No story highlights</Text>
+        <TouchableOpacity 
+          style={[styles.createButton, { backgroundColor: colors.backgroundAlt, borderColor: colors.border }]} 
+          onPress={handleCreateStory}
+        >
+          <Text style={[styles.createButtonText, { color: colors.text }]}>Create a story</Text>
         </TouchableOpacity>
       </View>
     );
@@ -214,20 +221,20 @@ export default function ProfileScreen() {
 
   if (!profile) {
     return (
-      <View style={[commonStyles.container, styles.centerContent]}>
-        <Text style={styles.loadingText}>Loading profile...</Text>
+      <View style={[styles.container, styles.centerContent, { backgroundColor: colors.background }]}>
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading profile...</Text>
       </View>
     );
   }
 
   return (
-    <View style={commonStyles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.logoHeader}>
+        <View style={[styles.logoHeader, { borderBottomColor: colors.border }]}>
           <View style={styles.logoPlaceholder} />
           <TouchableOpacity onPress={handleSettings} style={styles.settingsButton}>
             <IconSymbol
@@ -241,7 +248,7 @@ export default function ProfileScreen() {
 
         {/* Banner */}
         {profile.banner_url && (
-          <Image source={{ uri: profile.banner_url }} style={styles.banner} />
+          <Image source={{ uri: profile.banner_url }} style={[styles.banner, { backgroundColor: colors.backgroundAlt }]} />
         )}
 
         {/* Profile Header with Logo */}
@@ -254,37 +261,37 @@ export default function ProfileScreen() {
             source={{
               uri: profile.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
             }}
-            style={styles.avatar}
+            style={[styles.avatar, { backgroundColor: colors.backgroundAlt, borderColor: colors.border }]}
           />
-          <Text style={styles.displayName}>{profile.display_name || profile.username}</Text>
-          <Text style={styles.username}>@{profile.username}</Text>
+          <Text style={[styles.displayName, { color: colors.text }]}>{profile.display_name || profile.username}</Text>
+          <Text style={[styles.username, { color: colors.textSecondary }]}>@{profile.username}</Text>
 
-          {profile.bio && <Text style={styles.bio}>{profile.bio}</Text>}
+          {profile.bio && <Text style={[styles.bio, { color: colors.text }]}>{profile.bio}</Text>}
 
           {profile.unique_profile_link && (
-            <Text style={styles.profileLink}>{profile.unique_profile_link}</Text>
+            <Text style={[styles.profileLink, { color: colors.brandPrimary }]}>{profile.unique_profile_link}</Text>
           )}
 
           <View style={styles.statsContainer}>
             <View style={styles.stat}>
-              <Text style={styles.statValue}>{formatCount(followersCount)}</Text>
-              <Text style={styles.statLabel}>Followers</Text>
+              <Text style={[styles.statValue, { color: colors.text }]}>{formatCount(followersCount)}</Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Followers</Text>
             </View>
-            <View style={styles.statDivider} />
+            <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
             <View style={styles.stat}>
-              <Text style={styles.statValue}>{formatCount(followingCount)}</Text>
-              <Text style={styles.statLabel}>Following</Text>
+              <Text style={[styles.statValue, { color: colors.text }]}>{formatCount(followingCount)}</Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Following</Text>
             </View>
-            <View style={styles.statDivider} />
+            <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
             <View style={styles.stat}>
-              <Text style={styles.statValue}>{posts.length}</Text>
-              <Text style={styles.statLabel}>Posts</Text>
+              <Text style={[styles.statValue, { color: colors.text }]}>{posts.length}</Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Posts</Text>
             </View>
           </View>
 
           {/* Wallet Balance - Clickable */}
           <TouchableOpacity 
-            style={styles.walletCard} 
+            style={[styles.walletCard, { backgroundColor: colors.backgroundAlt, borderColor: colors.border }]} 
             onPress={() => router.push('/screens/WalletScreen')}
             activeOpacity={0.7}
           >
@@ -295,10 +302,10 @@ export default function ProfileScreen() {
                 size={20}
                 color={colors.brandPrimary}
               />
-              <Text style={styles.walletLabel}>Saldo Balance</Text>
+              <Text style={[styles.walletLabel, { color: colors.text }]}>Saldo Balance</Text>
             </View>
             <View style={styles.walletRight}>
-              <Text style={styles.walletAmount}>{walletBalance.toFixed(2)} SEK</Text>
+              <Text style={[styles.walletAmount, { color: colors.brandPrimary }]}>{walletBalance.toFixed(2)} SEK</Text>
               <IconSymbol
                 ios_icon_name="chevron.right"
                 android_material_icon_name="chevron_right"
@@ -310,7 +317,7 @@ export default function ProfileScreen() {
 
           {/* Saved Streams Link */}
           <TouchableOpacity 
-            style={styles.savedStreamsCard} 
+            style={[styles.savedStreamsCard, { backgroundColor: colors.backgroundAlt, borderColor: colors.border }]} 
             onPress={handleSavedStreams}
             activeOpacity={0.7}
           >
@@ -321,7 +328,7 @@ export default function ProfileScreen() {
                 size={20}
                 color={colors.brandPrimary}
               />
-              <Text style={styles.savedStreamsLabel}>Saved Streams</Text>
+              <Text style={[styles.savedStreamsLabel, { color: colors.text }]}>Saved Streams</Text>
             </View>
             <IconSymbol
               ios_icon_name="chevron.right"
@@ -333,7 +340,7 @@ export default function ProfileScreen() {
 
           {/* Archived Streams Link */}
           <TouchableOpacity 
-            style={styles.savedStreamsCard} 
+            style={[styles.savedStreamsCard, { backgroundColor: colors.backgroundAlt, borderColor: colors.border }]} 
             onPress={handleArchivedStreams}
             activeOpacity={0.7}
           >
@@ -344,7 +351,7 @@ export default function ProfileScreen() {
                 size={20}
                 color={colors.brandPrimary}
               />
-              <Text style={styles.savedStreamsLabel}>Stream History</Text>
+              <Text style={[styles.savedStreamsLabel, { color: colors.text }]}>Stream History</Text>
             </View>
             <IconSymbol
               ios_icon_name="chevron.right"
@@ -358,7 +365,10 @@ export default function ProfileScreen() {
             <View style={styles.buttonFlex}>
               <GradientButton title="Edit Profile" onPress={handleEditProfile} size="medium" />
             </View>
-            <TouchableOpacity style={styles.iconButton} onPress={handleShare}>
+            <TouchableOpacity 
+              style={[styles.iconButton, { backgroundColor: colors.card, borderColor: colors.border }]} 
+              onPress={handleShare}
+            >
               <IconSymbol
                 ios_icon_name="square.and.arrow.up"
                 android_material_icon_name="share"
@@ -369,31 +379,37 @@ export default function ProfileScreen() {
           </View>
 
           <View style={styles.actionButtons}>
-            <TouchableOpacity style={styles.actionButton} onPress={handleCreatePost}>
+            <TouchableOpacity 
+              style={[styles.actionButton, { backgroundColor: colors.backgroundAlt, borderColor: colors.border }]} 
+              onPress={handleCreatePost}
+            >
               <IconSymbol
                 ios_icon_name="plus.square.fill"
                 android_material_icon_name="add_box"
                 size={20}
                 color={colors.text}
               />
-              <Text style={styles.actionButtonText}>Post</Text>
+              <Text style={[styles.actionButtonText, { color: colors.text }]}>Post</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton} onPress={handleCreateStory}>
+            <TouchableOpacity 
+              style={[styles.actionButton, { backgroundColor: colors.backgroundAlt, borderColor: colors.border }]} 
+              onPress={handleCreateStory}
+            >
               <IconSymbol
                 ios_icon_name="plus.circle.fill"
                 android_material_icon_name="add_circle"
                 size={20}
                 color={colors.text}
               />
-              <Text style={styles.actionButtonText}>Story</Text>
+              <Text style={[styles.actionButtonText, { color: colors.text }]}>Story</Text>
             </TouchableOpacity>
           </View>
         </View>
 
         {/* Tabs */}
-        <View style={styles.tabsContainer}>
+        <View style={[styles.tabsContainer, { borderBottomColor: colors.border }]}>
           <TouchableOpacity
-            style={[styles.tab, activeTab === 'replays' && styles.tabActive]}
+            style={[styles.tab, activeTab === 'replays' && { borderBottomColor: colors.brandPrimary }]}
             onPress={() => setActiveTab('replays')}
           >
             <IconSymbol
@@ -402,13 +418,13 @@ export default function ProfileScreen() {
               size={20}
               color={activeTab === 'replays' ? colors.brandPrimary : colors.textSecondary}
             />
-            <Text style={[styles.tabText, activeTab === 'replays' && styles.tabTextActive]}>
+            <Text style={[styles.tabText, { color: activeTab === 'replays' ? colors.brandPrimary : colors.textSecondary }]}>
               LIVE REPLAYS
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.tab, activeTab === 'posts' && styles.tabActive]}
+            style={[styles.tab, activeTab === 'posts' && { borderBottomColor: colors.brandPrimary }]}
             onPress={() => setActiveTab('posts')}
           >
             <IconSymbol
@@ -417,13 +433,13 @@ export default function ProfileScreen() {
               size={20}
               color={activeTab === 'posts' ? colors.brandPrimary : colors.textSecondary}
             />
-            <Text style={[styles.tabText, activeTab === 'posts' && styles.tabTextActive]}>
+            <Text style={[styles.tabText, { color: activeTab === 'posts' ? colors.brandPrimary : colors.textSecondary }]}>
               POSTS
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.tab, activeTab === 'stories' && styles.tabActive]}
+            style={[styles.tab, activeTab === 'stories' && { borderBottomColor: colors.brandPrimary }]}
             onPress={() => setActiveTab('stories')}
           >
             <IconSymbol
@@ -432,7 +448,7 @@ export default function ProfileScreen() {
               size={20}
               color={activeTab === 'stories' ? colors.brandPrimary : colors.textSecondary}
             />
-            <Text style={[styles.tabText, activeTab === 'stories' && styles.tabTextActive]}>
+            <Text style={[styles.tabText, { color: activeTab === 'stories' ? colors.brandPrimary : colors.textSecondary }]}>
               STORIES
             </Text>
           </TouchableOpacity>
@@ -456,6 +472,9 @@ function formatCount(count: number): string {
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
   centerContent: {
     justifyContent: 'center',
     alignItems: 'center',
@@ -463,7 +482,6 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.textSecondary,
   },
   scrollView: {
     flex: 1,
@@ -479,7 +497,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   logoPlaceholder: {
     width: 40,
@@ -493,7 +510,6 @@ const styles = StyleSheet.create({
   banner: {
     width: '100%',
     height: 150,
-    backgroundColor: colors.backgroundAlt,
   },
   header: {
     alignItems: 'center',
@@ -508,27 +524,22 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: colors.backgroundAlt,
     marginBottom: 16,
     borderWidth: 3,
-    borderColor: colors.border,
   },
   displayName: {
     fontSize: 24,
     fontWeight: '800',
-    color: colors.text,
     marginBottom: 4,
   },
   username: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.textSecondary,
     marginBottom: 12,
   },
   bio: {
     fontSize: 14,
     fontWeight: '400',
-    color: colors.text,
     textAlign: 'center',
     marginBottom: 8,
     lineHeight: 20,
@@ -536,7 +547,6 @@ const styles = StyleSheet.create({
   profileLink: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.brandPrimary,
     marginBottom: 20,
   },
   statsContainer: {
@@ -551,18 +561,15 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 20,
     fontWeight: '700',
-    color: colors.text,
     marginBottom: 4,
   },
   statLabel: {
     fontSize: 14,
     fontWeight: '400',
-    color: colors.textSecondary,
   },
   statDivider: {
     width: 1,
     height: 30,
-    backgroundColor: colors.border,
   },
   buttonRow: {
     flexDirection: 'row',
@@ -577,9 +584,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -594,24 +599,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: colors.backgroundAlt,
     borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: 12,
     paddingVertical: 12,
   },
   actionButtonText: {
     fontSize: 14,
     fontWeight: '700',
-    color: colors.text,
   },
   walletCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.backgroundAlt,
     borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 16,
@@ -626,7 +626,6 @@ const styles = StyleSheet.create({
   walletLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.text,
   },
   walletRight: {
     flexDirection: 'row',
@@ -636,15 +635,12 @@ const styles = StyleSheet.create({
   walletAmount: {
     fontSize: 16,
     fontWeight: '700',
-    color: colors.brandPrimary,
   },
   savedStreamsCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.backgroundAlt,
     borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 16,
@@ -659,12 +655,10 @@ const styles = StyleSheet.create({
   savedStreamsLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.text,
   },
   tabsContainer: {
     flexDirection: 'row',
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
     marginBottom: 2,
   },
   tab: {
@@ -674,18 +668,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 16,
     gap: 8,
-  },
-  tabActive: {
     borderBottomWidth: 2,
-    borderBottomColor: colors.brandPrimary,
+    borderBottomColor: 'transparent',
   },
   tabText: {
     fontSize: 12,
     fontWeight: '700',
-    color: colors.textSecondary,
-  },
-  tabTextActive: {
-    color: colors.brandPrimary,
   },
   postsGrid: {
     flexDirection: 'row',
@@ -703,31 +691,25 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     fontWeight: '700',
-    color: colors.text,
   },
   emptySubtext: {
     fontSize: 14,
     fontWeight: '400',
-    color: colors.textSecondary,
     textAlign: 'center',
   },
   createButton: {
     paddingHorizontal: 24,
     paddingVertical: 12,
-    backgroundColor: colors.backgroundAlt,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: colors.border,
   },
   createButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.text,
   },
   viewAllButton: {
     paddingHorizontal: 24,
     paddingVertical: 12,
-    backgroundColor: colors.brandPrimary,
     borderRadius: 20,
   },
   viewAllButtonText: {
@@ -738,7 +720,6 @@ const styles = StyleSheet.create({
   postCard: {
     width: (screenWidth - 6) / 3,
     aspectRatio: 9 / 16,
-    backgroundColor: colors.card,
     position: 'relative',
   },
   postImage: {

@@ -20,7 +20,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Href } from 'expo-router';
-import { colors } from '@/styles/commonStyles';
+import { useTheme } from '@/contexts/ThemeContext';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -46,6 +46,7 @@ export default function FloatingTabBar({
 }: FloatingTabBarProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const { colors, theme } = useTheme();
   const animatedValue = useSharedValue(0);
 
   const activeTabIndex = React.useMemo(() => {
@@ -105,32 +106,34 @@ export default function FloatingTabBar({
     };
   });
 
-  const dynamicStyles = {
-    blurContainer: {
-      ...styles.blurContainer,
-      borderWidth: 1,
-      borderColor: colors.border,
-      ...Platform.select({
-        ios: {
-          backgroundColor: 'rgba(255, 255, 255, 0.9)',
-        },
-        android: {
-          backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        },
-        web: {
-          backgroundColor: 'rgba(255, 255, 255, 0.95)',
-          backdropFilter: 'blur(10px)',
-        },
-      }),
-    },
-    background: {
-      ...styles.background,
-    },
-    indicator: {
-      ...styles.indicator,
-      backgroundColor: colors.backgroundAlt,
-      width: `${tabWidthPercent}%` as `${number}%`,
-    },
+  const blurContainerStyle = {
+    ...styles.blurContainer,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...Platform.select({
+      ios: {
+        backgroundColor: theme === 'dark' 
+          ? 'rgba(22, 22, 22, 0.9)' 
+          : 'rgba(255, 255, 255, 0.9)',
+      },
+      android: {
+        backgroundColor: theme === 'dark'
+          ? 'rgba(22, 22, 22, 0.95)'
+          : 'rgba(255, 255, 255, 0.95)',
+      },
+      web: {
+        backgroundColor: theme === 'dark'
+          ? 'rgba(22, 22, 22, 0.95)'
+          : 'rgba(255, 255, 255, 0.95)',
+        backdropFilter: 'blur(10px)',
+      },
+    }),
+  };
+
+  const indicatorDynamicStyle = {
+    ...styles.indicator,
+    backgroundColor: colors.backgroundAlt,
+    width: `${tabWidthPercent}%` as `${number}%`,
   };
 
   return (
@@ -144,10 +147,10 @@ export default function FloatingTabBar({
       ]}>
         <BlurView
           intensity={80}
-          style={[dynamicStyles.blurContainer, { borderRadius }]}
+          style={[blurContainerStyle, { borderRadius }]}
         >
-          <View style={dynamicStyles.background} />
-          <Animated.View style={[dynamicStyles.indicator, indicatorStyle]} />
+          <View style={styles.background} />
+          <Animated.View style={[indicatorDynamicStyle, indicatorStyle]} />
           <View style={styles.tabsContainer}>
             {tabs.map((tab, index) => {
               const isActive = activeTabIndex === index;
@@ -169,8 +172,8 @@ export default function FloatingTabBar({
                       <Text
                         style={[
                           styles.tabLabel,
-                          { color: colors.textSecondary },
-                          isActive && { color: colors.brandPrimary, fontWeight: '600' },
+                          { color: isActive ? colors.brandPrimary : colors.textSecondary },
+                          isActive && { fontWeight: '600' },
                         ]}
                       >
                         {tab.label}

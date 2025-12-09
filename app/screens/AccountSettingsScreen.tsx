@@ -10,13 +10,14 @@ import {
   Alert,
 } from 'react-native';
 import { router } from 'expo-router';
-import { colors, commonStyles } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { supabase } from '@/app/integrations/supabase/client';
 
 export default function AccountSettingsScreen() {
   const { signOut } = useAuth();
+  const { colors } = useTheme();
   const [isPrivateProfile, setIsPrivateProfile] = useState(false);
   const [commentPermission, setCommentPermission] = useState<'everyone' | 'followers' | 'no_one'>('everyone');
 
@@ -55,8 +56,8 @@ export default function AccountSettingsScreen() {
   };
 
   return (
-    <View style={commonStyles.container}>
-      <View style={styles.header}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <IconSymbol
             ios_icon_name="chevron.left"
@@ -65,7 +66,7 @@ export default function AccountSettingsScreen() {
             color={colors.text}
           />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Settings</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Settings</Text>
         <View style={styles.placeholder} />
       </View>
 
@@ -75,10 +76,34 @@ export default function AccountSettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* ALLMÄNT Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>ALLMÄNT</Text>
+        <View style={[styles.section, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>ALLMÄNT</Text>
 
-          <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/screens/EditProfileScreen')}>
+          <TouchableOpacity 
+            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
+            onPress={() => router.push('/screens/AppearanceSettingsScreen')}
+          >
+            <View style={styles.settingLeft}>
+              <IconSymbol
+                ios_icon_name="paintbrush.fill"
+                android_material_icon_name="palette"
+                size={20}
+                color={colors.text}
+              />
+              <Text style={[styles.settingText, { color: colors.text }]}>Appearance</Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="chevron_right"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
+            onPress={() => router.push('/screens/EditProfileScreen')}
+          >
             <View style={styles.settingLeft}>
               <IconSymbol
                 ios_icon_name="person.fill"
@@ -86,7 +111,7 @@ export default function AccountSettingsScreen() {
                 size={20}
                 color={colors.text}
               />
-              <Text style={styles.settingText}>Profile Settings</Text>
+              <Text style={[styles.settingText, { color: colors.text }]}>Profile Settings</Text>
             </View>
             <IconSymbol
               ios_icon_name="chevron.right"
@@ -96,15 +121,18 @@ export default function AccountSettingsScreen() {
             />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/screens/WalletScreen')}>
+          <TouchableOpacity 
+            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
+            onPress={() => router.push('/screens/WalletScreen')}
+          >
             <View style={styles.settingLeft}>
               <IconSymbol
                 ios_icon_name="wallet.pass.fill"
                 android_material_icon_name="account_balance_wallet"
                 size={20}
-                color={colors.gradientEnd}
+                color={colors.brandPrimary}
               />
-              <Text style={styles.settingText}>Saldo</Text>
+              <Text style={[styles.settingText, { color: colors.text }]}>Saldo</Text>
             </View>
             <IconSymbol
               ios_icon_name="chevron.right"
@@ -114,15 +142,18 @@ export default function AccountSettingsScreen() {
             />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/screens/GiftInformationScreen')}>
+          <TouchableOpacity 
+            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
+            onPress={() => router.push('/screens/GiftInformationScreen')}
+          >
             <View style={styles.settingLeft}>
               <IconSymbol
                 ios_icon_name="gift.fill"
                 android_material_icon_name="card_giftcard"
                 size={20}
-                color={colors.gradientEnd}
+                color={colors.brandPrimary}
               />
-              <Text style={styles.settingText}>Gift Information</Text>
+              <Text style={[styles.settingText, { color: colors.text }]}>Gift Information</Text>
             </View>
             <IconSymbol
               ios_icon_name="chevron.right"
@@ -132,7 +163,10 @@ export default function AccountSettingsScreen() {
             />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.settingItem} onPress={() => Alert.alert('Saved Streams', 'This feature will be available soon.')}>
+          <TouchableOpacity 
+            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
+            onPress={() => Alert.alert('Saved Streams', 'This feature will be available soon.')}
+          >
             <View style={styles.settingLeft}>
               <IconSymbol
                 ios_icon_name="bookmark.fill"
@@ -140,7 +174,7 @@ export default function AccountSettingsScreen() {
                 size={20}
                 color={colors.text}
               />
-              <Text style={styles.settingText}>Saved Streams</Text>
+              <Text style={[styles.settingText, { color: colors.text }]}>Saved Streams</Text>
             </View>
             <IconSymbol
               ios_icon_name="chevron.right"
@@ -150,15 +184,18 @@ export default function AccountSettingsScreen() {
             />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/screens/StreamDashboardScreen')}>
+          <TouchableOpacity 
+            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
+            onPress={() => router.push('/screens/StreamDashboardScreen')}
+          >
             <View style={styles.settingLeft}>
               <IconSymbol
                 ios_icon_name="shield.fill"
                 android_material_icon_name="shield"
                 size={20}
-                color={colors.gradientEnd}
+                color={colors.brandPrimary}
               />
-              <Text style={styles.settingText}>Stream Dashboard</Text>
+              <Text style={[styles.settingText, { color: colors.text }]}>Stream Dashboard</Text>
             </View>
             <IconSymbol
               ios_icon_name="chevron.right"
@@ -168,15 +205,18 @@ export default function AccountSettingsScreen() {
             />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/screens/BlockedUsersScreen')}>
+          <TouchableOpacity 
+            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
+            onPress={() => router.push('/screens/BlockedUsersScreen')}
+          >
             <View style={styles.settingLeft}>
               <IconSymbol
                 ios_icon_name="hand.raised.fill"
                 android_material_icon_name="block"
                 size={20}
-                color={colors.gradientEnd}
+                color={colors.brandPrimary}
               />
-              <Text style={styles.settingText}>Blocked Users</Text>
+              <Text style={[styles.settingText, { color: colors.text }]}>Blocked Users</Text>
             </View>
             <IconSymbol
               ios_icon_name="chevron.right"
@@ -188,10 +228,13 @@ export default function AccountSettingsScreen() {
         </View>
 
         {/* Security Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>🔐 Security</Text>
+        <View style={[styles.section, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>🔐 Security</Text>
 
-          <TouchableOpacity style={styles.settingItem} onPress={handleChangePassword}>
+          <TouchableOpacity 
+            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
+            onPress={handleChangePassword}
+          >
             <View style={styles.settingLeft}>
               <IconSymbol
                 ios_icon_name="lock.fill"
@@ -199,7 +242,7 @@ export default function AccountSettingsScreen() {
                 size={20}
                 color={colors.text}
               />
-              <Text style={styles.settingText}>Change Password</Text>
+              <Text style={[styles.settingText, { color: colors.text }]}>Change Password</Text>
             </View>
             <IconSymbol
               ios_icon_name="chevron.right"
@@ -209,7 +252,10 @@ export default function AccountSettingsScreen() {
             />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.settingItem} onPress={handleEnable2FA}>
+          <TouchableOpacity 
+            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
+            onPress={handleEnable2FA}
+          >
             <View style={styles.settingLeft}>
               <IconSymbol
                 ios_icon_name="shield.fill"
@@ -217,7 +263,7 @@ export default function AccountSettingsScreen() {
                 size={20}
                 color={colors.text}
               />
-              <Text style={styles.settingText}>Enable 2FA</Text>
+              <Text style={[styles.settingText, { color: colors.text }]}>Enable 2FA</Text>
             </View>
             <IconSymbol
               ios_icon_name="chevron.right"
@@ -227,15 +273,18 @@ export default function AccountSettingsScreen() {
             />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.settingItem} onPress={handleSignOut}>
+          <TouchableOpacity 
+            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
+            onPress={handleSignOut}
+          >
             <View style={styles.settingLeft}>
               <IconSymbol
                 ios_icon_name="rectangle.portrait.and.arrow.right"
                 android_material_icon_name="logout"
                 size={20}
-                color={colors.gradientEnd}
+                color={colors.brandPrimary}
               />
-              <Text style={[styles.settingText, styles.dangerText]}>Logout</Text>
+              <Text style={[styles.settingText, styles.dangerText, { color: colors.brandPrimary }]}>Logout</Text>
             </View>
             <IconSymbol
               ios_icon_name="chevron.right"
@@ -247,10 +296,10 @@ export default function AccountSettingsScreen() {
         </View>
 
         {/* Profile Preferences Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>👤 Profile Preferences</Text>
+        <View style={[styles.section, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>👤 Profile Preferences</Text>
 
-          <View style={styles.settingItem}>
+          <View style={[styles.settingItem, { borderBottomColor: colors.divider }]}>
             <View style={styles.settingLeft}>
               <IconSymbol
                 ios_icon_name="eye.slash.fill"
@@ -258,17 +307,17 @@ export default function AccountSettingsScreen() {
                 size={20}
                 color={colors.text}
               />
-              <Text style={styles.settingText}>Private Profile</Text>
+              <Text style={[styles.settingText, { color: colors.text }]}>Private Profile</Text>
             </View>
             <Switch
               value={isPrivateProfile}
               onValueChange={setIsPrivateProfile}
-              trackColor={{ false: colors.border, true: colors.gradientEnd }}
-              thumbColor={colors.text}
+              trackColor={{ false: colors.border, true: colors.brandPrimary }}
+              thumbColor="#FFFFFF"
             />
           </View>
 
-          <View style={styles.settingItem}>
+          <View style={[styles.settingItem, { borderBottomColor: colors.divider }]}>
             <View style={styles.settingLeft}>
               <IconSymbol
                 ios_icon_name="bubble.left.fill"
@@ -277,8 +326,8 @@ export default function AccountSettingsScreen() {
                 color={colors.text}
               />
               <View>
-                <Text style={styles.settingText}>Who Can Comment</Text>
-                <Text style={styles.settingSubtext}>{commentPermission}</Text>
+                <Text style={[styles.settingText, { color: colors.text }]}>Who Can Comment</Text>
+                <Text style={[styles.settingSubtext, { color: colors.textSecondary }]}>{commentPermission}</Text>
               </View>
             </View>
             <TouchableOpacity
@@ -302,18 +351,21 @@ export default function AccountSettingsScreen() {
         </View>
 
         {/* Payments & Payouts Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>💳 Payments & Payouts</Text>
+        <View style={[styles.section, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>💳 Payments & Payouts</Text>
 
-          <TouchableOpacity style={styles.settingItem} onPress={handleAddCredits}>
+          <TouchableOpacity 
+            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
+            onPress={handleAddCredits}
+          >
             <View style={styles.settingLeft}>
               <IconSymbol
                 ios_icon_name="plus.circle.fill"
                 android_material_icon_name="add_circle"
                 size={20}
-                color={colors.gradientEnd}
+                color={colors.brandPrimary}
               />
-              <Text style={styles.settingText}>Add Credits</Text>
+              <Text style={[styles.settingText, { color: colors.text }]}>Add Credits</Text>
             </View>
             <IconSymbol
               ios_icon_name="chevron.right"
@@ -323,7 +375,10 @@ export default function AccountSettingsScreen() {
             />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.settingItem} onPress={handleWithdrawEarnings}>
+          <TouchableOpacity 
+            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
+            onPress={handleWithdrawEarnings}
+          >
             <View style={styles.settingLeft}>
               <IconSymbol
                 ios_icon_name="arrow.down.circle.fill"
@@ -331,7 +386,7 @@ export default function AccountSettingsScreen() {
                 size={20}
                 color={colors.text}
               />
-              <Text style={styles.settingText}>Withdraw Earnings</Text>
+              <Text style={[styles.settingText, { color: colors.text }]}>Withdraw Earnings</Text>
             </View>
             <IconSymbol
               ios_icon_name="chevron.right"
@@ -341,7 +396,10 @@ export default function AccountSettingsScreen() {
             />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.settingItem} onPress={handleTransactionHistory}>
+          <TouchableOpacity 
+            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
+            onPress={handleTransactionHistory}
+          >
             <View style={styles.settingLeft}>
               <IconSymbol
                 ios_icon_name="list.bullet"
@@ -349,7 +407,7 @@ export default function AccountSettingsScreen() {
                 size={20}
                 color={colors.text}
               />
-              <Text style={styles.settingText}>Transaction History</Text>
+              <Text style={[styles.settingText, { color: colors.text }]}>Transaction History</Text>
             </View>
             <IconSymbol
               ios_icon_name="chevron.right"
@@ -365,6 +423,9 @@ export default function AccountSettingsScreen() {
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -373,7 +434,6 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   backButton: {
     width: 40,
@@ -384,7 +444,6 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: colors.text,
   },
   placeholder: {
     width: 40,
@@ -399,12 +458,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 24,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: colors.text,
     marginBottom: 16,
   },
   settingItem: {
@@ -413,7 +470,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: colors.divider,
   },
   settingLeft: {
     flexDirection: 'row',
@@ -424,16 +480,14 @@ const styles = StyleSheet.create({
   settingText: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.text,
   },
   settingSubtext: {
     fontSize: 12,
     fontWeight: '400',
-    color: colors.textSecondary,
     marginTop: 2,
     textTransform: 'capitalize',
   },
   dangerText: {
-    color: colors.gradientEnd,
+    // Color will be set dynamically
   },
 });

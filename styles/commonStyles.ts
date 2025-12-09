@@ -1,26 +1,29 @@
 
 import { StyleSheet, ViewStyle, TextStyle } from 'react-native';
 
+// This file is kept for backward compatibility
+// New code should use useTheme() hook from ThemeContext
+
 export const colors = {
-  // Primary Colors - Light Theme
-  background: '#FFFFFF',        // Pure White
-  backgroundAlt: '#F7F7F7',     // Light Gray for secondary sections
-  card: '#FBFBFB',              // Very Light Gray for cards
+  // Primary Colors - Light Theme (default)
+  background: '#FFFFFF',
+  backgroundAlt: '#F7F7F7',
+  card: '#FBFBFB',
   
   // Brand Colors
-  brandPrimary: '#A40028',      // Primary brand color (RoastLive red)
-  gradientStart: '#A40028',     // Left side of gradient
-  gradientEnd: '#A40028',       // Consistent brand color
-  highlight: '#A40028',         // Highlight color
+  brandPrimary: '#A40028',
+  gradientStart: '#A40028',
+  gradientEnd: '#A40028',
+  highlight: '#A40028',
   
   // Text Colors
-  text: '#000000',              // Black for headings
-  textSecondary: '#505050',     // Dark gray for subtitles
-  placeholder: '#A0A0A0',       // Medium gray for placeholders
+  text: '#000000',
+  textSecondary: '#505050',
+  placeholder: '#A0A0A0',
   
   // Border & Divider
-  border: '#D4D4D4',            // Light gray border
-  divider: '#E5E5E5',           // Divider line
+  border: '#D4D4D4',
+  divider: '#E5E5E5',
 };
 
 export const buttonStyles = StyleSheet.create({
