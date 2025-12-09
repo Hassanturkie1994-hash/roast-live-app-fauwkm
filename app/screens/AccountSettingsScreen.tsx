@@ -74,6 +74,83 @@ export default function AccountSettingsScreen() {
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
+        {/* ALLMÄNT Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>ALLMÄNT</Text>
+
+          <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/screens/EditProfileScreen')}>
+            <View style={styles.settingLeft}>
+              <IconSymbol
+                ios_icon_name="person.fill"
+                android_material_icon_name="person"
+                size={20}
+                color={colors.text}
+              />
+              <Text style={styles.settingText}>Profile Settings</Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="chevron_right"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/screens/WalletScreen')}>
+            <View style={styles.settingLeft}>
+              <IconSymbol
+                ios_icon_name="wallet.pass.fill"
+                android_material_icon_name="account_balance_wallet"
+                size={20}
+                color={colors.gradientEnd}
+              />
+              <Text style={styles.settingText}>Saldo</Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="chevron_right"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/screens/GiftInformationScreen')}>
+            <View style={styles.settingLeft}>
+              <IconSymbol
+                ios_icon_name="gift.fill"
+                android_material_icon_name="card_giftcard"
+                size={20}
+                color={colors.gradientEnd}
+              />
+              <Text style={styles.settingText}>Gift Information</Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="chevron_right"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.settingItem} onPress={() => Alert.alert('Saved Streams', 'This feature will be available soon.')}>
+            <View style={styles.settingLeft}>
+              <IconSymbol
+                ios_icon_name="bookmark.fill"
+                android_material_icon_name="bookmark"
+                size={20}
+                color={colors.text}
+              />
+              <Text style={styles.settingText}>Saved Streams</Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="chevron_right"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+        </View>
+
         {/* Security Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>🔐 Security</Text>

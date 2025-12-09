@@ -36,12 +36,13 @@ export default function ProfileScreen() {
   const [likedPosts, setLikedPosts] = useState<Post[]>([]);
   const [followersCount, setFollowersCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
+  const [walletBalance, setWalletBalance] = useState(0);
 
   const fetchUserData = useCallback(async () => {
     if (!user) return;
 
     try {
-      const [postsData, likedData, profileData] = await Promise.all([
+      const [postsData, likedData, profileData, walletData] = await Promise.all([
         supabase
           .from('posts')
           .select('*')
@@ -57,6 +58,11 @@ export default function ProfileScreen() {
           .select('followers_count, following_count')
           .eq('id', user.id)
           .single(),
+        supabase
+          .from('wallet')
+          .select('balance')
+          .eq('user_id', user.id)
+          .single(),
       ]);
 
       if (postsData.data) setPosts(postsData.data);
@@ -67,6 +73,9 @@ export default function ProfileScreen() {
       if (profileData.data) {
         setFollowersCount(profileData.data.followers_count || 0);
         setFollowingCount(profileData.data.following_count || 0);
+      }
+      if (walletData.data) {
+        setWalletBalance(parseFloat(walletData.data.balance));
       }
     } catch (error) {
       console.error('Error fetching user data:', error);
@@ -228,6 +237,32 @@ export default function ProfileScreen() {
               <Text style={styles.statLabel}>Posts</Text>
             </View>
           </View>
+
+          {/* Wallet Balance - Clickable */}
+          <TouchableOpacity 
+            style={styles.walletCard} 
+            onPress={() => router.push('/screens/WalletScreen')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.walletLeft}>
+              <IconSymbol
+                ios_icon_name="wallet.pass.fill"
+                android_material_icon_name="account_balance_wallet"
+                size={20}
+                color={colors.gradientEnd}
+              />
+              <Text style={styles.walletLabel}>Saldo Balance</Text>
+            </View>
+            <View style={styles.walletRight}>
+              <Text style={styles.walletAmount}>{walletBalance.toFixed(2)} SEK</Text>
+              <IconSymbol
+                ios_icon_name="chevron.right"
+                android_material_icon_name="chevron_right"
+                size={16}
+                color={colors.textSecondary}
+              />
+            </View>
+          </TouchableOpacity>
 
           <View style={styles.buttonRow}>
             <View style={styles.buttonFlex}>
@@ -473,6 +508,39 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: colors.text,
+  },
+  walletCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.backgroundAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginTop: 16,
+    width: '100%',
+  },
+  walletLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  walletLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  walletRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  walletAmount: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.gradientEnd,
   },
   tabsContainer: {
     flexDirection: 'row',
