@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Platform,
   Dimensions,
+  Animated,
 } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -26,8 +27,10 @@ export default function TikTokTabBar({ isStreaming = false }: TikTokTabBarProps)
   const router = useRouter();
   const pathname = usePathname();
   const { user } = useAuth();
-  const { colors } = useTheme();
+  const { colors, themeOpacity } = useTheme();
   const [unreadCount, setUnreadCount] = useState(0);
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const opacityAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     if (user) {
@@ -37,6 +40,39 @@ export default function TikTokTabBar({ isStreaming = false }: TikTokTabBarProps)
       return () => clearInterval(interval);
     }
   }, [user]);
+
+  useEffect(() => {
+    // Animate tab bar hiding/showing when streaming status changes
+    if (isStreaming) {
+      console.log('🚫 Hiding tab bar - user is streaming');
+      Animated.parallel([
+        Animated.timing(slideAnim, {
+          toValue: 100,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      console.log('✅ Showing tab bar - user stopped streaming');
+      Animated.parallel([
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [isStreaming]);
 
   const fetchUnreadCount = async () => {
     if (!user) return;
@@ -59,119 +95,127 @@ export default function TikTokTabBar({ isStreaming = false }: TikTokTabBarProps)
     router.push(route as any);
   };
 
-  if (isStreaming) {
-    console.log('🚫 Tab bar hidden - user is streaming');
-    return null;
-  }
-
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background, borderTopColor: colors.border }]} edges={['bottom']}>
-      <View style={styles.container}>
-        <View style={styles.tabsContainer}>
-          <TouchableOpacity
-            style={styles.tab}
-            onPress={() => handleTabPress('/(tabs)/(home)/')}
-            activeOpacity={0.7}
-          >
-            <IconSymbol
-              ios_icon_name={isActive('/(tabs)/(home)') ? 'house.fill' : 'house'}
-              android_material_icon_name="home"
-              size={28}
-              color={isActive('/(tabs)/(home)') ? colors.tabIconActiveColor : colors.tabIconColor}
-            />
-            <Text style={[styles.tabLabel, { color: isActive('/(tabs)/(home)') ? colors.tabIconActiveColor : colors.tabIconColor }]}>
-              Home
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.tab}
-            onPress={() => handleTabPress('/(tabs)/explore')}
-            activeOpacity={0.7}
-          >
-            <IconSymbol
-              ios_icon_name={isActive('/explore') ? 'magnifyingglass.circle.fill' : 'magnifyingglass'}
-              android_material_icon_name="search"
-              size={28}
-              color={isActive('/explore') ? colors.tabIconActiveColor : colors.tabIconColor}
-            />
-            <Text style={[styles.tabLabel, { color: isActive('/explore') ? colors.tabIconActiveColor : colors.tabIconColor }]}>
-              Explore
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.centerButton}
-            onPress={() => handleTabPress('/(tabs)/broadcaster')}
-            activeOpacity={0.9}
-          >
-            <LinearGradient
-              colors={[colors.brandPrimary, colors.brandPrimary]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.centerButtonGradient}
+    <Animated.View
+      style={[
+        styles.wrapper,
+        {
+          transform: [{ translateY: slideAnim }],
+          opacity: opacityAnim,
+        },
+      ]}
+      pointerEvents={isStreaming ? 'none' : 'auto'}
+    >
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background, borderTopColor: colors.border }]} edges={['bottom']}>
+        <Animated.View style={[styles.container, { opacity: themeOpacity }]}>
+          <View style={styles.tabsContainer}>
+            <TouchableOpacity
+              style={styles.tab}
+              onPress={() => handleTabPress('/(tabs)/(home)/')}
+              activeOpacity={0.7}
             >
               <IconSymbol
-                ios_icon_name="plus"
-                android_material_icon_name="add"
-                size={24}
-                color="#FFFFFF"
-              />
-              <Text style={styles.centerButtonText}>Go Live</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.tab}
-            onPress={() => handleTabPress('/(tabs)/inbox')}
-            activeOpacity={0.7}
-          >
-            <View style={styles.iconContainer}>
-              <IconSymbol
-                ios_icon_name={isActive('/inbox') ? 'tray.fill' : 'tray'}
-                android_material_icon_name="inbox"
+                ios_icon_name={isActive('/(tabs)/(home)') ? 'house.fill' : 'house'}
+                android_material_icon_name="home"
                 size={28}
-                color={isActive('/inbox') ? colors.tabIconActiveColor : colors.tabIconColor}
+                color={isActive('/(tabs)/(home)') ? colors.tabIconActiveColor : colors.tabIconColor}
               />
-              {unreadCount > 0 && (
-                <View style={[styles.badge, { backgroundColor: colors.brandPrimary, borderColor: colors.background }]}>
-                  <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
-                </View>
-              )}
-            </View>
-            <Text style={[styles.tabLabel, { color: isActive('/inbox') ? colors.tabIconActiveColor : colors.tabIconColor }]}>
-              Inbox
-            </Text>
-          </TouchableOpacity>
+              <Text style={[styles.tabLabel, { color: isActive('/(tabs)/(home)') ? colors.tabIconActiveColor : colors.tabIconColor }]}>
+                Home
+              </Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.tab}
-            onPress={() => handleTabPress('/(tabs)/profile')}
-            activeOpacity={0.7}
-          >
-            <IconSymbol
-              ios_icon_name={isActive('/profile') ? 'person.fill' : 'person'}
-              android_material_icon_name="person"
-              size={28}
-              color={isActive('/profile') ? colors.tabIconActiveColor : colors.tabIconColor}
-            />
-            <Text style={[styles.tabLabel, { color: isActive('/profile') ? colors.tabIconActiveColor : colors.tabIconColor }]}>
-              Profile
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </SafeAreaView>
+            <TouchableOpacity
+              style={styles.tab}
+              onPress={() => handleTabPress('/(tabs)/explore')}
+              activeOpacity={0.7}
+            >
+              <IconSymbol
+                ios_icon_name={isActive('/explore') ? 'magnifyingglass.circle.fill' : 'magnifyingglass'}
+                android_material_icon_name="search"
+                size={28}
+                color={isActive('/explore') ? colors.tabIconActiveColor : colors.tabIconColor}
+              />
+              <Text style={[styles.tabLabel, { color: isActive('/explore') ? colors.tabIconActiveColor : colors.tabIconColor }]}>
+                Explore
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.centerButton}
+              onPress={() => handleTabPress('/(tabs)/broadcaster')}
+              activeOpacity={0.9}
+            >
+              <LinearGradient
+                colors={[colors.brandPrimary, colors.brandPrimary]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.centerButtonGradient}
+              >
+                <IconSymbol
+                  ios_icon_name="plus"
+                  android_material_icon_name="add"
+                  size={24}
+                  color="#FFFFFF"
+                />
+                <Text style={styles.centerButtonText}>Go Live</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.tab}
+              onPress={() => handleTabPress('/(tabs)/inbox')}
+              activeOpacity={0.7}
+            >
+              <View style={styles.iconContainer}>
+                <IconSymbol
+                  ios_icon_name={isActive('/inbox') ? 'tray.fill' : 'tray'}
+                  android_material_icon_name="inbox"
+                  size={28}
+                  color={isActive('/inbox') ? colors.tabIconActiveColor : colors.tabIconColor}
+                />
+                {unreadCount > 0 && (
+                  <View style={[styles.badge, { backgroundColor: colors.brandPrimary, borderColor: colors.background }]}>
+                    <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={[styles.tabLabel, { color: isActive('/inbox') ? colors.tabIconActiveColor : colors.tabIconColor }]}>
+                Inbox
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.tab}
+              onPress={() => handleTabPress('/(tabs)/profile')}
+              activeOpacity={0.7}
+            >
+              <IconSymbol
+                ios_icon_name={isActive('/profile') ? 'person.fill' : 'person'}
+                android_material_icon_name="person"
+                size={28}
+                color={isActive('/profile') ? colors.tabIconActiveColor : colors.tabIconColor}
+              />
+              <Text style={[styles.tabLabel, { color: isActive('/profile') ? colors.tabIconActiveColor : colors.tabIconColor }]}>
+                Profile
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      </SafeAreaView>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  wrapper: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
     zIndex: 1000,
+  },
+  safeArea: {
     borderTopWidth: 1,
   },
   container: {

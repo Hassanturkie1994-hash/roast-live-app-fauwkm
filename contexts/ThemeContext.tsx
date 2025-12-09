@@ -1,6 +1,7 @@
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Animated } from 'react-native';
 
 export type ThemeMode = 'light' | 'dark';
 
@@ -43,6 +44,8 @@ interface ThemeContextType {
   images: ThemeImages;
   toggleTheme: () => void;
   setTheme: (theme: ThemeMode) => void;
+  themeOpacity: Animated.Value;
+  isTransitioning: boolean;
 }
 
 const lightTheme: ThemeColors = {
@@ -92,10 +95,13 @@ const darkImages: ThemeImages = {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 const THEME_STORAGE_KEY = '@roastlive_theme';
+const THEME_TRANSITION_DURATION = 500; // 500ms fade animation
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<ThemeMode>('light');
   const [isLoading, setIsLoading] = useState(true);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const themeOpacity = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     loadTheme();
@@ -127,9 +133,30 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   };
 
   const setTheme = (newTheme: ThemeMode) => {
+    if (theme === newTheme) return;
+
     console.log('🎨 Theme changing to:', newTheme);
-    setThemeState(newTheme);
-    saveTheme(newTheme);
+    setIsTransitioning(true);
+
+    // Fade out animation
+    Animated.timing(themeOpacity, {
+      toValue: 0,
+      duration: THEME_TRANSITION_DURATION / 2,
+      useNativeDriver: true,
+    }).start(() => {
+      // Change theme at the midpoint
+      setThemeState(newTheme);
+      saveTheme(newTheme);
+
+      // Fade in animation
+      Animated.timing(themeOpacity, {
+        toValue: 1,
+        duration: THEME_TRANSITION_DURATION / 2,
+        useNativeDriver: true,
+      }).start(() => {
+        setIsTransitioning(false);
+      });
+    });
   };
 
   const toggleTheme = () => {
@@ -145,7 +172,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <ThemeContext.Provider value={{ theme, colors, images, toggleTheme, setTheme }}>
+    <ThemeContext.Provider value={{ theme, colors, images, toggleTheme, setTheme, themeOpacity, isTransitioning }}>
       {children}
     </ThemeContext.Provider>
   );

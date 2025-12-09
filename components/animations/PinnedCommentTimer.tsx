@@ -1,7 +1,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
-import { colors } from '@/styles/commonStyles';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface PinnedCommentTimerProps {
   expiresAt: string;
@@ -9,8 +9,11 @@ interface PinnedCommentTimerProps {
 }
 
 export default function PinnedCommentTimer({ expiresAt, onExpire }: PinnedCommentTimerProps) {
+  const { colors } = useTheme();
   const [timeRemaining, setTimeRemaining] = useState(0);
   const progressAnim = useRef(new Animated.Value(1)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const glowAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     const calculateTimeRemaining = () => {
@@ -29,6 +32,38 @@ export default function PinnedCommentTimer({ expiresAt, onExpire }: PinnedCommen
       duration: totalDuration,
       useNativeDriver: false,
     }).start();
+
+    // Pulse animation for the timer
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    // Glow animation
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowAnim, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(glowAnim, {
+          toValue: 0,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
 
     // Update time remaining every second
     const interval = setInterval(() => {
@@ -56,20 +91,30 @@ export default function PinnedCommentTimer({ expiresAt, onExpire }: PinnedCommen
     outputRange: ['0%', '100%'],
   });
 
+  const glowOpacity = glowAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.3, 0.8],
+  });
+
   return (
-    <View style={styles.container}>
+    <Animated.View style={[styles.container, { transform: [{ scale: pulseAnim }] }]}>
       <View style={styles.timerBar}>
         <Animated.View
           style={[
             styles.timerProgress,
             {
               width: progressWidth,
+              backgroundColor: colors.gradientEnd,
+              shadowColor: colors.gradientEnd,
+              shadowOpacity: glowOpacity,
+              shadowRadius: 8,
+              shadowOffset: { width: 0, height: 0 },
             },
           ]}
         />
       </View>
-      <Text style={styles.timerText}>{formatTime(timeRemaining)}</Text>
-    </View>
+      <Text style={[styles.timerText, { color: colors.text }]}>{formatTime(timeRemaining)}</Text>
+    </Animated.View>
   );
 }
 
@@ -88,12 +133,11 @@ const styles = StyleSheet.create({
   },
   timerProgress: {
     height: '100%',
-    backgroundColor: colors.gradientEnd,
+    elevation: 4,
   },
   timerText: {
     fontSize: 12,
     fontWeight: '700',
-    color: colors.text,
     minWidth: 40,
   },
 });
