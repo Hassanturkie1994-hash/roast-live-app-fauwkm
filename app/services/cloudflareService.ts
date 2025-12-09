@@ -1,164 +1,117 @@
 
 import { supabase } from '@/app/integrations/supabase/client';
 
-export interface StartLiveResponse {
+interface StartLiveParams {
+  title: string;
+  userId: string;
+}
+
+interface StopLiveParams {
+  liveInputId: string;
+  streamId: string;
+}
+
+interface StartLiveResponse {
   success: boolean;
-  live_input_id?: string;
-  ingest_url?: string | null;
-  stream_key?: string | null;
-  playback_url?: string;
-  webrtc_url?: string | null;
+  stream: {
+    id: string;
+    live_input_id: string;
+    title: string;
+    status: string;
+    playback_url: string;
+  };
+  ingest: {
+    webRTC_url: string | null;
+    rtmps_url: string | null;
+    stream_key: string | null;
+  };
   error?: string;
 }
 
-export interface StopLiveResponse {
+interface StopLiveResponse {
   success: boolean;
-  message?: string;
   error?: string;
 }
 
 class CloudflareService {
-  private supabaseUrl: string;
+  async startLive({ title, userId }: StartLiveParams): Promise<StartLiveResponse> {
+    console.log('📡 Calling start-live edge function with:', { title, userId });
 
-  constructor() {
-    this.supabaseUrl = 'https://uaqsjqakhgycfopftzzp.supabase.co';
+    const { data, error } = await supabase.functions.invoke<StartLiveResponse>('start-live', {
+      body: { title, user_id: userId },
+    });
+
+    console.log('📡 start-live response:', { data, error });
+
+    if (error) {
+      console.error('❌ Edge function error:', error);
+      throw new Error(`Failed to start live stream: ${error.message}`);
+    }
+
+    if (!data) {
+      console.error('❌ No data returned from edge function');
+      throw new Error('No response from server');
+    }
+
+    if (!data.success) {
+      console.error('❌ Server returned success=false:', data.error);
+      throw new Error(data.error || 'Failed to start live stream');
+    }
+
+    // Validate response structure
+    if (!data.stream || !data.stream.id || !data.stream.live_input_id) {
+      console.error('❌ Invalid response structure:', data);
+      throw new Error('Invalid response from server: missing stream data');
+    }
+
+    if (!data.ingest) {
+      console.error('❌ Invalid response structure: missing ingest data:', data);
+      throw new Error('Invalid response from server: missing ingest data');
+    }
+
+    console.log('✅ Successfully started live stream:', {
+      id: data.stream.id,
+      live_input_id: data.stream.live_input_id,
+      playback_url: data.stream.playback_url,
+    });
+
+    return data;
   }
 
-  async startLive(title: string, userId: string): Promise<StartLiveResponse> {
-    try {
-      console.log('🎥 Starting live stream:', { title, userId });
+  async stopLive({ liveInputId, streamId }: StopLiveParams): Promise<StopLiveResponse> {
+    console.log('📡 Calling stop-live edge function with:', { liveInputId, streamId });
 
-      const { data: { session } } = await supabase.auth.getSession();
+    // Use liveInputId as primary, fallback to streamId (they should be the same)
+    const idToUse = liveInputId || streamId;
 
-      if (!session) {
-        console.error('❌ Not authenticated');
-        throw new Error('Not authenticated');
-      }
-
-      console.log('📡 Calling start-live Edge Function...');
-
-      const response = await fetch(
-        `${this.supabaseUrl}/functions/v1/start-live`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            title,
-            user_id: userId,
-          }),
-        }
-      );
-
-      console.log('📥 Response status:', response.status);
-
-      const responseText = await response.text();
-      console.log('📥 Response text:', responseText);
-
-      let data: StartLiveResponse;
-      try {
-        data = JSON.parse(responseText);
-      } catch (parseError) {
-        console.error('❌ Failed to parse response as JSON:', parseError);
-        throw new Error(`Invalid JSON response from server: ${responseText.substring(0, 100)}`);
-      }
-
-      console.log('📥 Parsed response:', JSON.stringify(data, null, 2));
-
-      if (!data.success) {
-        console.error('❌ Server returned error:', data.error);
-        throw new Error(data.error || 'Failed to start live stream');
-      }
-
-      if (!data.live_input_id) {
-        console.error('❌ Missing live_input_id in response:', data);
-        throw new Error('Missing live_input_id in server response. This usually means Cloudflare credentials are not configured or the Cloudflare API returned an error.');
-      }
-
-      if (!data.ingest_url || !data.stream_key || !data.playback_url) {
-        console.warn('⚠️ Some stream URLs are missing:', {
-          hasIngestUrl: !!data.ingest_url,
-          hasStreamKey: !!data.stream_key,
-          hasPlaybackUrl: !!data.playback_url,
-        });
-      }
-
-      console.log('✅ Live stream started successfully:', {
-        live_input_id: data.live_input_id,
-        hasIngestUrl: !!data.ingest_url,
-        hasStreamKey: !!data.stream_key,
-        hasPlaybackUrl: !!data.playback_url,
-        hasWebrtcUrl: !!data.webrtc_url,
-      });
-
-      return data;
-    } catch (error) {
-      console.error('❌ Error in startLive:', error);
-      throw error;
+    if (!idToUse) {
+      throw new Error('Missing live_input_id or stream_id');
     }
-  }
 
-  async stopLive(liveInputId: string): Promise<StopLiveResponse> {
-    try {
-      console.log('🛑 Stopping live stream:', liveInputId);
+    const { data, error } = await supabase.functions.invoke<StopLiveResponse>('stop-live', {
+      body: { live_input_id: idToUse },
+    });
 
-      if (!liveInputId) {
-        console.error('❌ Missing live_input_id');
-        throw new Error('Missing live_input_id');
-      }
+    console.log('📡 stop-live response:', { data, error });
 
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        console.error('❌ Not authenticated');
-        throw new Error('Not authenticated');
-      }
-
-      console.log('📡 Calling stop-live Edge Function...');
-
-      const response = await fetch(
-        `${this.supabaseUrl}/functions/v1/stop-live`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            live_input_id: liveInputId,
-          }),
-        }
-      );
-
-      console.log('📥 Response status:', response.status);
-
-      const responseText = await response.text();
-      console.log('📥 Response text:', responseText);
-
-      let data: StopLiveResponse;
-      try {
-        data = JSON.parse(responseText);
-      } catch (parseError) {
-        console.error('❌ Failed to parse response as JSON:', parseError);
-        throw new Error(`Invalid JSON response from server: ${responseText.substring(0, 100)}`);
-      }
-
-      console.log('📥 Parsed response:', JSON.stringify(data, null, 2));
-
-      if (!data.success) {
-        console.error('❌ Server returned error:', data.error);
-        throw new Error(data.error || 'Failed to stop live stream');
-      }
-
-      console.log('✅ Live stream stopped successfully');
-
-      return data;
-
-    } catch (error) {
-      console.error('❌ Error in stopLive:', error);
-      throw error;
+    if (error) {
+      console.error('❌ Edge function error:', error);
+      throw new Error(`Failed to stop live stream: ${error.message}`);
     }
+
+    if (!data) {
+      console.error('❌ No data returned from edge function');
+      throw new Error('No response from server');
+    }
+
+    if (!data.success) {
+      console.error('❌ Server returned success=false:', data.error);
+      throw new Error(data.error || 'Failed to stop live stream');
+    }
+
+    console.log('✅ Successfully stopped live stream');
+
+    return data;
   }
 }
 

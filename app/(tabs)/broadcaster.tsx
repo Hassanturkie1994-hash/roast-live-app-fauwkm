@@ -13,6 +13,14 @@ import { cloudflareService } from '@/app/services/cloudflareService';
 import { router } from 'expo-router';
 import ChatOverlay from '@/components/ChatOverlay';
 
+interface StreamData {
+  id: string;
+  live_input_id: string;
+  title: string;
+  status: string;
+  playback_url: string;
+}
+
 export default function BroadcasterScreen() {
   const { user } = useAuth();
   const [facing, setFacing] = useState<CameraType>('front');
@@ -24,15 +32,12 @@ export default function BroadcasterScreen() {
   const [isCameraOn, setIsCameraOn] = useState(true);
   const [showSetup, setShowSetup] = useState(false);
   const [streamTitle, setStreamTitle] = useState('');
-  const [currentStreamId, setCurrentStreamId] = useState<string | null>(null);
-  const [ingestUrl, setIngestUrl] = useState<string | null>(null);
-  const [streamKey, setStreamKey] = useState<string | null>(null);
-  const [rtcPublishUrl, setRtcPublishUrl] = useState<string | null>(null);
-  const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
+  const [currentStream, setCurrentStream] = useState<StreamData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isNativeStreamingAvailable, setIsNativeStreamingAvailable] = useState(false);
   const publisherRef = useRef<any>(null);
   const realtimeChannelRef = useRef<any>(null);
+  const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -47,43 +52,51 @@ export default function BroadcasterScreen() {
   }, [user]);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
     if (isLive) {
-      interval = setInterval(() => {
+      timerIntervalRef.current = setInterval(() => {
         setLiveTime((prev) => prev + 1);
       }, 1000);
+    } else {
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+      }
     }
+    
     return () => {
-      if (interval) clearInterval(interval);
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+      }
     };
   }, [isLive]);
 
   const subscribeToViewerUpdates = useCallback(() => {
-    if (!currentStreamId) return;
+    if (!currentStream?.id) return;
 
     const channel = supabase
-      .channel(`stream:${currentStreamId}:broadcaster`)
+      .channel(`stream:${currentStream.id}:broadcaster`)
       .on('broadcast', { event: 'viewer_count' }, (payload) => {
-        console.log('Viewer count update:', payload);
-        setViewerCount(payload.payload.count);
+        console.log('👥 Viewer count update:', payload);
+        setViewerCount(payload.payload.count || 0);
       })
       .subscribe();
 
     realtimeChannelRef.current = channel;
-  }, [currentStreamId]);
+  }, [currentStream?.id]);
 
   // Subscribe to viewer count updates
   useEffect(() => {
-    if (isLive && currentStreamId) {
+    if (isLive && currentStream?.id) {
       subscribeToViewerUpdates();
     }
     
     return () => {
       if (realtimeChannelRef.current) {
         supabase.removeChannel(realtimeChannelRef.current);
+        realtimeChannelRef.current = null;
       }
     };
-  }, [isLive, currentStreamId, subscribeToViewerUpdates]);
+  }, [isLive, currentStream?.id, subscribeToViewerUpdates]);
 
   if (!permission) {
     return <View style={commonStyles.container} />;
@@ -159,45 +172,38 @@ export default function BroadcasterScreen() {
     setIsLoading(true);
 
     try {
-      console.log('Starting live stream with title:', streamTitle);
+      console.log('🎬 Starting live stream with title:', streamTitle);
       
-      // Call Cloudflare Stream API via Edge Function
-      const response = await cloudflareService.startLive(streamTitle, user.id);
+      // Call cloudflareService.startLive with correct parameters
+      const result = await cloudflareService.startLive({ 
+        title: streamTitle, 
+        userId: user.id 
+      });
 
-      // TASK 3 — Improve Logging
-      console.log('SERVER RESPONSE:', response);
+      console.log('✅ Stream created successfully:', result);
 
-      // TASK 2 — Update App-side Validation
-      if (!response.success || !response.stream?.id) {
-        console.error('SERVER RESPONSE:', response);
-        throw new Error('Invalid response from server: missing stream.id');
-      }
-
-      // TASK 2 — Store all values for later use
-      setCurrentStreamId(response.stream.id);
-      setIngestUrl(response.ingest_url);
-      setStreamKey(response.stream_key);
-      setRtcPublishUrl(response.rtc_publish_url || null);
-      setPlaybackUrl(response.playback_url);
-      
+      // Store the stream data
+      setCurrentStream(result.stream);
       setIsLive(true);
       setViewerCount(0);
+      setLiveTime(0);
       setShowSetup(false);
       setStreamTitle('');
 
-      console.log('Stream started successfully:', {
-        streamId: response.stream.id,
-        ingestUrl: response.ingest_url,
-        streamKey: response.stream_key,
-        rtcPublishUrl: response.rtc_publish_url,
-        playbackUrl: response.playback_url,
+      console.log('📺 Stream details:', {
+        id: result.stream.id,
+        live_input_id: result.stream.live_input_id,
+        playback_url: result.stream.playback_url,
+        rtmps_url: result.ingest.rtmps_url,
+        stream_key: result.ingest.stream_key ? '***' : null,
+        webRTC_url: result.ingest.webRTC_url,
       });
 
       // Try to start native streaming if available
-      if (isNativeStreamingAvailable && response.ingest_url && response.stream_key) {
+      if (isNativeStreamingAvailable && result.ingest.rtmps_url && result.ingest.stream_key) {
         const nativeStarted = await startNativeStream(
-          response.ingest_url,
-          response.stream_key
+          result.ingest.rtmps_url,
+          result.ingest.stream_key
         );
 
         if (nativeStarted) {
@@ -208,17 +214,31 @@ export default function BroadcasterScreen() {
           );
         } else {
           // Fallback to showing instructions
-          showStreamingInstructions(response.ingest_url, response.stream_key);
+          showStreamingInstructions(result.ingest.rtmps_url, result.ingest.stream_key);
         }
       } else {
         // Show instructions for OBS or other streaming software
-        showStreamingInstructions(response.ingest_url, response.stream_key);
+        if (result.ingest.rtmps_url && result.ingest.stream_key) {
+          showStreamingInstructions(result.ingest.rtmps_url, result.ingest.stream_key);
+        } else {
+          Alert.alert(
+            '🔴 You are LIVE!',
+            `Your stream is now broadcasting!\n\nStream ID: ${result.stream.id}\n\nViewers can watch you live!`,
+            [{ text: 'OK' }]
+          );
+        }
       }
     } catch (error) {
-      console.error('Error starting stream:', error);
+      console.error('❌ Error starting stream:', error);
+      
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'Failed to start stream. Please try again.';
+      
       Alert.alert(
-        'Error',
-        error instanceof Error ? error.message : 'Failed to start stream. Please try again.'
+        'Cannot Start Stream',
+        errorMessage,
+        [{ text: 'OK' }]
       );
     } finally {
       setIsLoading(false);
@@ -253,32 +273,48 @@ export default function BroadcasterScreen() {
   };
 
   const endStream = async () => {
-    if (!currentStreamId) return;
+    if (!currentStream) {
+      Alert.alert('Error', 'No active stream to end');
+      return;
+    }
 
     setIsLoading(true);
 
     try {
+      console.log('🛑 Ending stream:', {
+        liveInputId: currentStream.live_input_id,
+        streamId: currentStream.id,
+      });
+
       // Stop native streaming if active
       await stopNativeStream();
 
-      // Call Cloudflare Stream API via Edge Function
-      await cloudflareService.stopLive(currentStreamId);
+      // Call cloudflareService.stopLive with correct parameters
+      await cloudflareService.stopLive({
+        liveInputId: currentStream.live_input_id,
+        streamId: currentStream.id,
+      });
 
+      console.log('✅ Stream ended successfully');
+
+      // Reset all state
       setIsLive(false);
       setViewerCount(0);
       setLiveTime(0);
-      setCurrentStreamId(null);
-      setIngestUrl(null);
-      setStreamKey(null);
-      setRtcPublishUrl(null);
-      setPlaybackUrl(null);
+      setCurrentStream(null);
 
       Alert.alert('Stream Ended', 'Your live stream has been ended successfully.');
     } catch (error) {
-      console.error('Error ending stream:', error);
+      console.error('❌ Error ending stream:', error);
+      
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'Failed to end stream. Please try again.';
+      
       Alert.alert(
         'Error',
-        error instanceof Error ? error.message : 'Failed to end stream. Please try again.'
+        errorMessage,
+        [{ text: 'OK' }]
       );
     } finally {
       setIsLoading(false);
@@ -326,8 +362,8 @@ export default function BroadcasterScreen() {
                 <RoastLiveLogo size="small" opacity={0.25} />
               </View>
 
-              {currentStreamId && (
-                <ChatOverlay streamId={currentStreamId} isBroadcaster={true} />
+              {currentStream && (
+                <ChatOverlay streamId={currentStream.id} isBroadcaster={true} />
               )}
             </>
           )}
@@ -337,7 +373,7 @@ export default function BroadcasterScreen() {
               <TouchableOpacity
                 style={[styles.controlButton, !isMicOn && styles.controlButtonOff]}
                 onPress={() => setIsMicOn(!isMicOn)}
-                disabled={!isLive}
+                disabled={!isLive || isLoading}
               >
                 <IconSymbol
                   ios_icon_name={isMicOn ? 'mic.fill' : 'mic.slash.fill'}
@@ -359,7 +395,7 @@ export default function BroadcasterScreen() {
               <TouchableOpacity
                 style={[styles.controlButton, !isCameraOn && styles.controlButtonOff]}
                 onPress={toggleCameraFacing}
-                disabled={!isLive}
+                disabled={!isLive || isLoading}
               >
                 <IconSymbol
                   ios_icon_name="arrow.triangle.2.circlepath.camera.fill"
@@ -377,7 +413,7 @@ export default function BroadcasterScreen() {
         visible={showSetup}
         transparent
         animationType="slide"
-        onRequestClose={() => setShowSetup(false)}
+        onRequestClose={() => !isLoading && setShowSetup(false)}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -394,6 +430,7 @@ export default function BroadcasterScreen() {
                 onChangeText={setStreamTitle}
                 maxLength={100}
                 autoFocus
+                editable={!isLoading}
               />
             </View>
 
