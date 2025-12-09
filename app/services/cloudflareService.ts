@@ -3,34 +3,20 @@ import { supabase } from '@/app/integrations/supabase/client';
 
 export interface StartLiveResponse {
   success: boolean;
-  stream: {
-    id: string;
-  };
+  live_input_id: string;
   ingest_url: string;
   stream_key: string;
-  rtc_publish_url?: string;
   playback_url: string;
+  webrtc_url?: string;
   error?: string;
 }
 
 export interface StopLiveResponse {
   success: boolean;
-  stream: {
-    id: string;
-    status: string;
-    ended_at: string;
-  };
+  message?: string;
+  error?: string;
 }
 
-/**
- * Cloudflare Stream API Service
- * 
- * This service provides methods to interact with Cloudflare Stream
- * for live streaming functionality. All API calls go through Supabase
- * Edge Functions to keep credentials secure.
- * 
- * Supports both RTMP and WebRTC (WHIP) streaming protocols.
- */
 class CloudflareService {
   private supabaseUrl: string;
 
@@ -38,25 +24,13 @@ class CloudflareService {
     this.supabaseUrl = 'https://uaqsjqakhgycfopftzzp.supabase.co';
   }
 
-  /**
-   * Start a live stream
-   * 
-   * Creates a new live input in Cloudflare Stream and stores the
-   * stream metadata in Supabase.
-   * 
-   * @param title - The title of the stream
-   * @param userId - The ID of the user starting the stream
-   * @returns Promise with stream data including RTMP/WebRTC URLs
-   */
   async startLive(title: string, userId: string): Promise<StartLiveResponse> {
     try {
       console.log('Starting live stream:', { title, userId });
 
       const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        throw new Error('Not authenticated');
-      }
+
+      if (!session) throw new Error('Not authenticated');
 
       const response = await fetch(
         `${this.supabaseUrl}/functions/v1/start-live`,
@@ -73,31 +47,24 @@ class CloudflareService {
         }
       );
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Start live error:', errorData);
-        throw new Error(errorData.error || 'Failed to start live stream');
+      const data = await response.json();
+
+      console.log("SERVER RESPONSE:", data);
+
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to start live stream');
       }
 
-      const data: StartLiveResponse = await response.json();
-      
-      // TASK 3 — Improve Logging
-      console.log('SERVER RESPONSE:', data);
-      
-      // TASK 2 — Update App-side Validation
-      if (!data.success || !data.stream?.id) {
-        console.error('SERVER RESPONSE:', data);
-        throw new Error('Invalid response from server: missing stream.id');
+      if (!data.live_input_id) {
+        throw new Error('Missing live_input_id in server response');
       }
 
-      // Validate all required fields are present
       if (!data.ingest_url || !data.stream_key || !data.playback_url) {
-        console.error('SERVER RESPONSE:', data);
-        throw new Error('Invalid response from server: missing required streaming fields');
+        throw new Error('Stream setup incomplete from server');
       }
-      
-      console.log('Live stream started successfully with stream.id:', data.stream.id);
-      
+
+      console.log('Live started. Live Input ID:', data.live_input_id);
+
       return data;
     } catch (error) {
       console.error('Error in startLive:', error);
@@ -105,24 +72,16 @@ class CloudflareService {
     }
   }
 
-  /**
-   * Stop a live stream
-   * 
-   * Ends the live stream session in Cloudflare and updates the
-   * stream status in Supabase.
-   * 
-   * @param streamId - The ID of the stream to stop
-   * @returns Promise with updated stream data
-   */
-  async stopLive(streamId: string): Promise<StopLiveResponse> {
+  async stopLive(liveInputId: string): Promise<StopLiveResponse> {
     try {
-      console.log('Stopping live stream:', streamId);
+      console.log('Stopping live input:', liveInputId);
+
+      if (!liveInputId) {
+        throw new Error('Missing live_input_id');
+      }
 
       const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        throw new Error('Not authenticated');
-      }
+      if (!session) throw new Error('Not authenticated');
 
       const response = await fetch(
         `${this.supabaseUrl}/functions/v1/stop-live`,
@@ -133,50 +92,24 @@ class CloudflareService {
             'Authorization': `Bearer ${session.access_token}`,
           },
           body: JSON.stringify({
-            stream_id: streamId,
+            live_input_id: liveInputId,
           }),
         }
       );
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Stop live error:', errorData);
-        throw new Error(errorData.error || 'Failed to stop live stream');
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to stop live stream');
       }
 
-      const data: StopLiveResponse = await response.json();
-      console.log('Live stream stopped successfully:', data);
-      
+      console.log('Live stream ended successfully:', data);
+
       return data;
+
     } catch (error) {
       console.error('Error in stopLive:', error);
       throw error;
-    }
-  }
-
-  /**
-   * Get stream status from database
-   * 
-   * @param streamId - The ID of the stream
-   * @returns Promise with stream data
-   */
-  async getStreamStatus(streamId: string): Promise<any> {
-    try {
-      const { data, error } = await supabase
-        .from('streams')
-        .select('*')
-        .eq('id', streamId)
-        .single();
-
-      if (error) {
-        console.error('Error fetching stream status:', error);
-        return null;
-      }
-
-      return data;
-    } catch (error) {
-      console.error('Error in getStreamStatus:', error);
-      return null;
     }
   }
 }

@@ -3,7 +3,17 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 
 serve(async (req) => {
   try {
-    const { title, user_id } = await req.json();
+    const { live_input_id } = await req.json();
+
+    if (!live_input_id) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Missing live_input_id parameter",
+        }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
 
     const CF_ACCOUNT_ID = Deno.env.get("CF_ACCOUNT_ID");
     const CF_API_TOKEN = Deno.env.get("CF_API_TOKEN");
@@ -18,42 +28,33 @@ serve(async (req) => {
       );
     }
 
-    const createInput = await fetch(
-      `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/stream/live_inputs`,
+    const deleteInput = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/stream/live_inputs/${live_input_id}`,
       {
-        method: "POST",
+        method: "DELETE",
         headers: {
           Authorization: `Bearer ${CF_API_TOKEN}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          meta: { title, user_id },
-        }),
       }
     );
 
-    const json = await createInput.json();
+    const json = await deleteInput.json();
 
-    if (!json.success || !json.result) {
+    if (!json.success) {
       return new Response(
         JSON.stringify({
           success: false,
-          error: json.errors ?? "Cloudflare error",
+          error: json.errors ?? "Failed to delete Cloudflare live input",
         }),
         { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    const { uid, rtmps, webRTC } = json.result;
-
     return new Response(
       JSON.stringify({
         success: true,
-        live_input_id: uid,
-        ingest_url: rtmps?.url,
-        stream_key: rtmps?.streamKey,
-        playback_url: `https://customer-${CF_ACCOUNT_ID}.cloudflarestream.com/${uid}/manifest/video.m3u8`,
-        webrtc_url: webRTC?.url,
+        message: "Live stream ended",
       }),
       {
         headers: { "Content-Type": "application/json" },

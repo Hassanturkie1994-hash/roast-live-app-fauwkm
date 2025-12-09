@@ -26,7 +26,7 @@ export default function BroadcasterScreen() {
   const [currentStreamId, setCurrentStreamId] = useState<string | null>(null);
   const [ingestUrl, setIngestUrl] = useState<string | null>(null);
   const [streamKey, setStreamKey] = useState<string | null>(null);
-  const [rtcPublishUrl, setRtcPublishUrl] = useState<string | null>(null);
+  const [webrtcUrl, setWebrtcUrl] = useState<string | null>(null);
   const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const realtimeChannelRef = useRef<any>(null);
@@ -133,23 +133,19 @@ export default function BroadcasterScreen() {
     try {
       console.log('Starting live stream with title:', streamTitle);
       
-      // Call Cloudflare Stream API via Edge Function
       const response = await cloudflareService.startLive(streamTitle, user.id);
 
-      // TASK 3 — Improve Logging
       console.log('SERVER RESPONSE:', response);
 
-      // TASK 2 — Update App-side Validation
-      if (!response.success || !response.stream?.id) {
+      if (!response.success || !response.live_input_id) {
         console.error('SERVER RESPONSE:', response);
-        throw new Error('Invalid response from server: missing stream.id');
+        throw new Error('Invalid response from server: missing live_input_id');
       }
 
-      // TASK 2 — Store all values for later use
-      setCurrentStreamId(response.stream.id);
+      setCurrentStreamId(response.live_input_id);
       setIngestUrl(response.ingest_url);
       setStreamKey(response.stream_key);
-      setRtcPublishUrl(response.rtc_publish_url || null);
+      setWebrtcUrl(response.webrtc_url || null);
       setPlaybackUrl(response.playback_url);
       
       setIsLive(true);
@@ -158,11 +154,11 @@ export default function BroadcasterScreen() {
       setStreamTitle('');
 
       console.log('Stream started successfully:', {
-        streamId: response.stream.id,
-        ingestUrl: response.ingest_url,
-        streamKey: response.stream_key,
-        rtcPublishUrl: response.rtc_publish_url,
-        playbackUrl: response.playback_url,
+        live_input_id: response.live_input_id,
+        ingest_url: response.ingest_url,
+        stream_key: response.stream_key,
+        webrtc_url: response.webrtc_url,
+        playback_url: response.playback_url,
       });
 
       Alert.alert(
@@ -204,7 +200,7 @@ export default function BroadcasterScreen() {
       setCurrentStreamId(null);
       setIngestUrl(null);
       setStreamKey(null);
-      setRtcPublishUrl(null);
+      setWebrtcUrl(null);
       setPlaybackUrl(null);
 
       Alert.alert('Stream Ended', 'Your live stream has been ended successfully.');
