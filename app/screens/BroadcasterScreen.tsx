@@ -211,6 +211,7 @@ export default function BroadcasterScreen() {
 
       console.log('✅ Stream ended successfully');
 
+      // Reset all state
       setIsLive(false);
       setViewerCount(0);
       setLiveTime(0);
@@ -291,7 +292,7 @@ export default function BroadcasterScreen() {
             <TouchableOpacity
               style={[styles.controlButton, !isMicOn && styles.controlButtonOff]}
               onPress={() => setIsMicOn(!isMicOn)}
-              disabled={!isLive}
+              disabled={isLoading}
             >
               <IconSymbol
                 ios_icon_name={isMicOn ? 'mic.fill' : 'mic.slash.fill'}
@@ -313,7 +314,7 @@ export default function BroadcasterScreen() {
             <TouchableOpacity
               style={styles.controlButton}
               onPress={toggleCameraFacing}
-              disabled={!isLive}
+              disabled={isLoading}
             >
               <IconSymbol
                 ios_icon_name="arrow.triangle.2.circlepath.camera.fill"

@@ -1,3 +1,4 @@
+
 {
   "expo": {
     "name": "Roast Live",
@@ -25,7 +26,12 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.anonymous.Natively"
+      "package": "com.anonymous.Natively",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.WAKE_LOCK"
+      ]
     },
     "web": {
       "favicon": "./assets/images/final_quest_240x240.png",
@@ -34,7 +40,15 @@
     "plugins": [
       "expo-font",
       "expo-router",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Roast Live to access your camera to broadcast live streams.",
+          "microphonePermission": "Allow Roast Live to access your microphone to broadcast live streams.",
+          "recordAudioAndroid": true
+        }
+      ]
     ],
     "scheme": "natively",
     "experiments": {
