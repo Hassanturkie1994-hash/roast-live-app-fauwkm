@@ -149,6 +149,24 @@ export default function AccountSettingsScreen() {
               color={colors.textSecondary}
             />
           </TouchableOpacity>
+
+          <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/screens/StreamDashboardScreen')}>
+            <View style={styles.settingLeft}>
+              <IconSymbol
+                ios_icon_name="shield.fill"
+                android_material_icon_name="shield"
+                size={20}
+                color={colors.gradientEnd}
+              />
+              <Text style={styles.settingText}>Stream Dashboard</Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="chevron_right"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
         </View>
 
         {/* Security Section */}

@@ -14,12 +14,17 @@ import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/app/integrations/supabase/client';
 import { Tables } from '@/app/integrations/supabase/types';
+import UserActionModal from '@/components/UserActionModal';
 
 interface ViewerListModalProps {
   visible: boolean;
   onClose: () => void;
   streamId: string;
   viewerCount: number;
+  streamerId: string;
+  currentUserId: string;
+  isStreamer: boolean;
+  isModerator: boolean;
 }
 
 type Viewer = {
@@ -34,9 +39,15 @@ export default function ViewerListModal({
   onClose,
   streamId,
   viewerCount,
+  streamerId,
+  currentUserId,
+  isStreamer,
+  isModerator,
 }: ViewerListModalProps) {
   const [viewers, setViewers] = useState<Viewer[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedViewer, setSelectedViewer] = useState<Viewer | null>(null);
+  const [showUserActionModal, setShowUserActionModal] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -71,8 +82,19 @@ export default function ViewerListModal({
     }
   };
 
+  const handleViewerPress = (viewer: Viewer) => {
+    if (isStreamer || isModerator) {
+      setSelectedViewer(viewer);
+      setShowUserActionModal(true);
+    }
+  };
+
   const renderViewer = ({ item }: { item: Viewer }) => (
-    <View style={styles.viewerItem}>
+    <TouchableOpacity
+      style={styles.viewerItem}
+      onPress={() => handleViewerPress(item)}
+      disabled={!isStreamer && !isModerator}
+    >
       <View style={styles.avatarContainer}>
         {item.users.avatar_url ? (
           <Image source={{ uri: item.users.avatar_url }} style={styles.avatar} />
@@ -95,7 +117,15 @@ export default function ViewerListModal({
         <View style={styles.liveDot} />
         <Text style={styles.liveText}>Watching</Text>
       </View>
-    </View>
+      {(isStreamer || isModerator) && (
+        <IconSymbol
+          ios_icon_name="chevron.right"
+          android_material_icon_name="chevron_right"
+          size={20}
+          color={colors.textSecondary}
+        />
+      )}
+    </TouchableOpacity>
   );
 
   return (
@@ -167,6 +197,23 @@ export default function ViewerListModal({
           )}
         </View>
       </View>
+
+      {selectedViewer && (
+        <UserActionModal
+          visible={showUserActionModal}
+          onClose={() => {
+            setShowUserActionModal(false);
+            setSelectedViewer(null);
+          }}
+          userId={selectedViewer.user_id}
+          username={selectedViewer.users.display_name}
+          streamId={streamId}
+          streamerId={streamerId}
+          currentUserId={currentUserId}
+          isStreamer={isStreamer}
+          isModerator={isModerator}
+        />
+      )}
     </Modal>
   );
 }

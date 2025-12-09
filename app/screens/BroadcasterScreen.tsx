@@ -17,6 +17,9 @@ import LiveStreamControlPanel from '@/components/LiveStreamControlPanel';
 import ViewerListModal from '@/components/ViewerListModal';
 import CameraFilterSelector, { CameraFilter } from '@/components/CameraFilterSelector';
 import EnhancedChatOverlay from '@/components/EnhancedChatOverlay';
+import ModeratorChatOverlay from '@/components/ModeratorChatOverlay';
+import ModeratorControlPanel from '@/components/ModeratorControlPanel';
+import { moderationService } from '@/app/services/moderationService';
 
 interface StreamData {
   id: string;
@@ -54,6 +57,8 @@ export default function BroadcasterScreen() {
   const [selectedFilter, setSelectedFilter] = useState<CameraFilter>('none');
   const [showExitConfirmation, setShowExitConfirmation] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
+  const [isModerator, setIsModerator] = useState(false);
+  const [showModeratorPanel, setShowModeratorPanel] = useState(false);
   const realtimeChannelRef = useRef<any>(null);
   const giftChannelRef = useRef<any>(null);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -493,6 +498,20 @@ export default function BroadcasterScreen() {
               />
             </TouchableOpacity>
 
+            {/* Moderator Panel Toggle Button */}
+            <TouchableOpacity
+              style={styles.moderatorPanelToggle}
+              onPress={() => setShowModeratorPanel(true)}
+              activeOpacity={0.7}
+            >
+              <IconSymbol
+                ios_icon_name="shield.fill"
+                android_material_icon_name="shield"
+                size={24}
+                color={colors.gradientEnd}
+              />
+            </TouchableOpacity>
+
             {/* Filter Selector */}
             <CameraFilterSelector
               selectedFilter={selectedFilter}
@@ -503,9 +522,15 @@ export default function BroadcasterScreen() {
               visible={showFilters}
             />
 
-            {/* Enhanced Chat Overlay - Bottom left */}
-            {currentStream && (
-              <EnhancedChatOverlay streamId={currentStream.id} />
+            {/* Moderator Chat Overlay - Bottom left */}
+            {currentStream && user && (
+              <ModeratorChatOverlay
+                streamId={currentStream.id}
+                streamerId={user.id}
+                currentUserId={user.id}
+                isStreamer={true}
+                isModerator={false}
+              />
             )}
           </>
         )}
@@ -553,12 +578,28 @@ export default function BroadcasterScreen() {
       )}
 
       {/* Viewer List Modal */}
-      {currentStream && (
+      {currentStream && user && (
         <ViewerListModal
           visible={showViewerList}
           onClose={() => setShowViewerList(false)}
           streamId={currentStream.id}
           viewerCount={viewerCount}
+          streamerId={user.id}
+          currentUserId={user.id}
+          isStreamer={true}
+          isModerator={false}
+        />
+      )}
+
+      {/* Moderator Control Panel */}
+      {currentStream && user && (
+        <ModeratorControlPanel
+          visible={showModeratorPanel}
+          onClose={() => setShowModeratorPanel(false)}
+          streamId={currentStream.id}
+          streamerId={user.id}
+          currentUserId={user.id}
+          isStreamer={true}
         />
       )}
 
@@ -752,6 +793,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: colors.border,
+  },
+  moderatorPanelToggle: {
+    position: 'absolute',
+    top: 180,
+    right: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.gradientEnd,
   },
   floatingThumbnail: {
     position: 'absolute',
