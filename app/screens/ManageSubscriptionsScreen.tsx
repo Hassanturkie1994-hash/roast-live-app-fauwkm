@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,73 +8,89 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  Image,
+  RefreshControl,
 } from 'react-native';
 import { router } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useAuth } from '@/contexts/AuthContext';
 import { creatorClubService, CreatorClubMembership } from '@/app/services/creatorClubService';
-import { walletService, WalletTransactionV2 } from '@/app/services/walletService';
+import { stripeService } from '@/app/services/stripeService';
 
 export default function ManageSubscriptionsScreen() {
   const { user } = useAuth();
   const { colors } = useTheme();
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [memberships, setMemberships] = useState<CreatorClubMembership[]>([]);
-  const [transactions, setTransactions] = useState<WalletTransactionV2[]>([]);
 
-  useEffect(() => {
-    if (user) {
-      loadData();
+  const fetchMemberships = useCallback(async () => {
+    if (!user) return;
+
+    try {
+      const data = await creatorClubService.getUserMemberships(user.id);
+      setMemberships(data);
+    } catch (error) {
+      console.error('Error fetching memberships:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
   }, [user]);
 
-  const loadData = async () => {
-    if (!user) return;
+  useEffect(() => {
+    fetchMemberships();
+  }, [fetchMemberships]);
 
-    setLoading(true);
-    try {
-      // Load memberships
-      const membershipData = await creatorClubService.getUserMemberships(user.id);
-      setMemberships(membershipData);
-
-      // Load subscription payment transactions
-      const allTransactions = await walletService.getTransactions(user.id, 100);
-      const subscriptionTransactions = allTransactions.filter(
-        (t) => t.type === 'subscription_payment' && t.amount_cents < 0
-      );
-      setTransactions(subscriptionTransactions);
-    } catch (error) {
-      console.error('Error loading subscriptions:', error);
-    } finally {
-      setLoading(false);
-    }
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchMemberships();
   };
 
   const handleCancelSubscription = (membership: CreatorClubMembership) => {
-    if (!membership.creator_clubs) return;
-
     Alert.alert(
       'Cancel Subscription',
-      `Are you sure you want to cancel your subscription to ${membership.creator_clubs.name}? Your benefits will remain active until ${new Date(membership.renews_at).toLocaleDateString()}.`,
+      `Are you sure you want to cancel your subscription to ${membership.creator_clubs?.name}? You will lose access at the end of your billing period.`,
       [
-        { text: 'Keep Subscription', style: 'cancel' },
+        {
+          text: 'Keep Subscription',
+          style: 'cancel',
+        },
         {
           text: 'Cancel',
           style: 'destructive',
           onPress: async () => {
-            const result = await creatorClubService.cancelMembership(
-              membership.club_id,
-              membership.member_id,
-              false
-            );
+            if (!membership.stripe_subscription_id) {
+              Alert.alert('Error', 'No subscription ID found');
+              return;
+            }
 
-            if (result.success) {
-              Alert.alert('Success', 'Your subscription has been canceled');
-              loadData();
-            } else {
-              Alert.alert('Error', result.error || 'Failed to cancel subscription');
+            try {
+              const result = await stripeService.cancelSubscription(
+                membership.stripe_subscription_id,
+                false // Cancel at period end
+              );
+
+              if (result.success) {
+                // Update local state
+                await creatorClubService.cancelMembership(
+                  membership.club_id,
+                  membership.member_id,
+                  false
+                );
+
+                Alert.alert(
+                  'Subscription Canceled',
+                  'Your subscription will remain active until the end of your billing period.'
+                );
+
+                fetchMemberships();
+              } else {
+                Alert.alert('Error', result.error || 'Failed to cancel subscription');
+              }
+            } catch (error) {
+              console.error('Error canceling subscription:', error);
+              Alert.alert('Error', 'An unexpected error occurred');
             }
           },
         },
@@ -82,27 +98,14 @@ export default function ManageSubscriptionsScreen() {
     );
   };
 
-  if (loading) {
-    return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[styles.header, { borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <IconSymbol
-              ios_icon_name="chevron.left"
-              android_material_icon_name="arrow_back"
-              size={24}
-              color={colors.text}
-            />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>My Subscriptions</Text>
-          <View style={styles.placeholder} />
-        </View>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.brandPrimary} />
-        </View>
-      </View>
-    );
-  }
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -119,17 +122,19 @@ export default function ManageSubscriptionsScreen() {
         <View style={styles.placeholder} />
       </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Active Subscriptions */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Active Subscriptions ({memberships.length})
-          </Text>
-
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.brandPrimary} />
+        </View>
+      ) : (
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.brandPrimary} />
+          }
+        >
           {memberships.length === 0 ? (
             <View style={styles.emptyState}>
               <IconSymbol
@@ -138,18 +143,16 @@ export default function ManageSubscriptionsScreen() {
                 size={48}
                 color={colors.textSecondary}
               />
-              <Text style={[styles.emptyText, { color: colors.text }]}>
-                No active subscriptions
-              </Text>
+              <Text style={[styles.emptyText, { color: colors.text }]}>No active subscriptions</Text>
               <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>
                 Join a creator&apos;s VIP club to get exclusive benefits
               </Text>
             </View>
           ) : (
             <View style={styles.membershipsList}>
-              {memberships.map((membership) => (
+              {memberships.map((membership, index) => (
                 <View
-                  key={membership.id}
+                  key={index}
                   style={[
                     styles.membershipCard,
                     { backgroundColor: colors.card, borderColor: colors.border },
@@ -158,17 +161,22 @@ export default function ManageSubscriptionsScreen() {
                   <View style={styles.membershipHeader}>
                     <View style={styles.membershipInfo}>
                       <Text style={[styles.clubName, { color: colors.text }]}>
-                        {membership.creator_clubs?.name}
+                        {membership.creator_clubs?.name || 'Unknown Club'}
                       </Text>
-                      <View style={[styles.badge, { backgroundColor: colors.brandPrimary }]}>
-                        <Text style={styles.badgeText}>{membership.creator_clubs?.tag}</Text>
-                      </View>
+                      {membership.creator_clubs?.tag && (
+                        <View style={[styles.badge, { backgroundColor: colors.brandPrimary }]}>
+                          <Text style={styles.badgeText}>{membership.creator_clubs.tag}</Text>
+                        </View>
+                      )}
                     </View>
+                    {membership.is_active && !membership.cancel_at_period_end && (
+                      <View style={[styles.statusBadge, { backgroundColor: `${colors.brandPrimary}20` }]}>
+                        <Text style={[styles.statusText, { color: colors.brandPrimary }]}>Active</Text>
+                      </View>
+                    )}
                     {membership.cancel_at_period_end && (
-                      <View style={[styles.cancelingBadge, { backgroundColor: colors.brandPrimary + '20' }]}>
-                        <Text style={[styles.cancelingText, { color: colors.brandPrimary }]}>
-                          Canceling
-                        </Text>
+                      <View style={[styles.statusBadge, { backgroundColor: '#FFC10720' }]}>
+                        <Text style={[styles.statusText, { color: '#FFC107' }]}>Canceling</Text>
                       </View>
                     )}
                   </View>
@@ -182,87 +190,79 @@ export default function ManageSubscriptionsScreen() {
                         color={colors.textSecondary}
                       />
                       <Text style={[styles.detailText, { color: colors.textSecondary }]}>
-                        Renews: {new Date(membership.renews_at).toLocaleDateString()}
+                        Started: {formatDate(membership.started_at)}
                       </Text>
                     </View>
                     <View style={styles.detailRow}>
                       <IconSymbol
-                        ios_icon_name="dollarsign.circle"
-                        android_material_icon_name="attach_money"
+                        ios_icon_name="arrow.clockwise"
+                        android_material_icon_name="refresh"
                         size={16}
                         color={colors.textSecondary}
                       />
                       <Text style={[styles.detailText, { color: colors.textSecondary }]}>
-                        kr {((membership.creator_clubs?.monthly_price_cents || 0) / 100).toFixed(2)}/month
+                        {membership.cancel_at_period_end
+                          ? `Ends: ${formatDate(membership.renews_at)}`
+                          : `Renews: ${formatDate(membership.renews_at)}`}
+                      </Text>
+                    </View>
+                    <View style={styles.detailRow}>
+                      <IconSymbol
+                        ios_icon_name="creditcard"
+                        android_material_icon_name="credit_card"
+                        size={16}
+                        color={colors.textSecondary}
+                      />
+                      <Text style={[styles.detailText, { color: colors.textSecondary }]}>
+                        {((membership.creator_clubs?.monthly_price_cents || 0) / 100).toFixed(2)}{' '}
+                        {membership.creator_clubs?.currency || 'SEK'}/month
                       </Text>
                     </View>
                   </View>
 
-                  {!membership.cancel_at_period_end && (
+                  {membership.is_active && !membership.cancel_at_period_end && (
                     <TouchableOpacity
-                      style={[styles.cancelButton, { borderColor: colors.brandPrimary }]}
+                      style={[styles.cancelButton, { borderColor: colors.border }]}
                       onPress={() => handleCancelSubscription(membership)}
                     >
-                      <Text style={[styles.cancelButtonText, { color: colors.brandPrimary }]}>
+                      <Text style={[styles.cancelButtonText, { color: colors.text }]}>
                         Cancel Subscription
                       </Text>
                     </TouchableOpacity>
+                  )}
+
+                  {membership.cancel_at_period_end && (
+                    <View style={[styles.cancelNotice, { backgroundColor: colors.backgroundAlt }]}>
+                      <IconSymbol
+                        ios_icon_name="info.circle"
+                        android_material_icon_name="info"
+                        size={16}
+                        color={colors.textSecondary}
+                      />
+                      <Text style={[styles.cancelNoticeText, { color: colors.textSecondary }]}>
+                        Your subscription will end on {formatDate(membership.renews_at)}
+                      </Text>
+                    </View>
                   )}
                 </View>
               ))}
             </View>
           )}
-        </View>
 
-        {/* Payment History */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Payment History</Text>
-
-          {transactions.length === 0 ? (
-            <View style={styles.emptyState}>
-              <IconSymbol
-                ios_icon_name="doc.text"
-                android_material_icon_name="description"
-                size={48}
-                color={colors.textSecondary}
-              />
-              <Text style={[styles.emptyText, { color: colors.text }]}>No payment history</Text>
-            </View>
-          ) : (
-            <View style={styles.transactionsList}>
-              {transactions.map((transaction) => (
-                <View
-                  key={transaction.id}
-                  style={[
-                    styles.transactionItem,
-                    { backgroundColor: colors.card, borderColor: colors.border },
-                  ]}
-                >
-                  <View style={styles.transactionIcon}>
-                    <IconSymbol
-                      ios_icon_name="arrow.up.circle.fill"
-                      android_material_icon_name="arrow_upward"
-                      size={24}
-                      color={colors.brandPrimary}
-                    />
-                  </View>
-                  <View style={styles.transactionInfo}>
-                    <Text style={[styles.transactionTitle, { color: colors.text }]}>
-                      Subscription Payment
-                    </Text>
-                    <Text style={[styles.transactionDate, { color: colors.textSecondary }]}>
-                      {new Date(transaction.created_at).toLocaleDateString()}
-                    </Text>
-                  </View>
-                  <Text style={[styles.transactionAmount, { color: colors.brandPrimary }]}>
-                    -kr {(Math.abs(transaction.amount_cents) / 100).toFixed(2)}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
-      </ScrollView>
+          {/* Info Card */}
+          <View style={[styles.infoCard, { backgroundColor: colors.backgroundAlt }]}>
+            <IconSymbol
+              ios_icon_name="info.circle.fill"
+              android_material_icon_name="info"
+              size={20}
+              color={colors.brandPrimary}
+            />
+            <Text style={[styles.infoText, { color: colors.textSecondary }]}>
+              Subscriptions are managed through Stripe. You can update your payment method or view billing history in your Stripe customer portal.
+            </Text>
+          </View>
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -304,76 +304,70 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingBottom: 100,
   },
-  section: {
-    paddingHorizontal: 20,
-    marginTop: 24,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 16,
-  },
   emptyState: {
     alignItems: 'center',
-    paddingVertical: 40,
-    gap: 12,
+    justifyContent: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 40,
   },
   emptyText: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '700',
+    marginTop: 16,
   },
   emptySubtext: {
     fontSize: 14,
     fontWeight: '400',
+    marginTop: 8,
     textAlign: 'center',
   },
   membershipsList: {
-    gap: 12,
+    padding: 20,
+    gap: 16,
   },
   membershipCard: {
     borderRadius: 16,
-    padding: 16,
+    padding: 20,
     borderWidth: 1,
   },
   membershipHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   membershipInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
     flex: 1,
+    gap: 8,
   },
   clubName: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '700',
   },
   badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
   },
   badgeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: 1,
   },
-  cancelingBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
   },
-  cancelingText: {
-    fontSize: 11,
+  statusText: {
+    fontSize: 12,
     fontWeight: '700',
   },
   membershipDetails: {
     gap: 8,
-    marginBottom: 12,
+    marginBottom: 16,
   },
   detailRow: {
     flexDirection: 'row',
@@ -385,46 +379,40 @@ const styles = StyleSheet.create({
     fontWeight: '400',
   },
   cancelButton: {
-    borderRadius: 8,
-    paddingVertical: 10,
+    borderRadius: 12,
+    paddingVertical: 12,
     alignItems: 'center',
     borderWidth: 1,
   },
   cancelButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  transactionsList: {
-    gap: 8,
-  },
-  transactionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 12,
-    padding: 12,
-    gap: 12,
-    borderWidth: 1,
-  },
-  transactionIcon: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  transactionInfo: {
-    flex: 1,
-  },
-  transactionTitle: {
     fontSize: 15,
     fontWeight: '600',
-    marginBottom: 2,
   },
-  transactionDate: {
+  cancelNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+    borderRadius: 8,
+  },
+  cancelNoticeText: {
+    flex: 1,
     fontSize: 13,
     fontWeight: '400',
   },
-  transactionAmount: {
-    fontSize: 16,
-    fontWeight: '700',
+  infoCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginHorizontal: 20,
+    marginTop: 20,
+    padding: 16,
+    borderRadius: 12,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '400',
+    lineHeight: 18,
   },
 });
