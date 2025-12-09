@@ -1,5 +1,6 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 Deno.serve(async (req) => {
   try {
@@ -28,6 +29,21 @@ Deno.serve(async (req) => {
         }),
         { status: 500, headers: { "Content-Type": "application/json" } }
       );
+    }
+
+    // Initialize Supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Fetch moderators for this creator
+    const { data: moderators, error: modError } = await supabase
+      .from('moderators')
+      .select('user_id, profiles(id, username, display_name, avatar_url)')
+      .eq('streamer_id', user_id);
+
+    if (modError) {
+      console.error('Error fetching moderators:', modError);
     }
 
     // Create Cloudflare live input
@@ -75,7 +91,15 @@ Deno.serve(async (req) => {
     // Build playback URL
     const playback_url = `https://customer-${CF_ACCOUNT_ID}.cloudflarestream.com/${uid}/manifest/video.m3u8`;
 
-    // Return response in EXACT format required
+    // Format moderators array
+    const moderatorsArray = moderators?.map(mod => ({
+      user_id: mod.user_id,
+      username: mod.profiles?.username,
+      display_name: mod.profiles?.display_name,
+      avatar_url: mod.profiles?.avatar_url,
+    })) || [];
+
+    // Return response with moderators included
     const response = {
       success: true,
       stream: {
@@ -84,6 +108,7 @@ Deno.serve(async (req) => {
         title: title,
         status: "live",
         playback_url: playback_url,
+        moderators: moderatorsArray,
       },
       ingest: {
         webRTC_url: webRTC?.url || null,
@@ -91,6 +116,8 @@ Deno.serve(async (req) => {
         stream_key: rtmps?.streamKey || null,
       },
     };
+
+    console.log(`✅ Stream started with ${moderatorsArray.length} moderators`);
 
     return new Response(
       JSON.stringify(response),
@@ -100,6 +127,7 @@ Deno.serve(async (req) => {
       }
     );
   } catch (e) {
+    console.error('Error in start-live function:', e);
     return new Response(
       JSON.stringify({ 
         success: false, 
