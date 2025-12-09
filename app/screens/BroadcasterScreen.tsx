@@ -131,43 +131,56 @@ export default function BroadcasterScreen() {
     setIsLoading(true);
 
     try {
-      console.log('Starting live stream with title:', streamTitle);
+      console.log('🎬 Starting live stream with title:', streamTitle);
       
       const response = await cloudflareService.startLive(streamTitle, user.id);
 
-      console.log('SERVER RESPONSE:', response);
+      console.log('📡 Full server response:', JSON.stringify(response, null, 2));
 
-      if (!response.success || !response.live_input_id) {
-        console.error('SERVER RESPONSE:', response);
-        throw new Error('Invalid response from server: missing live_input_id');
+      if (!response.success) {
+        console.error('❌ Server returned success=false:', response.error);
+        throw new Error(response.error || 'Server returned error');
       }
 
+      if (!response.live_input_id) {
+        console.error('❌ Missing live_input_id in response:', response);
+        throw new Error(
+          'Invalid response from server: missing live_input_id.\n\n' +
+          'This usually means:\n' +
+          '1. Cloudflare credentials (CF_ACCOUNT_ID and CF_API_TOKEN) are not configured in Supabase Edge Function secrets\n' +
+          '2. The Cloudflare API returned an error\n\n' +
+          'Please check the Edge Function logs for more details.'
+        );
+      }
+
+      console.log('✅ Setting stream data:', {
+        live_input_id: response.live_input_id,
+        ingest_url: response.ingest_url,
+        stream_key: response.stream_key ? '***' : null,
+        webrtc_url: response.webrtc_url,
+        playback_url: response.playback_url,
+      });
+
       setCurrentStreamId(response.live_input_id);
-      setIngestUrl(response.ingest_url);
-      setStreamKey(response.stream_key);
+      setIngestUrl(response.ingest_url || null);
+      setStreamKey(response.stream_key || null);
       setWebrtcUrl(response.webrtc_url || null);
-      setPlaybackUrl(response.playback_url);
+      setPlaybackUrl(response.playback_url || null);
       
       setIsLive(true);
       setViewerCount(0);
       setShowSetup(false);
       setStreamTitle('');
 
-      console.log('Stream started successfully:', {
-        live_input_id: response.live_input_id,
-        ingest_url: response.ingest_url,
-        stream_key: response.stream_key,
-        webrtc_url: response.webrtc_url,
-        playback_url: response.playback_url,
-      });
+      console.log('✅ Stream started successfully!');
 
       Alert.alert(
         '🔴 You are LIVE!',
-        'Your stream is now broadcasting. Viewers can watch you live!',
+        `Your stream is now broadcasting.\n\nStream ID: ${response.live_input_id}\n\nViewers can watch you live!`,
         [{ text: 'OK' }]
       );
     } catch (error) {
-      console.error('Error starting stream:', error);
+      console.error('❌ Error starting stream:', error);
       
       const errorMessage = error instanceof Error 
         ? error.message 
@@ -192,7 +205,11 @@ export default function BroadcasterScreen() {
     setIsLoading(true);
 
     try {
+      console.log('🛑 Ending stream:', currentStreamId);
+      
       await cloudflareService.stopLive(currentStreamId);
+
+      console.log('✅ Stream ended successfully');
 
       setIsLive(false);
       setViewerCount(0);
@@ -205,7 +222,7 @@ export default function BroadcasterScreen() {
 
       Alert.alert('Stream Ended', 'Your live stream has been ended successfully.');
     } catch (error) {
-      console.error('Error ending stream:', error);
+      console.error('❌ Error ending stream:', error);
       
       const errorMessage = error instanceof Error 
         ? error.message 
