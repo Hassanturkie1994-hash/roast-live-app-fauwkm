@@ -111,6 +111,10 @@ export default function ProfileScreen() {
     router.push('/screens/CreateStoryScreen');
   };
 
+  const handleSavedStreams = () => {
+    router.push('/screens/SavedStreamsScreen');
+  };
+
   const renderPosts = () => {
     const displayPosts = activeTab === 'posts' ? posts : likedPosts;
 
@@ -262,6 +266,29 @@ export default function ProfileScreen() {
                 color={colors.textSecondary}
               />
             </View>
+          </TouchableOpacity>
+
+          {/* Saved Streams Link */}
+          <TouchableOpacity 
+            style={styles.savedStreamsCard} 
+            onPress={handleSavedStreams}
+            activeOpacity={0.7}
+          >
+            <View style={styles.savedStreamsLeft}>
+              <IconSymbol
+                ios_icon_name="video.fill"
+                android_material_icon_name="videocam"
+                size={20}
+                color={colors.gradientEnd}
+              />
+              <Text style={styles.savedStreamsLabel}>Saved Streams</Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="chevron_right"
+              size={16}
+              color={colors.textSecondary}
+            />
           </TouchableOpacity>
 
           <View style={styles.buttonRow}>
@@ -541,6 +568,29 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: colors.gradientEnd,
+  },
+  savedStreamsCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.backgroundAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginTop: 8,
+    width: '100%',
+  },
+  savedStreamsLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  savedStreamsLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
   },
   tabsContainer: {
     flexDirection: 'row',

@@ -15,6 +15,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/app/integrations/supabase/client';
 import { Tables } from '@/app/integrations/supabase/types';
+import { notificationService } from '@/app/services/notificationService';
 
 type Notification = Tables<'notifications'> & {
   sender: Tables<'users'> | null;
@@ -26,6 +27,7 @@ export default function InboxScreen() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const fetchNotifications = useCallback(async () => {
     if (!user) return;
@@ -33,7 +35,7 @@ export default function InboxScreen() {
     try {
       const { data, error } = await supabase
         .from('notifications')
-        .select('*, sender:sender_id(*)' + ', stream:ref_stream_id(*)')
+        .select('*, sender:sender_id(*), stream:ref_stream_id(*)')
         .eq('receiver_id', user.id)
         .order('created_at', { ascending: false })
         .limit(50);
@@ -44,6 +46,10 @@ export default function InboxScreen() {
       }
 
       setNotifications(data as any);
+
+      // Count unread
+      const unread = data.filter((n) => !n.read).length;
+      setUnreadCount(unread);
     } catch (error) {
       console.error('Error in fetchNotifications:', error);
     } finally {
@@ -93,10 +99,8 @@ export default function InboxScreen() {
 
   const handleNotificationPress = async (notification: Notification) => {
     if (!notification.read) {
-      await supabase
-        .from('notifications')
-        .update({ read: true })
-        .eq('id', notification.id);
+      await notificationService.markAsRead(notification.id);
+      setUnreadCount((prev) => Math.max(0, prev - 1));
     }
 
     if (notification.type === 'stream_started' && notification.stream) {
@@ -104,7 +108,20 @@ export default function InboxScreen() {
         pathname: '/live-player',
         params: { streamId: notification.stream.id },
       });
+    } else if (notification.type === 'like' && notification.ref_post_id) {
+      router.push(`/screens/PostDetailScreen?postId=${notification.ref_post_id}`);
+    } else if (notification.type === 'comment' && notification.ref_post_id) {
+      router.push(`/screens/PostDetailScreen?postId=${notification.ref_post_id}`);
+    } else if (notification.type === 'follow' && notification.sender) {
+      router.push(`/screens/UserProfileScreen?userId=${notification.sender.id}`);
     }
+  };
+
+  const handleClearAll = async () => {
+    if (!user) return;
+    await notificationService.markAllAsRead(user.id);
+    setUnreadCount(0);
+    fetchNotifications();
   };
 
   const getNotificationIcon = (type: string) => {
@@ -113,21 +130,30 @@ export default function InboxScreen() {
         return { ios: 'video.fill', android: 'videocam' };
       case 'follow':
         return { ios: 'person.fill.badge.plus', android: 'person_add' };
-      case 'mention':
-        return { ios: 'at', android: 'alternate_email' };
+      case 'like':
+        return { ios: 'heart.fill', android: 'favorite' };
+      case 'comment':
+        return { ios: 'bubble.left.fill', android: 'comment' };
+      case 'message':
+        return { ios: 'envelope.fill', android: 'mail' };
       default:
         return { ios: 'bell.fill', android: 'notifications' };
     }
   };
 
   const getNotificationText = (notification: Notification) => {
+    const senderName = notification.sender?.display_name || 'Someone';
     switch (notification.type) {
       case 'stream_started':
-        return `${notification.sender?.display_name || 'Someone'} started a live stream`;
+        return `${senderName} started a live stream`;
       case 'follow':
-        return `${notification.sender?.display_name || 'Someone'} started following you`;
-      case 'mention':
-        return `${notification.sender?.display_name || 'Someone'} mentioned you in chat`;
+        return `${senderName} started following you`;
+      case 'like':
+        return `${senderName} liked your post`;
+      case 'comment':
+        return `${senderName} commented on your post`;
+      case 'message':
+        return `${senderName} sent you a message`;
       default:
         return notification.message || 'New notification';
     }
@@ -150,13 +176,26 @@ export default function InboxScreen() {
   return (
     <View style={commonStyles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Notifications</Text>
+        <View style={styles.headerTop}>
+          <Text style={styles.headerTitle}>Notifications</Text>
+          {unreadCount > 0 && (
+            <TouchableOpacity onPress={handleClearAll} style={styles.clearButton}>
+              <Text style={styles.clearButtonText}>Clear All</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        {unreadCount > 0 && (
+          <View style={styles.unreadBadge}>
+            <Text style={styles.unreadText}>{unreadCount} unread</Text>
+          </View>
+        )}
       </View>
 
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.contentContainer}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.text} />}
+        showsVerticalScrollIndicator={false}
       >
         {loading ? (
           <View style={styles.centerContent}>
@@ -172,7 +211,7 @@ export default function InboxScreen() {
             />
             <Text style={styles.emptyText}>No notifications yet</Text>
             <Text style={styles.emptySubtext}>
-              You&apos;ll be notified when someone follows you or goes live
+              You&apos;ll be notified when someone follows you, likes your posts, or goes live
             </Text>
           </View>
         ) : (
@@ -196,17 +235,14 @@ export default function InboxScreen() {
 
                 <View style={styles.notificationContent}>
                   <Text style={styles.notificationText}>{getNotificationText(notification)}</Text>
-                  <Text style={styles.notificationTime}>
-                    {formatTime(notification.created_at || '')}
-                  </Text>
+                  <Text style={styles.notificationTime}>{formatTime(notification.created_at || '')}</Text>
                 </View>
 
                 {notification.sender?.avatar && (
-                  <Image
-                    source={{ uri: notification.sender.avatar }}
-                    style={styles.notificationAvatar}
-                  />
+                  <Image source={{ uri: notification.sender.avatar }} style={styles.notificationAvatar} />
                 )}
+
+                {!notification.read && <View style={styles.unreadDot} />}
               </TouchableOpacity>
             );
           })
@@ -224,9 +260,38 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
   headerTitle: {
     fontSize: 28,
     fontWeight: '800',
+    color: colors.text,
+  },
+  clearButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: 12,
+  },
+  clearButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  unreadBadge: {
+    backgroundColor: colors.gradientEnd,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  unreadText: {
+    fontSize: 12,
+    fontWeight: '700',
     color: colors.text,
   },
   scrollView: {
@@ -272,6 +337,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
     gap: 16,
+    position: 'relative',
   },
   notificationUnread: {
     backgroundColor: colors.backgroundAlt,
@@ -304,5 +370,14 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     backgroundColor: colors.backgroundAlt,
+  },
+  unreadDot: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.gradientEnd,
   },
 });
