@@ -15,6 +15,8 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/app/integrations/supabase/client';
 import { Tables } from '@/app/integrations/supabase/types';
 import UserActionModal from '@/components/UserActionModal';
+import { fanClubService } from '@/app/services/fanClubService';
+import { moderationService } from '@/app/services/moderationService';
 
 interface ViewerListModalProps {
   visible: boolean;
@@ -48,16 +50,43 @@ export default function ViewerListModal({
   const [isLoading, setIsLoading] = useState(false);
   const [selectedViewer, setSelectedViewer] = useState<Viewer | null>(null);
   const [showUserActionModal, setShowUserActionModal] = useState(false);
+  const [fanClubBadges, setFanClubBadges] = useState<Map<string, { color: string; name: string }>>(new Map());
+  const [moderatorIds, setModeratorIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (visible) {
       fetchViewers();
+      fetchFanClubBadges();
+      fetchModerators();
       
       // Auto-refresh viewer list every 5 seconds
       const interval = setInterval(fetchViewers, 5000);
       return () => clearInterval(interval);
     }
   }, [visible, streamId]);
+
+  const fetchFanClubBadges = async () => {
+    // Get fan club info
+    const fanClub = await fanClubService.getFanClub(streamerId);
+    if (!fanClub) return;
+
+    // Get all members
+    const members = await fanClubService.getFanClubMembers(fanClub.id);
+    const badgeMap = new Map();
+    members.forEach((member) => {
+      badgeMap.set(member.user_id, {
+        color: fanClub.badge_color,
+        name: fanClub.club_name,
+      });
+    });
+    setFanClubBadges(badgeMap);
+  };
+
+  const fetchModerators = async () => {
+    const mods = await moderationService.getModerators(streamerId);
+    const modIds = new Set(mods.map((m) => m.user_id));
+    setModeratorIds(modIds);
+  };
 
   const fetchViewers = async () => {
     setIsLoading(true);
@@ -89,6 +118,43 @@ export default function ViewerListModal({
     }
   };
 
+  const renderBadges = (userId: string) => {
+    const badges = [];
+
+    // Moderator badge
+    if (moderatorIds.has(userId)) {
+      badges.push(
+        <View key="mod" style={[styles.badge, { backgroundColor: colors.gradientEnd }]}>
+          <IconSymbol
+            ios_icon_name="shield.fill"
+            android_material_icon_name="shield"
+            size={10}
+            color={colors.text}
+          />
+          <Text style={styles.badgeText}>MOD</Text>
+        </View>
+      );
+    }
+
+    // Fan club badge
+    const fanBadge = fanClubBadges.get(userId);
+    if (fanBadge) {
+      badges.push(
+        <View key="fan" style={[styles.badge, { backgroundColor: fanBadge.color }]}>
+          <IconSymbol
+            ios_icon_name="heart.fill"
+            android_material_icon_name="favorite"
+            size={10}
+            color={colors.text}
+          />
+          <Text style={styles.badgeText}>{fanBadge.name}</Text>
+        </View>
+      );
+    }
+
+    return badges.length > 0 ? <View style={styles.badgeContainer}>{badges}</View> : null;
+  };
+
   const renderViewer = ({ item }: { item: Viewer }) => (
     <TouchableOpacity
       style={styles.viewerItem}
@@ -110,7 +176,10 @@ export default function ViewerListModal({
         )}
       </View>
       <View style={styles.viewerInfo}>
-        <Text style={styles.viewerName}>{item.users.display_name}</Text>
+        <View style={styles.viewerNameRow}>
+          <Text style={styles.viewerName}>{item.users.display_name}</Text>
+          {renderBadges(item.user_id)}
+        </View>
         <Text style={styles.viewerUsername}>@{item.users.username}</Text>
       </View>
       <View style={styles.liveIndicator}>
@@ -292,11 +361,33 @@ const styles = StyleSheet.create({
   viewerInfo: {
     flex: 1,
   },
+  viewerNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 2,
+  },
   viewerName: {
     fontSize: 16,
     fontWeight: '600',
     color: colors.text,
-    marginBottom: 2,
+  },
+  badgeContainer: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  badgeText: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: colors.text,
   },
   viewerUsername: {
     fontSize: 14,

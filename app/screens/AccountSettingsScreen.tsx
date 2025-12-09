@@ -167,6 +167,24 @@ export default function AccountSettingsScreen() {
               color={colors.textSecondary}
             />
           </TouchableOpacity>
+
+          <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/screens/BlockedUsersScreen')}>
+            <View style={styles.settingLeft}>
+              <IconSymbol
+                ios_icon_name="hand.raised.fill"
+                android_material_icon_name="block"
+                size={20}
+                color={colors.gradientEnd}
+              />
+              <Text style={styles.settingText}>Blocked Users</Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="chevron_right"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
         </View>
 
         {/* Security Section */}

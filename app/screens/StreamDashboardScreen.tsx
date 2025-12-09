@@ -180,6 +180,38 @@ export default function StreamDashboardScreen() {
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
+        {/* Quick Actions */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <View style={styles.quickActions}>
+            <TouchableOpacity
+              style={styles.quickActionButton}
+              onPress={() => router.push('/screens/FanClubManagementScreen' as any)}
+            >
+              <IconSymbol
+                ios_icon_name="heart.circle.fill"
+                android_material_icon_name="favorite"
+                size={32}
+                color={colors.gradientEnd}
+              />
+              <Text style={styles.quickActionText}>Fan Club</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.quickActionButton}
+              onPress={() => router.push('/screens/BlockedUsersScreen' as any)}
+            >
+              <IconSymbol
+                ios_icon_name="hand.raised.circle.fill"
+                android_material_icon_name="block"
+                size={32}
+                color={colors.gradientEnd}
+              />
+              <Text style={styles.quickActionText}>Blocked Users</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* Add Moderator Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>
@@ -573,5 +605,26 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: colors.text,
+  },
+  quickActions: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  quickActionButton: {
+    flex: 1,
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: 12,
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  quickActionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    textAlign: 'center',
   },
 });
