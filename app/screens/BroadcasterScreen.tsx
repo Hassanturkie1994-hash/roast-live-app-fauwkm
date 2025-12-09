@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, TextInput, Modal, Platform, BackHandler } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, TextInput, Modal, Platform, BackHandler, AppState, AppStateStatus } from 'react-native';
 import { CameraView, CameraType, useCameraPermissions, FlashMode } from 'expo-camera';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import GradientButton from '@/components/GradientButton';
@@ -53,9 +53,11 @@ export default function BroadcasterScreen() {
   const [showFilters, setShowFilters] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState<CameraFilter>('none');
   const [showExitConfirmation, setShowExitConfirmation] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(false);
   const realtimeChannelRef = useRef<any>(null);
   const giftChannelRef = useRef<any>(null);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const appState = useRef<AppStateStatus>(AppState.currentState);
 
   useEffect(() => {
     if (!user) {
@@ -73,6 +75,34 @@ export default function BroadcasterScreen() {
 
       return () => backHandler.remove();
     }
+  }, [isLive]);
+
+  // Handle multitask mode (app minimization)
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (isLive) {
+        if (
+          appState.current.match(/active/) &&
+          nextAppState.match(/inactive|background/)
+        ) {
+          // App is going to background - enable minimized mode
+          console.log('📱 App minimized - enabling floating thumbnail mode');
+          setIsMinimized(true);
+        } else if (
+          appState.current.match(/inactive|background/) &&
+          nextAppState === 'active'
+        ) {
+          // App is coming to foreground - disable minimized mode
+          console.log('📱 App restored - disabling floating thumbnail mode');
+          setIsMinimized(false);
+        }
+      }
+      appState.current = nextAppState;
+    });
+
+    return () => {
+      subscription.remove();
+    };
   }, [isLive]);
 
   useEffect(() => {
@@ -177,7 +207,10 @@ export default function BroadcasterScreen() {
   };
 
   const toggleFlash = () => {
-    setFlashMode((current) => (current === 'off' ? 'on' : 'off'));
+    // Flash only available on back camera
+    if (facing === 'back') {
+      setFlashMode((current) => (current === 'off' ? 'on' : 'off'));
+    }
   };
 
   const handleStartLiveSetup = () => {
@@ -282,6 +315,7 @@ export default function BroadcasterScreen() {
       setLiveTime(0);
       setCurrentStream(null);
       setGiftAnimations([]);
+      setIsMinimized(false);
 
       Alert.alert('Stream Ended', 'Your live stream has been ended successfully.');
     } catch (error) {
@@ -310,11 +344,15 @@ export default function BroadcasterScreen() {
 
   return (
     <View style={commonStyles.container}>
+      {/* Camera View - Full screen 9:16 aspect ratio */}
       {isCameraOn ? (
         <CameraView 
           style={styles.camera} 
           facing={facing}
           flash={flashMode}
+          // TikTok-style vertical format settings
+          videoQuality="1080p"
+          ratio="16:9"
         />
       ) : (
         <View style={styles.cameraOffContainer}>
@@ -328,8 +366,29 @@ export default function BroadcasterScreen() {
         </View>
       )}
 
+      {/* Floating Thumbnail for Multitask Mode */}
+      {isMinimized && isLive && (
+        <TouchableOpacity 
+          style={styles.floatingThumbnail}
+          onPress={() => setIsMinimized(false)}
+          activeOpacity={0.9}
+        >
+          <View style={styles.thumbnailContent}>
+            <CameraView 
+              style={styles.thumbnailCamera} 
+              facing={facing}
+              flash={flashMode}
+            />
+            <View style={styles.thumbnailOverlay}>
+              <LiveBadge size="small" />
+              <Text style={styles.thumbnailText}>Tap to expand</Text>
+            </View>
+          </View>
+        </TouchableOpacity>
+      )}
+
       <View style={styles.overlay}>
-        {isLive && (
+        {isLive && !isMinimized && (
           <>
             {/* Top Bar with LIVE badge, watermark, and stats */}
             <View style={styles.topBar}>
@@ -384,7 +443,7 @@ export default function BroadcasterScreen() {
               visible={showFilters}
             />
 
-            {/* Enhanced Chat Overlay */}
+            {/* Enhanced Chat Overlay - Bottom left */}
             {currentStream && (
               <EnhancedChatOverlay streamId={currentStream.id} />
             )}
@@ -416,8 +475,8 @@ export default function BroadcasterScreen() {
         />
       ))}
 
-      {/* Sticky Bottom Control Panel (only visible when live) */}
-      {isLive && (
+      {/* Sticky Bottom Control Panel (only visible when live and not minimized) */}
+      {isLive && !isMinimized && (
         <LiveStreamControlPanel
           isMicOn={isMicOn}
           onToggleMic={() => setIsMicOn(!isMicOn)}
@@ -429,6 +488,7 @@ export default function BroadcasterScreen() {
           onToggleFlash={toggleFlash}
           onEndStream={() => setShowExitConfirmation(true)}
           isLoading={isLoading}
+          isBackCamera={facing === 'back'}
         />
       )}
 
@@ -476,7 +536,7 @@ export default function BroadcasterScreen() {
                 color={colors.gradientEnd}
               />
               <Text style={styles.infoText}>
-                Your stream will be broadcast live to all viewers. Make sure you have a stable internet connection!
+                Your stream will be broadcast live in vertical format (9:16) at up to 1080p quality. Make sure you have a stable internet connection!
               </Text>
             </View>
 
@@ -518,7 +578,7 @@ export default function BroadcasterScreen() {
             />
             <Text style={styles.confirmationTitle}>End Livestream?</Text>
             <Text style={styles.confirmationText}>
-              You cannot leave the livestream without ending it. Are you sure you want to end your livestream?
+              You cannot leave while streaming. End your stream first.{'\n\n'}Are you sure you want to stop streaming?
             </Text>
             <View style={styles.confirmationButtons}>
               <TouchableOpacity
@@ -529,7 +589,7 @@ export default function BroadcasterScreen() {
               </TouchableOpacity>
               <View style={styles.confirmationEndButton}>
                 <GradientButton
-                  title="Yes, End Stream"
+                  title="End Stream"
                   onPress={handleEndStreamConfirm}
                   size="medium"
                 />
@@ -545,6 +605,9 @@ export default function BroadcasterScreen() {
 const styles = StyleSheet.create({
   camera: {
     flex: 1,
+    // Edge-to-edge display with 9:16 aspect ratio
+    width: '100%',
+    height: '100%',
   },
   cameraOffContainer: {
     flex: 1,
@@ -629,6 +692,42 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: colors.border,
+  },
+  floatingThumbnail: {
+    position: 'absolute',
+    top: 100,
+    right: 20,
+    width: 120,
+    height: 160,
+    borderRadius: 12,
+    overflow: 'hidden',
+    zIndex: 9999,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    borderWidth: 3,
+    borderColor: colors.gradientEnd,
+  },
+  thumbnailContent: {
+    flex: 1,
+  },
+  thumbnailCamera: {
+    flex: 1,
+  },
+  thumbnailOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  thumbnailText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: colors.text,
+    textAlign: 'center',
   },
   centerContent: {
     flex: 1,

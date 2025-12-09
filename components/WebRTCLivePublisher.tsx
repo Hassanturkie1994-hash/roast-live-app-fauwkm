@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { View, StyleSheet, Platform, Text } from 'react-native';
+import { View, StyleSheet, Platform, Text, Dimensions } from 'react-native';
 import { CameraView, CameraType } from 'expo-camera';
 import { colors } from '@/styles/commonStyles';
 
@@ -9,12 +9,29 @@ interface WebRTCLivePublisherProps {
   facing?: CameraType;
   onStreamStarted?: () => void;
   onStreamError?: (error: Error) => void;
+  flashMode?: 'on' | 'off' | 'auto';
+  isCameraOn?: boolean;
 }
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+// Calculate optimal camera dimensions for 9:16 aspect ratio
+const ASPECT_RATIO = 9 / 16;
+const TARGET_WIDTH = 1080;
+const TARGET_HEIGHT = 1920;
+const FALLBACK_WIDTH = 720;
+const FALLBACK_HEIGHT = 1280;
 
 /**
  * WebRTC Live Publisher Component
  * 
- * This component handles WebRTC streaming to Cloudflare.
+ * This component handles WebRTC streaming to Cloudflare with TikTok-style vertical format.
+ * 
+ * Camera Settings:
+ * - Resolution target: 1080x1920 (Full HD vertical)
+ * - Fallback resolution: 720x1280
+ * - Aspect ratio: 9:16 (portrait mode)
+ * - Framerate: 30-60 fps (device dependent)
  * 
  * Note: WebRTC streaming from React Native requires native modules.
  * For Expo Go and web, this will show the camera preview but won't
@@ -28,6 +45,8 @@ export default function WebRTCLivePublisher({
   facing = 'front',
   onStreamStarted,
   onStreamError,
+  flashMode = 'off',
+  isCameraOn = true,
 }: WebRTCLivePublisherProps) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,22 +55,39 @@ export default function WebRTCLivePublisher({
 
   const startWebRTCStream = useCallback(async () => {
     try {
-      // Get user media (camera and microphone)
+      // Get user media (camera and microphone) with TikTok-style vertical settings
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          frameRate: { ideal: 30 },
+          // Target Full HD vertical (1080x1920)
+          width: { ideal: TARGET_WIDTH, min: FALLBACK_WIDTH },
+          height: { ideal: TARGET_HEIGHT, min: FALLBACK_HEIGHT },
+          // Aspect ratio 9:16 (portrait mode)
+          aspectRatio: { ideal: ASPECT_RATIO },
+          // Framerate 30-60 fps
+          frameRate: { ideal: 60, min: 30 },
           facingMode: facing === 'front' ? 'user' : 'environment',
         },
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
+          sampleRate: 48000,
+          channelCount: 2,
         },
       });
 
       localStreamRef.current = stream;
+
+      // Log actual video settings
+      const videoTrack = stream.getVideoTracks()[0];
+      const settings = videoTrack.getSettings();
+      console.log('📹 Camera settings:', {
+        width: settings.width,
+        height: settings.height,
+        aspectRatio: settings.aspectRatio,
+        frameRate: settings.frameRate,
+        facingMode: settings.facingMode,
+      });
 
       // Create RTCPeerConnection
       const peerConnection = new RTCPeerConnection({
@@ -94,7 +130,7 @@ export default function WebRTCLivePublisher({
       await peerConnection.setRemoteDescription(answer);
 
       setIsStreaming(true);
-      console.log('WebRTC streaming started successfully');
+      console.log('✅ WebRTC streaming started successfully');
 
       if (onStreamStarted) {
         onStreamStarted();
@@ -112,21 +148,21 @@ export default function WebRTCLivePublisher({
         }
       };
     } catch (err) {
-      console.error('Error starting WebRTC stream:', err);
+      console.error('❌ Error starting WebRTC stream:', err);
       throw err;
     }
   }, [rtcPublishUrl, facing, onStreamStarted, onStreamError]);
 
   const initializeWebRTCStream = useCallback(async () => {
     try {
-      console.log('Initializing WebRTC stream to:', rtcPublishUrl);
+      console.log('🎬 Initializing WebRTC stream to:', rtcPublishUrl);
 
       // Check if WebRTC is available (web only for now)
       if (Platform.OS === 'web' && typeof RTCPeerConnection !== 'undefined') {
         await startWebRTCStream();
       } else {
         // For native platforms, we need react-native-webrtc
-        console.log('WebRTC not available on this platform');
+        console.log('📱 WebRTC not available on this platform');
         setError('WebRTC streaming requires native build with react-native-webrtc');
         
         // For now, we'll just show the camera preview
@@ -136,7 +172,7 @@ export default function WebRTCLivePublisher({
         }
       }
     } catch (err) {
-      console.error('Error initializing WebRTC:', err);
+      console.error('❌ Error initializing WebRTC:', err);
       const error = err instanceof Error ? err : new Error('Failed to initialize WebRTC');
       setError(error.message);
       if (onStreamError) {
@@ -156,7 +192,7 @@ export default function WebRTCLivePublisher({
   }, [rtcPublishUrl, initializeWebRTCStream]);
 
   const cleanup = () => {
-    console.log('Cleaning up WebRTC resources');
+    console.log('🧹 Cleaning up WebRTC resources');
 
     // Stop all tracks
     if (localStreamRef.current) {
@@ -175,12 +211,25 @@ export default function WebRTCLivePublisher({
     setIsStreaming(false);
   };
 
-  // For native platforms, show camera preview
-  // In production, this would be integrated with react-native-webrtc
+  // For native platforms, show camera preview with 9:16 aspect ratio
   if (Platform.OS !== 'web') {
     return (
       <View style={styles.container}>
-        <CameraView style={styles.camera} facing={facing} />
+        {isCameraOn ? (
+          <CameraView 
+            style={styles.camera} 
+            facing={facing}
+            flash={flashMode}
+            // Enable high quality video
+            videoQuality="1080p"
+            // Maintain 9:16 aspect ratio
+            ratio="16:9"
+          />
+        ) : (
+          <View style={styles.cameraOffContainer}>
+            <Text style={styles.cameraOffText}>Camera Off</Text>
+          </View>
+        )}
         {error && (
           <View style={styles.errorOverlay}>
             <Text style={styles.errorText}>{error}</Text>
@@ -221,6 +270,20 @@ const styles = StyleSheet.create({
   },
   camera: {
     flex: 1,
+    // Ensure camera fills screen edge-to-edge with 9:16 aspect ratio
+    width: '100%',
+    height: '100%',
+  },
+  cameraOffContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cameraOffText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.textSecondary,
   },
   streamContainer: {
     flex: 1,

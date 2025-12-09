@@ -16,6 +16,7 @@ interface LiveStreamControlPanelProps {
   onToggleFlash: () => void;
   onEndStream: () => void;
   isLoading?: boolean;
+  isBackCamera?: boolean;
 }
 
 export default function LiveStreamControlPanel({
@@ -29,6 +30,7 @@ export default function LiveStreamControlPanel({
   onToggleFlash,
   onEndStream,
   isLoading = false,
+  isBackCamera = false,
 }: LiveStreamControlPanelProps) {
   return (
     <View style={styles.container}>
@@ -78,19 +80,28 @@ export default function LiveStreamControlPanel({
           <Text style={styles.controlLabel}>{facing === 'front' ? 'Front' : 'Back'}</Text>
         </TouchableOpacity>
 
-        {/* Flash Toggle */}
+        {/* Flash Toggle - Only enabled for back camera */}
         <TouchableOpacity
-          style={[styles.controlButton, isFlashOn && styles.controlButtonActive]}
+          style={[
+            styles.controlButton, 
+            isFlashOn && styles.controlButtonActive,
+            !isBackCamera && styles.controlButtonDisabled
+          ]}
           onPress={onToggleFlash}
-          disabled={isLoading || !isCameraOn}
+          disabled={isLoading || !isCameraOn || !isBackCamera}
         >
           <IconSymbol
             ios_icon_name={isFlashOn ? 'bolt.fill' : 'bolt.slash.fill'}
             android_material_icon_name={isFlashOn ? 'flash_on' : 'flash_off'}
             size={24}
-            color={colors.text}
+            color={isBackCamera ? colors.text : colors.textSecondary}
           />
-          <Text style={styles.controlLabel}>{isFlashOn ? 'Flash' : 'Off'}</Text>
+          <Text style={[
+            styles.controlLabel,
+            !isBackCamera && styles.controlLabelDisabled
+          ]}>
+            {isFlashOn ? 'Flash' : 'Off'}
+          </Text>
         </TouchableOpacity>
 
         {/* End Stream Button */}
@@ -145,11 +156,17 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(227, 0, 82, 0.3)',
     borderColor: colors.gradientEnd,
   },
+  controlButtonDisabled: {
+    opacity: 0.4,
+  },
   controlLabel: {
     fontSize: 10,
     fontWeight: '600',
     color: colors.text,
     marginTop: 4,
+  },
+  controlLabelDisabled: {
+    color: colors.textSecondary,
   },
   endStreamButton: {
     minWidth: 70,
