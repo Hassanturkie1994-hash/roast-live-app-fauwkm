@@ -11,7 +11,7 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { useEvent } from 'expo';
-import { colors } from '@/styles/commonStyles';
+import { useTheme } from '@/contexts/ThemeContext';
 import { IconSymbol } from '@/components/IconSymbol';
 import LiveBadge from '@/components/LiveBadge';
 import FollowButton from '@/components/FollowButton';
@@ -28,6 +28,7 @@ type Stream = Tables<'streams'> & {
 export default function LivePlayerScreen() {
   const { streamId } = useLocalSearchParams<{ streamId: string }>();
   const { user } = useAuth();
+  const { colors } = useTheme();
   const [stream, setStream] = useState<Stream | null>(null);
   const [isFollowing, setIsFollowing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -244,27 +245,27 @@ export default function LivePlayerScreen() {
 
   if (!stream) {
     return (
-      <View style={[styles.container, styles.centerContent]}>
-        <ActivityIndicator size="large" color={colors.gradientEnd} />
-        <Text style={styles.loadingText}>Loading stream...</Text>
+      <View style={[styles.container, styles.centerContent, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.brandPrimary} />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading stream...</Text>
       </View>
     );
   }
 
   if (!stream.playback_url) {
     return (
-      <View style={[styles.container, styles.centerContent]}>
+      <View style={[styles.container, styles.centerContent, { backgroundColor: colors.background }]}>
         <IconSymbol
           ios_icon_name="exclamationmark.triangle.fill"
           android_material_icon_name="warning"
           size={48}
-          color={colors.gradientEnd}
+          color={colors.brandPrimary}
         />
-        <Text style={styles.errorText}>Stream not available</Text>
-        <Text style={styles.errorSubtext}>
+        <Text style={[styles.errorText, { color: colors.text }]}>Stream not available</Text>
+        <Text style={[styles.errorSubtext, { color: colors.textSecondary }]}>
           The broadcaster hasn&apos;t started streaming yet
         </Text>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <TouchableOpacity style={[styles.backButton, { backgroundColor: colors.brandPrimary }]} onPress={() => router.back()}>
           <Text style={styles.backButtonText}>Go Back</Text>
         </TouchableOpacity>
       </View>
@@ -272,11 +273,11 @@ export default function LivePlayerScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {isLoading && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color={colors.gradientEnd} />
-          <Text style={styles.loadingText}>Loading video...</Text>
+          <ActivityIndicator size="large" color={colors.brandPrimary} />
+          <Text style={[styles.loadingText, { color: colors.text }]}>Loading video...</Text>
         </View>
       )}
 
@@ -296,7 +297,7 @@ export default function LivePlayerScreen() {
               ios_icon_name="xmark"
               android_material_icon_name="close"
               size={24}
-              color={colors.text}
+              color="#FFFFFF"
             />
           </TouchableOpacity>
 
@@ -307,7 +308,7 @@ export default function LivePlayerScreen() {
                 ios_icon_name="eye.fill"
                 android_material_icon_name="visibility"
                 size={14}
-                color={colors.text}
+                color="#FFFFFF"
               />
               <Text style={styles.viewerCount}>{viewerCount}</Text>
             </View>
@@ -326,7 +327,7 @@ export default function LivePlayerScreen() {
               ios_icon_name="heart.fill"
               android_material_icon_name="favorite"
               size={28}
-              color={colors.text}
+              color="#FFFFFF"
             />
             <Text style={styles.actionText}>Like</Text>
           </TouchableOpacity>
@@ -336,7 +337,7 @@ export default function LivePlayerScreen() {
               ios_icon_name="square.and.arrow.up.fill"
               android_material_icon_name="share"
               size={28}
-              color={colors.text}
+              color="#FFFFFF"
             />
             <Text style={styles.actionText}>Share</Text>
           </TouchableOpacity>
@@ -363,7 +364,6 @@ export default function LivePlayerScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   centerContent: {
     justifyContent: 'center',
@@ -374,18 +374,15 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.textSecondary,
   },
   errorText: {
     fontSize: 18,
     fontWeight: '600',
-    color: colors.text,
     marginTop: 16,
   },
   errorSubtext: {
     fontSize: 14,
     fontWeight: '400',
-    color: colors.textSecondary,
     textAlign: 'center',
     marginTop: 8,
   },
@@ -393,13 +390,12 @@ const styles = StyleSheet.create({
     marginTop: 24,
     paddingHorizontal: 32,
     paddingVertical: 12,
-    backgroundColor: colors.gradientEnd,
     borderRadius: 25,
   },
   backButtonText: {
     fontSize: 16,
     fontWeight: '700',
-    color: colors.text,
+    color: '#FFFFFF',
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -448,7 +444,7 @@ const styles = StyleSheet.create({
   viewerCount: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.text,
+    color: '#FFFFFF',
   },
   placeholder: {
     width: 40,
@@ -472,7 +468,7 @@ const styles = StyleSheet.create({
   actionText: {
     fontSize: 12,
     fontWeight: '600',
-    color: colors.text,
+    color: '#FFFFFF',
   },
   bottomBar: {
     flexDirection: 'row',
@@ -488,12 +484,12 @@ const styles = StyleSheet.create({
   broadcasterName: {
     fontSize: 16,
     fontWeight: '700',
-    color: colors.text,
+    color: '#FFFFFF',
     marginBottom: 4,
   },
   streamTitle: {
     fontSize: 14,
     fontWeight: '400',
-    color: colors.text,
+    color: '#FFFFFF',
   },
 });

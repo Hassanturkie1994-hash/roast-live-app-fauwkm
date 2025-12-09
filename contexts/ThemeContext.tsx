@@ -27,11 +27,20 @@ interface ThemeColors {
   
   // Status Bar
   statusBarStyle: 'light' | 'dark';
+  
+  // Tab Icons
+  tabIconColor: string;
+  tabIconActiveColor: string;
+}
+
+interface ThemeImages {
+  logo: any;
 }
 
 interface ThemeContextType {
   theme: ThemeMode;
   colors: ThemeColors;
+  images: ThemeImages;
   toggleTheme: () => void;
   setTheme: (theme: ThemeMode) => void;
 }
@@ -50,11 +59,13 @@ const lightTheme: ThemeColors = {
   border: '#D4D4D4',
   divider: '#E5E5E5',
   statusBarStyle: 'dark',
+  tabIconColor: '#000000',
+  tabIconActiveColor: '#A40028',
 };
 
 const darkTheme: ThemeColors = {
-  background: '#0A0A0A',
-  backgroundAlt: '#161616',
+  background: '#000000',
+  backgroundAlt: '#0A0A0A',
   card: '#161616',
   brandPrimary: '#A40028',
   gradientStart: '#A40028',
@@ -66,6 +77,16 @@ const darkTheme: ThemeColors = {
   border: '#2A2A2A',
   divider: '#2A2A2A',
   statusBarStyle: 'light',
+  tabIconColor: '#FFFFFF',
+  tabIconActiveColor: '#A40028',
+};
+
+const lightImages: ThemeImages = {
+  logo: require('@/assets/images/86a2dea9-db4b-404b-b353-38433ace329f.png'), // LOGO-LIGHT-THEME.png (black ROAST)
+};
+
+const darkImages: ThemeImages = {
+  logo: require('@/assets/images/d567f294-92c1-4b14-ada2-433ebed54e33.png'), // LOGO-DARK-THEME.png (white ROAST)
 };
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -85,9 +106,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       const savedTheme = await AsyncStorage.getItem(THEME_STORAGE_KEY);
       if (savedTheme === 'light' || savedTheme === 'dark') {
         setThemeState(savedTheme);
+        console.log('✅ Theme loaded from storage:', savedTheme);
+      } else {
+        console.log('ℹ️ No saved theme, using default: light');
       }
     } catch (error) {
-      console.error('Error loading theme:', error);
+      console.error('❌ Error loading theme:', error);
     } finally {
       setIsLoading(false);
     }
@@ -96,12 +120,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const saveTheme = async (newTheme: ThemeMode) => {
     try {
       await AsyncStorage.setItem(THEME_STORAGE_KEY, newTheme);
+      console.log('✅ Theme saved to storage:', newTheme);
     } catch (error) {
-      console.error('Error saving theme:', error);
+      console.error('❌ Error saving theme:', error);
     }
   };
 
   const setTheme = (newTheme: ThemeMode) => {
+    console.log('🎨 Theme changing to:', newTheme);
     setThemeState(newTheme);
     saveTheme(newTheme);
   };
@@ -112,13 +138,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   };
 
   const colors = theme === 'light' ? lightTheme : darkTheme;
+  const images = theme === 'light' ? lightImages : darkImages;
 
   if (isLoading) {
     return null;
   }
 
   return (
-    <ThemeContext.Provider value={{ theme, colors, toggleTheme, setTheme }}>
+    <ThemeContext.Provider value={{ theme, colors, images, toggleTheme, setTheme }}>
       {children}
     </ThemeContext.Provider>
   );

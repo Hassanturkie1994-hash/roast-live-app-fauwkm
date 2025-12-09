@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { Image, StyleSheet, View, ViewStyle } from 'react-native';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface RoastLiveLogoProps {
   size?: 'small' | 'medium' | 'large' | 'xlarge';
@@ -15,6 +16,8 @@ export default function RoastLiveLogo({
   opacity = 1,
   withShadow = false 
 }: RoastLiveLogoProps) {
+  const { images } = useTheme();
+
   const sizeStyles = {
     small: { width: 100, height: 30 },
     medium: { width: 150, height: 45 },
@@ -27,7 +30,7 @@ export default function RoastLiveLogo({
   return (
     <View style={[styles.container, style]}>
       <Image
-        source={require('@/assets/images/73ab0bd2-0be4-4076-9012-fa4dab631eee.png')}
+        source={images.logo}
         style={[
           styles.logo,
           {

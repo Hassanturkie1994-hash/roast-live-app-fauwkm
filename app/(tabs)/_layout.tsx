@@ -2,11 +2,12 @@
 import React from 'react';
 import { Stack } from 'expo-router';
 import TikTokTabBar from '@/components/TikTokTabBar';
-import { colors } from '@/styles/commonStyles';
+import { useTheme } from '@/contexts/ThemeContext';
 import { StreamingProvider, useStreaming } from '@/contexts/StreamingContext';
 
 function TabLayoutContent() {
   const { isStreaming } = useStreaming();
+  const { colors } = useTheme();
 
   return (
     <>

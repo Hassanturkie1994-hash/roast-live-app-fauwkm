@@ -10,7 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { router } from 'expo-router';
-import { colors, commonStyles } from '@/styles/commonStyles';
+import { useTheme } from '@/contexts/ThemeContext';
 import { IconSymbol } from '@/components/IconSymbol';
 import GradientButton from '@/components/GradientButton';
 import { useAuth } from '@/contexts/AuthContext';
@@ -28,6 +28,7 @@ interface Transaction {
 
 export default function WalletScreen() {
   const { user } = useAuth();
+  const { colors } = useTheme();
   const [loading, setLoading] = useState(true);
   const [walletBalance, setWalletBalance] = useState(0);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -80,14 +81,14 @@ export default function WalletScreen() {
     switch (type) {
       case 'add_balance':
       case 'wallet_topup':
-        return { ios: 'plus.circle.fill', android: 'add_circle', color: colors.gradientEnd };
+        return { ios: 'plus.circle.fill', android: 'add_circle', color: colors.brandPrimary };
       case 'withdraw':
       case 'withdrawal':
         return { ios: 'arrow.down.circle.fill', android: 'download', color: colors.text };
       case 'gift_purchase':
-        return { ios: 'gift.fill', android: 'card_giftcard', color: colors.gradientStart };
+        return { ios: 'gift.fill', android: 'card_giftcard', color: colors.brandPrimary };
       case 'creator_tip':
-        return { ios: 'heart.fill', android: 'favorite', color: colors.gradientEnd };
+        return { ios: 'heart.fill', android: 'favorite', color: colors.brandPrimary };
       default:
         return { ios: 'circle.fill', android: 'circle', color: colors.text };
     }
@@ -123,8 +124,8 @@ export default function WalletScreen() {
   };
 
   return (
-    <View style={commonStyles.container}>
-      <View style={styles.header}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <IconSymbol
             ios_icon_name="chevron.left"
@@ -133,13 +134,13 @@ export default function WalletScreen() {
             color={colors.text}
           />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Saldo</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Saldo</Text>
         <View style={styles.placeholder} />
       </View>
 
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.gradientEnd} />
+          <ActivityIndicator size="large" color={colors.brandPrimary} />
         </View>
       ) : (
         <ScrollView
@@ -148,9 +149,9 @@ export default function WalletScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* Balance Card */}
-          <View style={styles.balanceCard}>
-            <Text style={styles.balanceLabel}>Current Balance</Text>
-            <Text style={styles.balanceAmount}>{walletBalance.toFixed(2)} SEK</Text>
+          <View style={[styles.balanceCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.balanceLabel, { color: colors.textSecondary }]}>Current Balance</Text>
+            <Text style={[styles.balanceAmount, { color: colors.text }]}>{walletBalance.toFixed(2)} SEK</Text>
             <View style={styles.balanceActions}>
               <GradientButton
                 title="Add Balance"
@@ -163,10 +164,10 @@ export default function WalletScreen() {
           {/* Recent Transactions */}
           <View style={styles.transactionsSection}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Recent Transactions</Text>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent Transactions</Text>
               {transactions.length > 5 && (
                 <TouchableOpacity onPress={handleViewAllTransactions}>
-                  <Text style={styles.viewAllText}>View All</Text>
+                  <Text style={[styles.viewAllText, { color: colors.brandPrimary }]}>View All</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -179,8 +180,8 @@ export default function WalletScreen() {
                   size={48}
                   color={colors.textSecondary}
                 />
-                <Text style={styles.emptyText}>No transactions yet</Text>
-                <Text style={styles.emptySubtext}>
+                <Text style={[styles.emptyText, { color: colors.text }]}>No transactions yet</Text>
+                <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>
                   Add balance to start using gifts and features
                 </Text>
               </View>
@@ -189,7 +190,7 @@ export default function WalletScreen() {
                 {transactions.slice(0, 5).map((transaction, index) => {
                   const icon = getTransactionIcon(transaction.type);
                   return (
-                    <View key={index} style={styles.transactionItem}>
+                    <View key={index} style={[styles.transactionItem, { borderBottomColor: colors.divider }]}>
                       <View style={styles.transactionLeft}>
                         <View style={[styles.iconContainer, { backgroundColor: `${icon.color}20` }]}>
                           <IconSymbol
@@ -200,15 +201,15 @@ export default function WalletScreen() {
                           />
                         </View>
                         <View style={styles.transactionInfo}>
-                          <Text style={styles.transactionType}>{formatType(transaction.type)}</Text>
-                          <Text style={styles.transactionDate}>{formatDate(transaction.created_at)}</Text>
+                          <Text style={[styles.transactionType, { color: colors.text }]}>{formatType(transaction.type)}</Text>
+                          <Text style={[styles.transactionDate, { color: colors.textSecondary }]}>{formatDate(transaction.created_at)}</Text>
                         </View>
                       </View>
                       <View style={styles.transactionRight}>
                         <Text
                           style={[
                             styles.transactionAmount,
-                            transaction.amount < 0 && styles.negativeAmount,
+                            { color: transaction.amount > 0 ? colors.brandPrimary : colors.text },
                           ]}
                         >
                           {transaction.amount > 0 ? '+' : ''}{transaction.amount.toFixed(2)} SEK
@@ -225,14 +226,14 @@ export default function WalletScreen() {
           </View>
 
           {/* Info Card */}
-          <View style={styles.infoCard}>
+          <View style={[styles.infoCard, { backgroundColor: colors.backgroundAlt }]}>
             <IconSymbol
               ios_icon_name="info.circle.fill"
               android_material_icon_name="info"
               size={20}
-              color={colors.gradientEnd}
+              color={colors.brandPrimary}
             />
-            <Text style={styles.infoText}>
+            <Text style={[styles.infoText, { color: colors.textSecondary }]}>
               Your Saldo balance can be used to purchase gifts during live streams and support your favorite creators.
             </Text>
           </View>
@@ -243,6 +244,9 @@ export default function WalletScreen() {
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -251,7 +255,6 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   backButton: {
     width: 40,
@@ -262,7 +265,6 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: colors.text,
   },
   placeholder: {
     width: 40,
@@ -279,24 +281,20 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   balanceCard: {
-    backgroundColor: colors.card,
     borderRadius: 16,
     padding: 24,
     margin: 20,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: colors.border,
   },
   balanceLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.textSecondary,
     marginBottom: 8,
   },
   balanceAmount: {
     fontSize: 42,
     fontWeight: '800',
-    color: colors.text,
     marginBottom: 20,
   },
   balanceActions: {
@@ -315,12 +313,10 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: colors.text,
   },
   viewAllText: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.gradientEnd,
   },
   emptyState: {
     alignItems: 'center',
@@ -330,13 +326,11 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.text,
     marginTop: 16,
   },
   emptySubtext: {
     fontSize: 14,
     fontWeight: '400',
-    color: colors.textSecondary,
     marginTop: 8,
     textAlign: 'center',
   },
@@ -349,7 +343,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: colors.divider,
   },
   transactionLeft: {
     flexDirection: 'row',
@@ -370,12 +363,10 @@ const styles = StyleSheet.create({
   transactionType: {
     fontSize: 15,
     fontWeight: '600',
-    color: colors.text,
   },
   transactionDate: {
     fontSize: 12,
     fontWeight: '400',
-    color: colors.textSecondary,
     marginTop: 2,
   },
   transactionRight: {
@@ -384,10 +375,6 @@ const styles = StyleSheet.create({
   transactionAmount: {
     fontSize: 15,
     fontWeight: '700',
-    color: colors.gradientEnd,
-  },
-  negativeAmount: {
-    color: colors.text,
   },
   transactionStatus: {
     fontSize: 11,
@@ -397,7 +384,6 @@ const styles = StyleSheet.create({
   },
   infoCard: {
     flexDirection: 'row',
-    backgroundColor: colors.backgroundAlt,
     borderRadius: 12,
     padding: 16,
     marginHorizontal: 20,
@@ -408,7 +394,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontWeight: '400',
-    color: colors.textSecondary,
     lineHeight: 18,
   },
 });

@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors } from '@/styles/commonStyles';
+import { useTheme } from '@/contexts/ThemeContext';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/app/integrations/supabase/client';
@@ -30,6 +30,7 @@ interface Story {
 
 export default function StoriesBar() {
   const { user } = useAuth();
+  const { colors } = useTheme();
   const [stories, setStories] = useState<Story[]>([]);
   const [userHasStory, setUserHasStory] = useState(false);
 
@@ -125,7 +126,7 @@ export default function StoriesBar() {
   if (!user) return null;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -143,7 +144,7 @@ export default function StoriesBar() {
               end={{ x: 1, y: 1 }}
               style={styles.storyAvatarGradient}
             >
-              <View style={styles.storyAvatarInner}>
+              <View style={[styles.storyAvatarInner, { backgroundColor: colors.background }]}>
                 <Image
                   source={{
                     uri: user.user_metadata?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
@@ -153,8 +154,8 @@ export default function StoriesBar() {
               </View>
             </LinearGradient>
           ) : (
-            <View style={styles.addStoryContainer}>
-              <View style={styles.addStoryButton}>
+            <View style={[styles.addStoryContainer, { backgroundColor: colors.backgroundAlt, borderColor: colors.border }]}>
+              <View style={[styles.addStoryButton, { backgroundColor: colors.card }]}>
                 <IconSymbol
                   ios_icon_name="plus"
                   android_material_icon_name="add"
@@ -164,7 +165,7 @@ export default function StoriesBar() {
               </View>
             </View>
           )}
-          <Text style={styles.storyUsername}>
+          <Text style={[styles.storyUsername, { color: colors.text }]}>
             {userHasStory ? 'Your Story' : 'Add Story'}
           </Text>
         </TouchableOpacity>
@@ -182,7 +183,7 @@ export default function StoriesBar() {
               end={{ x: 1, y: 1 }}
               style={styles.storyAvatarGradient}
             >
-              <View style={styles.storyAvatarInner}>
+              <View style={[styles.storyAvatarInner, { backgroundColor: colors.background }]}>
                 <Image
                   source={{
                     uri: story.profile.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
@@ -191,7 +192,7 @@ export default function StoriesBar() {
                 />
               </View>
             </LinearGradient>
-            <Text style={styles.storyUsername} numberOfLines={1}>
+            <Text style={[styles.storyUsername, { color: colors.text }]} numberOfLines={1}>
               {story.profile.display_name || story.profile.username}
             </Text>
           </TouchableOpacity>
@@ -203,9 +204,7 @@ export default function StoriesBar() {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: colors.background,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
     paddingVertical: 12,
   },
   scrollContent: {
@@ -220,9 +219,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: colors.backgroundAlt,
     borderWidth: 2,
-    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
@@ -231,7 +228,6 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: colors.card,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -246,7 +242,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     borderRadius: 29,
-    backgroundColor: colors.background,
     padding: 2,
   },
   storyAvatar: {
@@ -257,7 +252,6 @@ const styles = StyleSheet.create({
   storyUsername: {
     fontSize: 12,
     fontWeight: '600',
-    color: colors.text,
     textAlign: 'center',
   },
 });

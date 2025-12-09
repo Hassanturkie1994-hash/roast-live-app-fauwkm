@@ -77,9 +77,9 @@ export default function TikTokTabBar({ isStreaming = false }: TikTokTabBarProps)
               ios_icon_name={isActive('/(tabs)/(home)') ? 'house.fill' : 'house'}
               android_material_icon_name="home"
               size={28}
-              color={isActive('/(tabs)/(home)') ? colors.brandPrimary : colors.textSecondary}
+              color={isActive('/(tabs)/(home)') ? colors.tabIconActiveColor : colors.tabIconColor}
             />
-            <Text style={[styles.tabLabel, { color: isActive('/(tabs)/(home)') ? colors.brandPrimary : colors.textSecondary }]}>
+            <Text style={[styles.tabLabel, { color: isActive('/(tabs)/(home)') ? colors.tabIconActiveColor : colors.tabIconColor }]}>
               Home
             </Text>
           </TouchableOpacity>
@@ -93,9 +93,9 @@ export default function TikTokTabBar({ isStreaming = false }: TikTokTabBarProps)
               ios_icon_name={isActive('/explore') ? 'magnifyingglass.circle.fill' : 'magnifyingglass'}
               android_material_icon_name="search"
               size={28}
-              color={isActive('/explore') ? colors.brandPrimary : colors.textSecondary}
+              color={isActive('/explore') ? colors.tabIconActiveColor : colors.tabIconColor}
             />
-            <Text style={[styles.tabLabel, { color: isActive('/explore') ? colors.brandPrimary : colors.textSecondary }]}>
+            <Text style={[styles.tabLabel, { color: isActive('/explore') ? colors.tabIconActiveColor : colors.tabIconColor }]}>
               Explore
             </Text>
           </TouchableOpacity>
@@ -128,10 +128,10 @@ export default function TikTokTabBar({ isStreaming = false }: TikTokTabBarProps)
           >
             <View style={styles.iconContainer}>
               <IconSymbol
-                ios_icon_name={isActive('/inbox') ? 'bubble.left.fill' : 'bubble.left'}
-                android_material_icon_name="chat_bubble"
+                ios_icon_name={isActive('/inbox') ? 'tray.fill' : 'tray'}
+                android_material_icon_name="inbox"
                 size={28}
-                color={isActive('/inbox') ? colors.brandPrimary : colors.textSecondary}
+                color={isActive('/inbox') ? colors.tabIconActiveColor : colors.tabIconColor}
               />
               {unreadCount > 0 && (
                 <View style={[styles.badge, { backgroundColor: colors.brandPrimary, borderColor: colors.background }]}>
@@ -139,8 +139,8 @@ export default function TikTokTabBar({ isStreaming = false }: TikTokTabBarProps)
                 </View>
               )}
             </View>
-            <Text style={[styles.tabLabel, { color: isActive('/inbox') ? colors.brandPrimary : colors.textSecondary }]}>
-              Messages
+            <Text style={[styles.tabLabel, { color: isActive('/inbox') ? colors.tabIconActiveColor : colors.tabIconColor }]}>
+              Inbox
             </Text>
           </TouchableOpacity>
 
@@ -153,9 +153,9 @@ export default function TikTokTabBar({ isStreaming = false }: TikTokTabBarProps)
               ios_icon_name={isActive('/profile') ? 'person.fill' : 'person'}
               android_material_icon_name="person"
               size={28}
-              color={isActive('/profile') ? colors.brandPrimary : colors.textSecondary}
+              color={isActive('/profile') ? colors.tabIconActiveColor : colors.tabIconColor}
             />
-            <Text style={[styles.tabLabel, { color: isActive('/profile') ? colors.brandPrimary : colors.textSecondary }]}>
+            <Text style={[styles.tabLabel, { color: isActive('/profile') ? colors.tabIconActiveColor : colors.tabIconColor }]}>
               Profile
             </Text>
           </TouchableOpacity>

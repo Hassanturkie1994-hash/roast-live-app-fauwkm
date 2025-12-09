@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors, commonStyles } from '@/styles/commonStyles';
+import { useTheme } from '@/contexts/ThemeContext';
 import { IconSymbol } from '@/components/IconSymbol';
 import { fetchGifts, Gift, GiftTier } from '@/app/services/giftService';
 
@@ -21,6 +21,7 @@ const { width: screenWidth } = Dimensions.get('window');
 const cardWidth = (screenWidth - 60) / 2;
 
 export default function GiftInformationScreen() {
+  const { colors } = useTheme();
   const [loading, setLoading] = useState(true);
   const [gifts, setGifts] = useState<Gift[]>([]);
   const [selectedGift, setSelectedGift] = useState<Gift | null>(null);
@@ -49,7 +50,7 @@ export default function GiftInformationScreen() {
       case 'C':
         return '#FFD700';
       case 'B':
-        return colors.gradientEnd;
+        return colors.brandPrimary;
       case 'A':
         return colors.textSecondary;
       default:
@@ -85,7 +86,7 @@ export default function GiftInformationScreen() {
 
   const renderGiftCard = ({ item }: { item: Gift }) => (
     <TouchableOpacity
-      style={styles.giftCard}
+      style={[styles.giftCard, { backgroundColor: colors.card, borderColor: colors.border }]}
       onPress={() => setSelectedGift(item)}
       activeOpacity={0.8}
     >
@@ -97,7 +98,7 @@ export default function GiftInformationScreen() {
         <Text style={styles.giftEmoji}>{item.emoji_icon}</Text>
       </View>
 
-      <Text style={styles.giftName} numberOfLines={2}>
+      <Text style={[styles.giftName, { color: colors.text }]} numberOfLines={2}>
         {item.name}
       </Text>
 
@@ -108,43 +109,43 @@ export default function GiftInformationScreen() {
   );
 
   const renderHeader = () => (
-    <View style={styles.introSection}>
-      <Text style={styles.introTitle}>🔥 Roast Live Gifts</Text>
-      <Text style={styles.introText}>
+    <View style={[styles.introSection, { backgroundColor: colors.backgroundAlt, borderBottomColor: colors.border }]}>
+      <Text style={[styles.introTitle, { color: colors.text }]}>🔥 Roast Live Gifts</Text>
+      <Text style={[styles.introText, { color: colors.textSecondary }]}>
         Send savage gifts during live streams to roast or support your favorite creators. Each gift has its own unique animation and impact!
       </Text>
 
       <View style={styles.tierInfoContainer}>
-        <View style={styles.tierInfoCard}>
+        <View style={[styles.tierInfoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={[styles.tierInfoBadge, { backgroundColor: colors.textSecondary }]}>
             <Text style={styles.tierInfoBadgeText}>CHEAP</Text>
           </View>
-          <Text style={styles.tierInfoPrice}>1-19 kr</Text>
-          <Text style={styles.tierInfoDesc}>Quick roasts</Text>
+          <Text style={[styles.tierInfoPrice, { color: colors.text }]}>1-19 kr</Text>
+          <Text style={[styles.tierInfoDesc, { color: colors.textSecondary }]}>Quick roasts</Text>
         </View>
 
-        <View style={styles.tierInfoCard}>
-          <View style={[styles.tierInfoBadge, { backgroundColor: colors.gradientEnd }]}>
+        <View style={[styles.tierInfoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.tierInfoBadge, { backgroundColor: colors.brandPrimary }]}>
             <Text style={styles.tierInfoBadgeText}>MEDIUM</Text>
           </View>
-          <Text style={styles.tierInfoPrice}>20-600 kr</Text>
-          <Text style={styles.tierInfoDesc}>Solid burns</Text>
+          <Text style={[styles.tierInfoPrice, { color: colors.text }]}>20-600 kr</Text>
+          <Text style={[styles.tierInfoDesc, { color: colors.textSecondary }]}>Solid burns</Text>
         </View>
 
-        <View style={styles.tierInfoCard}>
+        <View style={[styles.tierInfoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={[styles.tierInfoBadge, { backgroundColor: '#FFD700' }]}>
             <Text style={styles.tierInfoBadgeText}>PREMIUM</Text>
           </View>
-          <Text style={styles.tierInfoPrice}>600-3000 kr</Text>
-          <Text style={styles.tierInfoDesc}>Epic roasts</Text>
+          <Text style={[styles.tierInfoPrice, { color: colors.text }]}>600-3000 kr</Text>
+          <Text style={[styles.tierInfoDesc, { color: colors.textSecondary }]}>Epic roasts</Text>
         </View>
       </View>
     </View>
   );
 
   return (
-    <View style={commonStyles.container}>
-      <View style={styles.header}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <IconSymbol
             ios_icon_name="chevron.left"
@@ -153,13 +154,13 @@ export default function GiftInformationScreen() {
             color={colors.text}
           />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Gift Information</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Gift Information</Text>
         <View style={styles.placeholder} />
       </View>
 
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.gradientEnd} />
+          <ActivityIndicator size="large" color={colors.brandPrimary} />
         </View>
       ) : (
         <FlatList
@@ -188,9 +189,9 @@ export default function GiftInformationScreen() {
               activeOpacity={1}
               onPress={() => setSelectedGift(null)}
             />
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Gift Details</Text>
+            <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
+              <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.modalTitle, { color: colors.text }]}>Gift Details</Text>
                 <TouchableOpacity onPress={() => setSelectedGift(null)}>
                   <IconSymbol
                     ios_icon_name="xmark.circle.fill"
@@ -206,7 +207,7 @@ export default function GiftInformationScreen() {
                   <Text style={styles.modalEmoji}>{selectedGift.emoji_icon}</Text>
                 </View>
 
-                <Text style={styles.modalGiftName}>{selectedGift.name}</Text>
+                <Text style={[styles.modalGiftName, { color: colors.text }]}>{selectedGift.name}</Text>
 
                 <View style={styles.modalPriceRow}>
                   <Text style={[styles.modalPrice, { color: getTierColor(selectedGift.tier) }]}>
@@ -218,40 +219,40 @@ export default function GiftInformationScreen() {
                 </View>
 
                 <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>Description</Text>
-                  <Text style={styles.modalSectionText}>{selectedGift.description}</Text>
+                  <Text style={[styles.modalSectionTitle, { color: colors.text }]}>Description</Text>
+                  <Text style={[styles.modalSectionText, { color: colors.textSecondary }]}>{selectedGift.description}</Text>
                 </View>
 
                 <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>Animation Tier</Text>
-                  <Text style={styles.modalSectionText}>{getTierDescription(selectedGift.tier)}</Text>
+                  <Text style={[styles.modalSectionTitle, { color: colors.text }]}>Animation Tier</Text>
+                  <Text style={[styles.modalSectionText, { color: colors.textSecondary }]}>{getTierDescription(selectedGift.tier)}</Text>
                 </View>
 
                 {selectedGift.usage_count !== undefined && selectedGift.usage_count > 0 && (
                   <View style={styles.modalSection}>
-                    <Text style={styles.modalSectionTitle}>Popularity</Text>
+                    <Text style={[styles.modalSectionTitle, { color: colors.text }]}>Popularity</Text>
                     <View style={styles.popularityRow}>
                       <IconSymbol
                         ios_icon_name="flame.fill"
                         android_material_icon_name="local_fire_department"
                         size={20}
-                        color={colors.gradientEnd}
+                        color={colors.brandPrimary}
                       />
-                      <Text style={styles.modalSectionText}>
+                      <Text style={[styles.modalSectionText, { color: colors.textSecondary }]}>
                         Sent {selectedGift.usage_count} times
                       </Text>
                     </View>
                   </View>
                 )}
 
-                <View style={styles.infoCard}>
+                <View style={[styles.infoCard, { backgroundColor: colors.backgroundAlt }]}>
                   <IconSymbol
                     ios_icon_name="info.circle.fill"
                     android_material_icon_name="info"
                     size={18}
-                    color={colors.gradientEnd}
+                    color={colors.brandPrimary}
                   />
-                  <Text style={styles.infoText}>
+                  <Text style={[styles.infoText, { color: colors.textSecondary }]}>
                     Send during livestream to appear on screen! Gifts are purchased using your Saldo balance.
                   </Text>
                 </View>
@@ -276,6 +277,9 @@ export default function GiftInformationScreen() {
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -284,7 +288,6 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   backButton: {
     width: 40,
@@ -295,7 +298,6 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: colors.text,
   },
   placeholder: {
     width: 40,
@@ -310,20 +312,16 @@ const styles = StyleSheet.create({
   },
   introSection: {
     padding: 20,
-    backgroundColor: colors.backgroundAlt,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   introTitle: {
     fontSize: 24,
     fontWeight: '800',
-    color: colors.text,
     marginBottom: 12,
   },
   introText: {
     fontSize: 14,
     fontWeight: '400',
-    color: colors.textSecondary,
     lineHeight: 20,
     marginBottom: 20,
   },
@@ -333,12 +331,10 @@ const styles = StyleSheet.create({
   },
   tierInfoCard: {
     flex: 1,
-    backgroundColor: colors.card,
     borderRadius: 12,
     padding: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: colors.border,
   },
   tierInfoBadge: {
     paddingHorizontal: 8,
@@ -354,13 +350,11 @@ const styles = StyleSheet.create({
   tierInfoPrice: {
     fontSize: 14,
     fontWeight: '700',
-    color: colors.text,
     marginBottom: 4,
   },
   tierInfoDesc: {
     fontSize: 11,
     fontWeight: '400',
-    color: colors.textSecondary,
   },
   columnWrapper: {
     paddingHorizontal: 20,
@@ -369,11 +363,9 @@ const styles = StyleSheet.create({
   },
   giftCard: {
     width: cardWidth,
-    backgroundColor: colors.card,
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
-    borderColor: colors.border,
     alignItems: 'center',
     position: 'relative',
   },
@@ -404,7 +396,6 @@ const styles = StyleSheet.create({
   giftName: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.text,
     marginBottom: 4,
     textAlign: 'center',
     minHeight: 36,
@@ -422,7 +413,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
   },
   modalContent: {
-    backgroundColor: colors.background,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: '85%',
@@ -433,12 +423,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: colors.text,
     flex: 1,
   },
   modalBody: {
@@ -454,7 +442,6 @@ const styles = StyleSheet.create({
   modalGiftName: {
     fontSize: 24,
     fontWeight: '800',
-    color: colors.text,
     textAlign: 'center',
     marginBottom: 12,
   },
@@ -485,13 +472,11 @@ const styles = StyleSheet.create({
   modalSectionTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: colors.text,
     marginBottom: 8,
   },
   modalSectionText: {
     fontSize: 14,
     fontWeight: '400',
-    color: colors.textSecondary,
     lineHeight: 20,
   },
   popularityRow: {
@@ -501,7 +486,6 @@ const styles = StyleSheet.create({
   },
   infoCard: {
     flexDirection: 'row',
-    backgroundColor: colors.backgroundAlt,
     borderRadius: 12,
     padding: 12,
     gap: 10,
@@ -512,7 +496,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     fontWeight: '400',
-    color: colors.textSecondary,
     lineHeight: 16,
   },
   ctaContainer: {
