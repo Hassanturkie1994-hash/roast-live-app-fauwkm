@@ -7,12 +7,11 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
-  TextInput,
   RefreshControl,
   Dimensions,
 } from 'react-native';
 import { router } from 'expo-router';
-import { colors, commonStyles } from '@/styles/commonStyles';
+import { useTheme } from '@/contexts/ThemeContext';
 import { IconSymbol } from '@/components/IconSymbol';
 import LiveBadge from '@/components/LiveBadge';
 import { supabase } from '@/app/integrations/supabase/client';
@@ -36,6 +35,7 @@ interface ExploreItem {
 }
 
 export default function ExploreScreen() {
+  const { colors } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
   const [items, setItems] = useState<ExploreItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -124,29 +124,39 @@ export default function ExploreScreen() {
     : items;
 
   return (
-    <View style={commonStyles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Explore</Text>
-        <TouchableOpacity style={styles.searchContainer} onPress={handleSearchPress} activeOpacity={0.7}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { borderBottomColor: colors.border }]}>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Explore</Text>
+        <TouchableOpacity 
+          style={[styles.searchContainer, { backgroundColor: colors.backgroundAlt }]} 
+          onPress={handleSearchPress} 
+          activeOpacity={0.7}
+        >
           <IconSymbol
             ios_icon_name="magnifyingglass"
             android_material_icon_name="search"
             size={20}
             color={colors.textSecondary}
           />
-          <Text style={styles.searchPlaceholder}>Search...</Text>
+          <Text style={[styles.searchPlaceholder, { color: colors.placeholder }]}>Search...</Text>
         </TouchableOpacity>
       </View>
 
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.contentContainer}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.text} />}
+        refreshControl={
+          <RefreshControl 
+            refreshing={refreshing} 
+            onRefresh={onRefresh} 
+            tintColor={colors.brandPrimary} 
+          />
+        }
         showsVerticalScrollIndicator={false}
       >
         {loading ? (
           <View style={styles.centerContent}>
-            <Text style={styles.loadingText}>Loading content...</Text>
+            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading content...</Text>
           </View>
         ) : filteredItems.length === 0 ? (
           <View style={styles.emptyState}>
@@ -156,15 +166,15 @@ export default function ExploreScreen() {
               size={64}
               color={colors.textSecondary}
             />
-            <Text style={styles.emptyText}>No content available</Text>
-            <Text style={styles.emptySubtext}>Check back later for new posts and streams!</Text>
+            <Text style={[styles.emptyText, { color: colors.text }]}>No content available</Text>
+            <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>Check back later for new posts and streams!</Text>
           </View>
         ) : (
           <View style={styles.grid}>
             {filteredItems.map((item) => (
               <TouchableOpacity
                 key={item.id}
-                style={styles.card}
+                style={[styles.card, { backgroundColor: colors.card }]}
                 onPress={() => handleItemPress(item)}
                 activeOpacity={0.9}
               >
@@ -186,7 +196,7 @@ export default function ExploreScreen() {
                             ios_icon_name="eye.fill"
                             android_material_icon_name="visibility"
                             size={12}
-                            color={colors.text}
+                            color="#FFFFFF"
                           />
                           <Text style={styles.viewerCount}>{(item.data as Stream).viewer_count || 0}</Text>
                         </View>
@@ -213,7 +223,7 @@ export default function ExploreScreen() {
                               ios_icon_name="heart.fill"
                               android_material_icon_name="favorite"
                               size={14}
-                              color={colors.text}
+                              color="#FFFFFF"
                             />
                             <Text style={styles.postStatText}>{(item.data as Post).likes_count || 0}</Text>
                           </View>
@@ -222,7 +232,7 @@ export default function ExploreScreen() {
                               ios_icon_name="bubble.left.fill"
                               android_material_icon_name="comment"
                               size={14}
-                              color={colors.text}
+                              color="#FFFFFF"
                             />
                             <Text style={styles.postStatText}>{(item.data as Post).comments_count || 0}</Text>
                           </View>
@@ -244,23 +254,23 @@ export default function ExploreScreen() {
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
   header: {
     paddingTop: 60,
     paddingHorizontal: 20,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
     gap: 12,
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: '800',
-    color: colors.text,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.backgroundAlt,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -268,7 +278,6 @@ const styles = StyleSheet.create({
   },
   searchPlaceholder: {
     flex: 1,
-    color: colors.placeholder,
     fontSize: 16,
   },
   scrollView: {
@@ -285,7 +294,6 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.textSecondary,
   },
   emptyState: {
     alignItems: 'center',
@@ -296,14 +304,12 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     fontWeight: '700',
-    color: colors.text,
     marginTop: 20,
     textAlign: 'center',
   },
   emptySubtext: {
     fontSize: 14,
     fontWeight: '400',
-    color: colors.textSecondary,
     marginTop: 8,
     textAlign: 'center',
   },
@@ -317,7 +323,6 @@ const styles = StyleSheet.create({
   card: {
     width: cardWidth,
     aspectRatio: 9 / 16,
-    backgroundColor: colors.card,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -348,7 +353,7 @@ const styles = StyleSheet.create({
   viewerCount: {
     fontSize: 12,
     fontWeight: '600',
-    color: colors.text,
+    color: '#FFFFFF',
   },
   cardInfo: {
     gap: 4,
@@ -356,13 +361,13 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: colors.text,
+    color: '#FFFFFF',
     lineHeight: 18,
   },
   cardSubtitle: {
     fontSize: 12,
     fontWeight: '400',
-    color: colors.text,
+    color: '#FFFFFF',
   },
   postStats: {
     flexDirection: 'row',
@@ -377,6 +382,6 @@ const styles = StyleSheet.create({
   postStatText: {
     fontSize: 12,
     fontWeight: '700',
-    color: colors.text,
+    color: '#FFFFFF',
   },
 });

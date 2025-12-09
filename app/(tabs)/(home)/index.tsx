@@ -11,7 +11,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { router } from 'expo-router';
-import { colors, commonStyles } from '@/styles/commonStyles';
+import { useTheme } from '@/contexts/ThemeContext';
 import StreamPreviewCard from '@/components/StreamPreviewCard';
 import StoriesBar from '@/components/StoriesBar';
 import RoastLiveLogo from '@/components/RoastLiveLogo';
@@ -41,6 +41,7 @@ const { width: screenWidth } = Dimensions.get('window');
 
 export default function HomeScreen() {
   const { user } = useAuth();
+  const { colors } = useTheme();
   const [streams, setStreams] = useState<Stream[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -119,7 +120,7 @@ export default function HomeScreen() {
 
   const renderPost = ({ item }: { item: Post }) => (
     <TouchableOpacity
-      style={styles.postContainer}
+      style={[styles.postContainer, { backgroundColor: colors.background, borderBottomColor: colors.border }]}
       onPress={() => handlePostPress(item)}
       activeOpacity={0.95}
     >
@@ -128,17 +129,17 @@ export default function HomeScreen() {
           source={{
             uri: item.profiles.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
           }}
-          style={styles.postAvatar}
+          style={[styles.postAvatar, { backgroundColor: colors.backgroundAlt }]}
         />
         <View style={styles.postHeaderText}>
-          <Text style={styles.postDisplayName}>
+          <Text style={[styles.postDisplayName, { color: colors.text }]}>
             {item.profiles.display_name || item.profiles.username}
           </Text>
-          <Text style={styles.postUsername}>@{item.profiles.username}</Text>
+          <Text style={[styles.postUsername, { color: colors.textSecondary }]}>@{item.profiles.username}</Text>
         </View>
       </View>
 
-      <Image source={{ uri: item.media_url }} style={styles.postImage} />
+      <Image source={{ uri: item.media_url }} style={[styles.postImage, { backgroundColor: colors.backgroundAlt }]} />
 
       <View style={styles.postActions}>
         <TouchableOpacity style={styles.postAction}>
@@ -148,7 +149,7 @@ export default function HomeScreen() {
             size={24}
             color={colors.text}
           />
-          <Text style={styles.postActionText}>{item.likes_count}</Text>
+          <Text style={[styles.postActionText, { color: colors.text }]}>{item.likes_count}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.postAction}>
@@ -158,7 +159,7 @@ export default function HomeScreen() {
             size={24}
             color={colors.text}
           />
-          <Text style={styles.postActionText}>{item.comments_count}</Text>
+          <Text style={[styles.postActionText, { color: colors.text }]}>{item.comments_count}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.postAction}>
@@ -173,23 +174,23 @@ export default function HomeScreen() {
 
       {item.caption && (
         <View style={styles.postCaption}>
-          <Text style={styles.postCaptionUsername}>@{item.profiles.username}</Text>
-          <Text style={styles.postCaptionText}> {item.caption}</Text>
+          <Text style={[styles.postCaptionUsername, { color: colors.text }]}>@{item.profiles.username}</Text>
+          <Text style={[styles.postCaptionText, { color: colors.text }]}> {item.caption}</Text>
         </View>
       )}
     </TouchableOpacity>
   );
 
   return (
-    <View style={commonStyles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header with Logo */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <RoastLiveLogo size="small" withShadow />
       </View>
 
-      <View style={styles.tabBar}>
+      <View style={[styles.tabBar, { borderBottomColor: colors.border }]}>
         <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'live' && styles.tabButtonActive]}
+          style={[styles.tabButton, activeTab === 'live' && { borderBottomColor: colors.brandPrimary }]}
           onPress={() => setActiveTab('live')}
         >
           <IconSymbol
@@ -198,13 +199,13 @@ export default function HomeScreen() {
             size={20}
             color={activeTab === 'live' ? colors.brandPrimary : colors.textSecondary}
           />
-          <Text style={[styles.tabButtonText, activeTab === 'live' && styles.tabButtonTextActive]}>
+          <Text style={[styles.tabButtonText, { color: activeTab === 'live' ? colors.brandPrimary : colors.textSecondary }]}>
             LIVE
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'posts' && styles.tabButtonActive]}
+          style={[styles.tabButton, activeTab === 'posts' && { borderBottomColor: colors.brandPrimary }]}
           onPress={() => setActiveTab('posts')}
         >
           <IconSymbol
@@ -213,7 +214,7 @@ export default function HomeScreen() {
             size={20}
             color={activeTab === 'posts' ? colors.brandPrimary : colors.textSecondary}
           />
-          <Text style={[styles.tabButtonText, activeTab === 'posts' && styles.tabButtonTextActive]}>
+          <Text style={[styles.tabButtonText, { color: activeTab === 'posts' ? colors.brandPrimary : colors.textSecondary }]}>
             POSTS
           </Text>
         </TouchableOpacity>
@@ -262,18 +263,18 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
   header: {
     paddingHorizontal: 16,
     paddingTop: 60,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.background,
   },
   tabBar: {
     flexDirection: 'row',
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   tabButton: {
     flex: 1,
@@ -282,27 +283,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 16,
     gap: 8,
-  },
-  tabButtonActive: {
     borderBottomWidth: 2,
-    borderBottomColor: colors.brandPrimary,
+    borderBottomColor: 'transparent',
   },
   tabButtonText: {
     fontSize: 14,
     fontWeight: '700',
-    color: colors.textSecondary,
-  },
-  tabButtonTextActive: {
-    color: colors.brandPrimary,
   },
   listContent: {
     paddingBottom: 100,
   },
   postContainer: {
-    backgroundColor: colors.background,
     marginBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
     paddingBottom: 16,
   },
   postHeader: {
@@ -315,7 +308,6 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.backgroundAlt,
     marginRight: 12,
   },
   postHeaderText: {
@@ -324,17 +316,14 @@ const styles = StyleSheet.create({
   postDisplayName: {
     fontSize: 14,
     fontWeight: '700',
-    color: colors.text,
   },
   postUsername: {
     fontSize: 12,
     fontWeight: '400',
-    color: colors.textSecondary,
   },
   postImage: {
     width: screenWidth,
     aspectRatio: 9 / 16,
-    backgroundColor: colors.backgroundAlt,
   },
   postActions: {
     flexDirection: 'row',
@@ -351,7 +340,6 @@ const styles = StyleSheet.create({
   postActionText: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.text,
   },
   postCaption: {
     flexDirection: 'row',
@@ -361,12 +349,10 @@ const styles = StyleSheet.create({
   postCaptionUsername: {
     fontSize: 14,
     fontWeight: '700',
-    color: colors.text,
   },
   postCaptionText: {
     fontSize: 14,
     fontWeight: '400',
-    color: colors.text,
     flex: 1,
   },
 });

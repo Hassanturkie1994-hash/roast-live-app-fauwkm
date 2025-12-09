@@ -1,5 +1,5 @@
 
-import { StyleSheet, ViewStyle, TextStyle } from 'react-native';
+import { StyleSheet } from 'react-native';
 
 // This file is kept for backward compatibility
 // New code should use useTheme() hook from ThemeContext
@@ -34,6 +34,11 @@ export const buttonStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.brandPrimary,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   gradientButtonText: {
     color: '#FFFFFF',
@@ -49,6 +54,11 @@ export const buttonStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.brandPrimary,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   pillButtonText: {
     color: '#FFFFFF',

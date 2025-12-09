@@ -12,9 +12,9 @@ import { useRouter, usePathname } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/components/IconSymbol';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors } from '@/styles/commonStyles';
+import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { notificationService } from '@/app/services/notificationService';
+import { messagingService } from '@/app/services/messagingService';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -26,6 +26,7 @@ export default function TikTokTabBar({ isStreaming = false }: TikTokTabBarProps)
   const router = useRouter();
   const pathname = usePathname();
   const { user } = useAuth();
+  const { colors } = useTheme();
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
@@ -39,9 +40,11 @@ export default function TikTokTabBar({ isStreaming = false }: TikTokTabBarProps)
 
   const fetchUnreadCount = async () => {
     if (!user) return;
-    const result = await notificationService.getUnreadCount(user.id);
-    if (result.success) {
-      setUnreadCount(result.count);
+    
+    const result = await messagingService.getConversations(user.id);
+    if (result.success && result.conversations) {
+      const total = result.conversations.reduce((sum, conv) => sum + (conv.unread_count || 0), 0);
+      setUnreadCount(total);
     }
   };
 
@@ -56,14 +59,13 @@ export default function TikTokTabBar({ isStreaming = false }: TikTokTabBarProps)
     router.push(route as any);
   };
 
-  // Hide tab bar when streaming
   if (isStreaming) {
     console.log('🚫 Tab bar hidden - user is streaming');
     return null;
   }
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background, borderTopColor: colors.border }]} edges={['bottom']}>
       <View style={styles.container}>
         <View style={styles.tabsContainer}>
           <TouchableOpacity
@@ -75,9 +77,9 @@ export default function TikTokTabBar({ isStreaming = false }: TikTokTabBarProps)
               ios_icon_name={isActive('/(tabs)/(home)') ? 'house.fill' : 'house'}
               android_material_icon_name="home"
               size={28}
-              color={isActive('/(tabs)/(home)') ? colors.text : colors.textSecondary}
+              color={isActive('/(tabs)/(home)') ? colors.brandPrimary : colors.textSecondary}
             />
-            <Text style={[styles.tabLabel, { color: isActive('/(tabs)/(home)') ? colors.text : colors.textSecondary }]}>
+            <Text style={[styles.tabLabel, { color: isActive('/(tabs)/(home)') ? colors.brandPrimary : colors.textSecondary }]}>
               Home
             </Text>
           </TouchableOpacity>
@@ -91,9 +93,9 @@ export default function TikTokTabBar({ isStreaming = false }: TikTokTabBarProps)
               ios_icon_name={isActive('/explore') ? 'magnifyingglass.circle.fill' : 'magnifyingglass'}
               android_material_icon_name="search"
               size={28}
-              color={isActive('/explore') ? colors.text : colors.textSecondary}
+              color={isActive('/explore') ? colors.brandPrimary : colors.textSecondary}
             />
-            <Text style={[styles.tabLabel, { color: isActive('/explore') ? colors.text : colors.textSecondary }]}>
+            <Text style={[styles.tabLabel, { color: isActive('/explore') ? colors.brandPrimary : colors.textSecondary }]}>
               Explore
             </Text>
           </TouchableOpacity>
@@ -104,7 +106,7 @@ export default function TikTokTabBar({ isStreaming = false }: TikTokTabBarProps)
             activeOpacity={0.9}
           >
             <LinearGradient
-              colors={[colors.gradientStart, colors.gradientEnd]}
+              colors={[colors.brandPrimary, colors.brandPrimary]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.centerButtonGradient}
@@ -113,7 +115,7 @@ export default function TikTokTabBar({ isStreaming = false }: TikTokTabBarProps)
                 ios_icon_name="plus"
                 android_material_icon_name="add"
                 size={24}
-                color={colors.text}
+                color="#FFFFFF"
               />
               <Text style={styles.centerButtonText}>Go Live</Text>
             </LinearGradient>
@@ -126,19 +128,19 @@ export default function TikTokTabBar({ isStreaming = false }: TikTokTabBarProps)
           >
             <View style={styles.iconContainer}>
               <IconSymbol
-                ios_icon_name={isActive('/inbox') ? 'bell.fill' : 'bell'}
-                android_material_icon_name="notifications"
+                ios_icon_name={isActive('/inbox') ? 'bubble.left.fill' : 'bubble.left'}
+                android_material_icon_name="chat_bubble"
                 size={28}
-                color={isActive('/inbox') ? colors.text : colors.textSecondary}
+                color={isActive('/inbox') ? colors.brandPrimary : colors.textSecondary}
               />
               {unreadCount > 0 && (
-                <View style={styles.badge}>
+                <View style={[styles.badge, { backgroundColor: colors.brandPrimary, borderColor: colors.background }]}>
                   <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
                 </View>
               )}
             </View>
-            <Text style={[styles.tabLabel, { color: isActive('/inbox') ? colors.text : colors.textSecondary }]}>
-              Inbox
+            <Text style={[styles.tabLabel, { color: isActive('/inbox') ? colors.brandPrimary : colors.textSecondary }]}>
+              Messages
             </Text>
           </TouchableOpacity>
 
@@ -151,9 +153,9 @@ export default function TikTokTabBar({ isStreaming = false }: TikTokTabBarProps)
               ios_icon_name={isActive('/profile') ? 'person.fill' : 'person'}
               android_material_icon_name="person"
               size={28}
-              color={isActive('/profile') ? colors.text : colors.textSecondary}
+              color={isActive('/profile') ? colors.brandPrimary : colors.textSecondary}
             />
-            <Text style={[styles.tabLabel, { color: isActive('/profile') ? colors.text : colors.textSecondary }]}>
+            <Text style={[styles.tabLabel, { color: isActive('/profile') ? colors.brandPrimary : colors.textSecondary }]}>
               Profile
             </Text>
           </TouchableOpacity>
@@ -170,9 +172,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 1000,
-    backgroundColor: colors.background,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
   },
   container: {
     width: '100%',
@@ -203,7 +203,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -4,
     right: -8,
-    backgroundColor: colors.gradientEnd,
     borderRadius: 10,
     minWidth: 18,
     height: 18,
@@ -211,19 +210,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 4,
     borderWidth: 2,
-    borderColor: colors.background,
   },
   badgeText: {
     fontSize: 10,
     fontWeight: '700',
-    color: colors.text,
+    color: '#FFFFFF',
   },
   centerButton: {
     marginHorizontal: 8,
     borderRadius: 25,
     overflow: 'hidden',
     elevation: 8,
-    shadowColor: colors.gradientEnd,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -237,7 +235,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   centerButtonText: {
-    color: colors.text,
+    color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.5,

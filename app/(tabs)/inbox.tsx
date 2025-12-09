@@ -10,152 +10,67 @@ import {
   RefreshControl,
 } from 'react-native';
 import { router } from 'expo-router';
-import { colors, commonStyles } from '@/styles/commonStyles';
+import { useTheme } from '@/contexts/ThemeContext';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/app/integrations/supabase/client';
-import { Tables } from '@/app/integrations/supabase/types';
-import { notificationService } from '@/app/services/notificationService';
-
-type Notification = Tables<'notifications'> & {
-  sender: Tables<'users'> | null;
-  stream: Tables<'streams'> | null;
-};
+import { messagingService, Conversation } from '@/app/services/messagingService';
 
 export default function InboxScreen() {
   const { user } = useAuth();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const { colors } = useTheme();
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [totalUnread, setTotalUnread] = useState(0);
 
-  const fetchNotifications = useCallback(async () => {
+  const fetchConversations = useCallback(async () => {
     if (!user) return;
 
     try {
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('*, sender:sender_id(*), stream:ref_stream_id(*)')
-        .eq('receiver_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(50);
-
-      if (error) {
-        console.error('Error fetching notifications:', error);
-        return;
+      const result = await messagingService.getConversations(user.id);
+      
+      if (result.success && result.conversations) {
+        setConversations(result.conversations);
+        
+        const unreadTotal = result.conversations.reduce((sum, conv) => sum + (conv.unread_count || 0), 0);
+        setTotalUnread(unreadTotal);
       }
-
-      setNotifications(data as any);
-
-      const unread = data.filter((n) => !n.read).length;
-      setUnreadCount(unread);
     } catch (error) {
-      console.error('Error in fetchNotifications:', error);
+      console.error('Error in fetchConversations:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, [user]);
 
-  const subscribeToNotifications = useCallback(() => {
-    if (!user) return;
-
-    const channel = supabase
-      .channel(`notifications:${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-          filter: `receiver_id=eq.${user.id}`,
-        },
-        () => {
-          fetchNotifications();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user, fetchNotifications]);
-
   useEffect(() => {
     if (!user) {
       router.replace('/auth/login');
     } else {
-      fetchNotifications();
-      const cleanup = subscribeToNotifications();
-      return cleanup;
+      fetchConversations();
+      
+      const interval = setInterval(fetchConversations, 10000);
+      return () => clearInterval(interval);
     }
-  }, [user, fetchNotifications, subscribeToNotifications]);
+  }, [user, fetchConversations]);
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchNotifications();
+    fetchConversations();
   };
 
-  const handleNotificationPress = async (notification: Notification) => {
-    if (!notification.read) {
-      await notificationService.markAsRead(notification.id);
-      setUnreadCount((prev) => Math.max(0, prev - 1));
-    }
+  const handleConversationPress = (conversation: Conversation) => {
+    if (!conversation.other_user) return;
 
-    if (notification.type === 'stream_started' && notification.stream) {
-      router.push({
-        pathname: '/live-player',
-        params: { streamId: notification.stream.id },
-      });
-    } else if (notification.type === 'like' && notification.ref_post_id) {
-      router.push(`/screens/PostDetailScreen?postId=${notification.ref_post_id}`);
-    } else if (notification.type === 'comment' && notification.ref_post_id) {
-      router.push(`/screens/PostDetailScreen?postId=${notification.ref_post_id}`);
-    } else if (notification.type === 'follow' && notification.sender) {
-      router.push(`/screens/UserProfileScreen?userId=${notification.sender.id}`);
-    }
-  };
-
-  const handleClearAll = async () => {
-    if (!user) return;
-    await notificationService.markAllAsRead(user.id);
-    setUnreadCount(0);
-    fetchNotifications();
-  };
-
-  const getNotificationIcon = (type: string) => {
-    switch (type) {
-      case 'stream_started':
-        return { ios: 'video.fill', android: 'videocam' };
-      case 'follow':
-        return { ios: 'person.fill.badge.plus', android: 'person_add' };
-      case 'like':
-        return { ios: 'heart.fill', android: 'favorite' };
-      case 'comment':
-        return { ios: 'bubble.left.fill', android: 'comment' };
-      case 'message':
-        return { ios: 'envelope.fill', android: 'mail' };
-      default:
-        return { ios: 'bell.fill', android: 'notifications' };
-    }
-  };
-
-  const getNotificationText = (notification: Notification) => {
-    const senderName = notification.sender?.display_name || 'Someone';
-    switch (notification.type) {
-      case 'stream_started':
-        return `${senderName} started a live stream`;
-      case 'follow':
-        return `${senderName} started following you`;
-      case 'like':
-        return `${senderName} liked your post`;
-      case 'comment':
-        return `${senderName} commented on your post`;
-      case 'message':
-        return `${senderName} sent you a message`;
-      default:
-        return notification.message || 'New notification';
-    }
+    router.push({
+      pathname: '/screens/ChatScreen',
+      params: {
+        conversationId: conversation.id,
+        otherUserId: conversation.other_user.id,
+        otherUsername: conversation.other_user.display_name || conversation.other_user.username,
+        otherAvatar: conversation.other_user.avatar_url || '',
+      },
+    });
   };
 
   const formatTime = (timestamp: string) => {
@@ -173,75 +88,113 @@ export default function InboxScreen() {
   };
 
   return (
-    <View style={commonStyles.container}>
-      <View style={styles.header}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <View style={styles.headerTop}>
-          <Text style={styles.headerTitle}>Notifications</Text>
-          {unreadCount > 0 && (
-            <TouchableOpacity onPress={handleClearAll} style={styles.clearButton}>
-              <Text style={styles.clearButtonText}>Clear All</Text>
-            </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Messages</Text>
+          {totalUnread > 0 && (
+            <View style={[styles.unreadBadge, { backgroundColor: colors.brandPrimary }]}>
+              <Text style={styles.unreadText}>{totalUnread > 99 ? '99+' : totalUnread}</Text>
+            </View>
           )}
         </View>
-        {unreadCount > 0 && (
-          <View style={styles.unreadBadge}>
-            <Text style={styles.unreadText}>{unreadCount} unread</Text>
-          </View>
-        )}
       </View>
 
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.contentContainer}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.text} />}
+        refreshControl={
+          <RefreshControl 
+            refreshing={refreshing} 
+            onRefresh={onRefresh} 
+            tintColor={colors.brandPrimary} 
+          />
+        }
         showsVerticalScrollIndicator={false}
       >
         {loading ? (
           <View style={styles.centerContent}>
-            <Text style={styles.loadingText}>Loading notifications...</Text>
+            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading messages...</Text>
           </View>
-        ) : notifications.length === 0 ? (
+        ) : conversations.length === 0 ? (
           <View style={styles.emptyState}>
             <IconSymbol
-              ios_icon_name="bell.slash"
-              android_material_icon_name="notifications_off"
+              ios_icon_name="bubble.left.and.bubble.right"
+              android_material_icon_name="chat"
               size={64}
               color={colors.textSecondary}
             />
-            <Text style={styles.emptyText}>No notifications yet</Text>
-            <Text style={styles.emptySubtext}>
-              You&apos;ll be notified when someone follows you, likes your posts, or goes live
+            <Text style={[styles.emptyText, { color: colors.text }]}>No messages yet</Text>
+            <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>
+              Start a conversation from someone&apos;s profile or during a live stream
             </Text>
           </View>
         ) : (
-          notifications.map((notification) => {
-            const icon = getNotificationIcon(notification.type);
+          conversations.map((conversation) => {
+            if (!conversation.other_user) return null;
+
+            const hasUnread = (conversation.unread_count || 0) > 0;
+
             return (
               <TouchableOpacity
-                key={notification.id}
-                style={[styles.notificationCard, !notification.read && styles.notificationUnread]}
-                onPress={() => handleNotificationPress(notification)}
+                key={conversation.id}
+                style={[
+                  styles.conversationCard,
+                  { 
+                    backgroundColor: hasUnread ? colors.backgroundAlt : colors.background,
+                    borderBottomColor: colors.border 
+                  },
+                ]}
+                onPress={() => handleConversationPress(conversation)}
                 activeOpacity={0.7}
               >
-                <View style={styles.notificationIcon}>
-                  <IconSymbol
-                    ios_icon_name={icon.ios}
-                    android_material_icon_name={icon.android}
-                    size={24}
-                    color={notification.read ? colors.textSecondary : colors.gradientEnd}
-                  />
+                <Image
+                  source={{
+                    uri: conversation.other_user.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
+                  }}
+                  style={[styles.avatar, { backgroundColor: colors.card }]}
+                />
+
+                <View style={styles.conversationContent}>
+                  <View style={styles.conversationHeader}>
+                    <Text style={[styles.username, { color: colors.text }]} numberOfLines={1}>
+                      {conversation.other_user.display_name || conversation.other_user.username}
+                    </Text>
+                    {conversation.last_message && (
+                      <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
+                        {formatTime(conversation.last_message.created_at)}
+                      </Text>
+                    )}
+                  </View>
+
+                  <View style={styles.conversationFooter}>
+                    {conversation.last_message ? (
+                      <Text
+                        style={[
+                          styles.lastMessage,
+                          { color: hasUnread ? colors.text : colors.textSecondary },
+                          hasUnread && styles.lastMessageUnread,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {conversation.last_message.sender_id === user?.id ? 'You: ' : ''}
+                        {conversation.last_message.content}
+                      </Text>
+                    ) : (
+                      <Text style={[styles.lastMessage, { color: colors.textSecondary }]}>
+                        No messages yet
+                      </Text>
+                    )}
+
+                    {hasUnread && (
+                      <View style={[styles.unreadCountBadge, { backgroundColor: colors.brandPrimary }]}>
+                        <Text style={styles.unreadCountText}>
+                          {conversation.unread_count! > 99 ? '99+' : conversation.unread_count}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
-
-                <View style={styles.notificationContent}>
-                  <Text style={styles.notificationText}>{getNotificationText(notification)}</Text>
-                  <Text style={styles.notificationTime}>{formatTime(notification.created_at || '')}</Text>
-                </View>
-
-                {notification.sender?.avatar && (
-                  <Image source={{ uri: notification.sender.avatar }} style={styles.notificationAvatar} />
-                )}
-
-                {!notification.read && <View style={styles.unreadDot} />}
               </TouchableOpacity>
             );
           })
@@ -252,46 +205,33 @@ export default function InboxScreen() {
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
   header: {
     paddingTop: 60,
     paddingHorizontal: 20,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   headerTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
+    gap: 12,
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: '800',
-    color: colors.text,
-  },
-  clearButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: colors.backgroundAlt,
-    borderRadius: 12,
-  },
-  clearButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.text,
   },
   unreadBadge: {
-    backgroundColor: colors.gradientEnd,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
-    alignSelf: 'flex-start',
   },
   unreadText: {
     fontSize: 12,
     fontWeight: '700',
-    color: colors.text,
+    color: '#FFFFFF',
   },
   scrollView: {
     flex: 1,
@@ -307,7 +247,6 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.textSecondary,
   },
   emptyState: {
     alignItems: 'center',
@@ -318,65 +257,69 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     fontWeight: '700',
-    color: colors.text,
     marginTop: 20,
     textAlign: 'center',
   },
   emptySubtext: {
     fontSize: 14,
     fontWeight: '400',
-    color: colors.textSecondary,
     marginTop: 8,
     textAlign: 'center',
   },
-  notificationCard: {
+  conversationCard: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
     gap: 16,
-    position: 'relative',
   },
-  notificationUnread: {
-    backgroundColor: colors.backgroundAlt,
+  avatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
   },
-  notificationIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  notificationContent: {
+  conversationContent: {
     flex: 1,
-    gap: 4,
+    gap: 6,
   },
-  notificationText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.text,
-    lineHeight: 20,
+  conversationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  notificationTime: {
+  username: {
+    fontSize: 16,
+    fontWeight: '700',
+    flex: 1,
+  },
+  timestamp: {
     fontSize: 12,
     fontWeight: '400',
-    color: colors.textSecondary,
   },
-  notificationAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.backgroundAlt,
+  conversationFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  unreadDot: {
-    position: 'absolute',
-    top: 20,
-    right: 20,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.gradientEnd,
+  lastMessage: {
+    fontSize: 14,
+    fontWeight: '400',
+    flex: 1,
+  },
+  lastMessageUnread: {
+    fontWeight: '600',
+  },
+  unreadCountBadge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  unreadCountText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });
