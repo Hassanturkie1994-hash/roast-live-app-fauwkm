@@ -19,10 +19,14 @@ import CameraFilterSelector, { CameraFilter } from '@/components/CameraFilterSel
 import EnhancedChatOverlay from '@/components/EnhancedChatOverlay';
 import ModeratorChatOverlay from '@/components/ModeratorChatOverlay';
 import ModeratorControlPanel from '@/components/ModeratorControlPanel';
+import StreamHealthDashboard from '@/components/StreamHealthDashboard';
+import ConnectionStatusIndicator from '@/components/ConnectionStatusIndicator';
+import ModerationHistoryModal from '@/components/ModerationHistoryModal';
 import { moderationService } from '@/app/services/moderationService';
 import { viewerTrackingService } from '@/app/services/viewerTrackingService';
 import { liveStreamArchiveService } from '@/app/services/liveStreamArchiveService';
 import { commentService } from '@/app/services/commentService';
+import { useStreamConnection } from '@/hooks/useStreamConnection';
 
 interface StreamData {
   id: string;
@@ -67,11 +71,32 @@ export default function BroadcasterScreen() {
   const [archiveId, setArchiveId] = useState<string | null>(null);
   const [peakViewers, setPeakViewers] = useState(0);
   const [totalViewers, setTotalViewers] = useState(0);
+  const [showHealthDashboard, setShowHealthDashboard] = useState(true);
+  const [totalGifts, setTotalGifts] = useState(0);
+  const [showModerationHistory, setShowModerationHistory] = useState(false);
   const realtimeChannelRef = useRef<any>(null);
   const giftChannelRef = useRef<any>(null);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const appState = useRef<AppStateStatus>(AppState.currentState);
   const streamStartTime = useRef<string | null>(null);
+
+  // Connection monitoring
+  const {
+    connectionStatus,
+    reconnectAttempt,
+    isReconnecting,
+    startReconnect,
+    stopReconnect,
+  } = useStreamConnection({
+    isStreaming: isLive,
+    onReconnectSuccess: () => {
+      console.log('✅ Stream reconnected successfully');
+    },
+    onReconnectFailed: () => {
+      console.log('❌ Stream reconnection failed, ending stream');
+      endStream();
+    },
+  });
 
   useEffect(() => {
     if (!user) {
@@ -176,6 +201,7 @@ export default function BroadcasterScreen() {
         };
         
         setGiftAnimations((prev) => [...prev, newAnimation]);
+        setTotalGifts((prev) => prev + 1);
       })
       .subscribe();
 
@@ -306,6 +332,7 @@ export default function BroadcasterScreen() {
       setViewerCount(0);
       setPeakViewers(0);
       setTotalViewers(0);
+      setTotalGifts(0);
       setLiveTime(0);
       setShowSetup(false);
       setStreamTitle('');
@@ -355,6 +382,9 @@ export default function BroadcasterScreen() {
         streamId: currentStream.id,
       });
       
+      // Stop reconnection attempts
+      stopReconnect();
+
       // Get total unique viewers
       const totalViewerCount = await viewerTrackingService.getTotalViewerCount(currentStream.id);
       setTotalViewers(totalViewerCount);
@@ -397,6 +427,7 @@ export default function BroadcasterScreen() {
       setViewerCount(0);
       setPeakViewers(0);
       setTotalViewers(0);
+      setTotalGifts(0);
       setLiveTime(0);
       setCurrentStream(null);
       setGiftAnimations([]);
@@ -408,7 +439,7 @@ export default function BroadcasterScreen() {
 
       Alert.alert(
         'Stream Ended',
-        `Your live stream has been ended successfully.\n\n📊 Stats:\n• Peak Viewers: ${peakViewers}\n• Total Viewers: ${totalViewerCount}\n• Duration: ${formatTime(liveTime)}`
+        `Your live stream has been ended successfully.\n\n📊 Stats:\n• Peak Viewers: ${peakViewers}\n• Total Viewers: ${totalViewerCount}\n• Total Gifts: ${totalGifts}\n• Duration: ${formatTime(liveTime)}`
       );
     } catch (error) {
       console.error('❌ Error ending stream:', error);
@@ -501,6 +532,13 @@ export default function BroadcasterScreen() {
       <View style={styles.overlay}>
         {isLive && !isMinimized && (
           <>
+            {/* Connection Status Indicator */}
+            <ConnectionStatusIndicator
+              status={connectionStatus}
+              attemptNumber={reconnectAttempt}
+              maxAttempts={6}
+            />
+
             {/* Top Bar */}
             <View style={styles.topBar}>
               <View style={styles.topLeft}>
@@ -535,6 +573,13 @@ export default function BroadcasterScreen() {
               </View>
             </View>
 
+            {/* Stream Health Dashboard */}
+            <StreamHealthDashboard
+              viewerCount={viewerCount}
+              giftCount={totalGifts}
+              isVisible={showHealthDashboard && !isMinimized}
+            />
+
             {/* Filter Toggle Button */}
             <TouchableOpacity
               style={styles.filterToggle}
@@ -560,6 +605,20 @@ export default function BroadcasterScreen() {
                 android_material_icon_name="shield"
                 size={24}
                 color={colors.gradientEnd}
+              />
+            </TouchableOpacity>
+
+            {/* Moderation History Button */}
+            <TouchableOpacity
+              style={styles.moderationHistoryToggle}
+              onPress={() => setShowModerationHistory(true)}
+              activeOpacity={0.7}
+            >
+              <IconSymbol
+                ios_icon_name="doc.text.fill"
+                android_material_icon_name="description"
+                size={24}
+                color={colors.text}
               />
             </TouchableOpacity>
 
@@ -653,6 +712,15 @@ export default function BroadcasterScreen() {
           streamerId={user.id}
           currentUserId={user.id}
           isStreamer={true}
+        />
+      )}
+
+      {/* Moderation History Modal */}
+      {user && (
+        <ModerationHistoryModal
+          visible={showModerationHistory}
+          onClose={() => setShowModerationHistory(false)}
+          streamerId={user.id}
         />
       )}
 
@@ -835,7 +903,7 @@ const styles = StyleSheet.create({
   },
   filterToggle: {
     position: 'absolute',
-    top: 120,
+    top: 360,
     right: 20,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     width: 48,
@@ -848,7 +916,7 @@ const styles = StyleSheet.create({
   },
   moderatorPanelToggle: {
     position: 'absolute',
-    top: 180,
+    top: 420,
     right: 20,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     width: 48,
@@ -858,6 +926,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: colors.gradientEnd,
+  },
+  moderationHistoryToggle: {
+    position: 'absolute',
+    top: 480,
+    right: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.border,
   },
   floatingThumbnail: {
     position: 'absolute',

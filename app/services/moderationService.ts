@@ -54,7 +54,87 @@ export interface PinnedComment {
   };
 }
 
+export interface ModerationHistoryEntry {
+  id: string;
+  moderator_user_id: string;
+  target_user_id: string;
+  streamer_id: string;
+  action_type: string;
+  reason: string | null;
+  duration_sec: number | null;
+  created_at: string;
+  moderator?: {
+    id: string;
+    username: string;
+    display_name: string;
+    avatar_url: string | null;
+  };
+  target?: {
+    id: string;
+    username: string;
+    display_name: string;
+    avatar_url: string | null;
+  };
+}
+
 class ModerationService {
+  // Log moderation action to history
+  private async logModerationAction(
+    moderatorUserId: string,
+    targetUserId: string,
+    streamerId: string,
+    actionType: string,
+    reason?: string,
+    durationSec?: number
+  ): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('moderation_history')
+        .insert({
+          moderator_user_id: moderatorUserId,
+          target_user_id: targetUserId,
+          streamer_id: streamerId,
+          action_type: actionType,
+          reason: reason || null,
+          duration_sec: durationSec || null,
+        });
+
+      if (error) {
+        console.error('Error logging moderation action:', error);
+      } else {
+        console.log(`📝 Logged moderation action: ${actionType}`);
+      }
+    } catch (error) {
+      console.error('Error in logModerationAction:', error);
+    }
+  }
+
+  // Get moderation history for a streamer
+  async getModerationHistory(streamerId: string, limit: number = 50): Promise<ModerationHistoryEntry[]> {
+    try {
+      const { data, error } = await supabase
+        .from('moderation_history')
+        .select(`
+          *,
+          moderator:profiles!moderation_history_moderator_user_id_fkey(id, username, display_name, avatar_url),
+          target:profiles!moderation_history_target_user_id_fkey(id, username, display_name, avatar_url)
+        `)
+        .eq('streamer_id', streamerId)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (error) {
+        console.error('Error fetching moderation history:', error);
+        return [];
+      }
+
+      return data as ModerationHistoryEntry[];
+    } catch (error) {
+      console.error('Error in getModerationHistory:', error);
+      return [];
+    }
+  }
+
   // Check if user is a moderator for a streamer
   async isModerator(streamerId: string, userId: string): Promise<boolean> {
     try {
@@ -77,7 +157,7 @@ class ModerationService {
     }
   }
 
-  // Check if user is banned by a streamer
+  // Check if user is banned by a streamer (persistent across all streams)
   async isBanned(streamerId: string, userId: string): Promise<boolean> {
     try {
       const { data, error } = await supabase
@@ -99,35 +179,47 @@ class ModerationService {
     }
   }
 
-  // Check if user is timed out in a stream
-  async isTimedOut(streamId: string, userId: string): Promise<boolean> {
+  // Check if user is timed out (check against current time)
+  async isTimedOut(streamerId: string, userId: string): Promise<{ isTimedOut: boolean; endTime?: string }> {
     try {
+      // Get the most recent timeout for this user from this streamer
       const { data, error } = await supabase
         .from('timed_out_users')
-        .select('end_time')
-        .eq('stream_id', streamId)
+        .select('end_time, stream_id')
         .eq('user_id', userId)
-        .single();
+        .gte('end_time', new Date().toISOString())
+        .order('end_time', { ascending: false })
+        .limit(1);
 
       if (error && error.code !== 'PGRST116') {
         console.error('Error checking timeout status:', error);
-        return false;
+        return { isTimedOut: false };
       }
 
-      if (!data) return false;
+      if (!data || data.length === 0) {
+        return { isTimedOut: false };
+      }
 
-      // Check if timeout has expired
-      const endTime = new Date(data.end_time);
-      const now = new Date();
-      return now < endTime;
+      // Verify the timeout is for a stream from this streamer
+      const { data: streamData } = await supabase
+        .from('streams')
+        .select('broadcaster_id')
+        .eq('id', data[0].stream_id)
+        .single();
+
+      if (streamData && streamData.broadcaster_id === streamerId) {
+        return { isTimedOut: true, endTime: data[0].end_time };
+      }
+
+      return { isTimedOut: false };
     } catch (error) {
       console.error('Error in isTimedOut:', error);
-      return false;
+      return { isTimedOut: false };
     }
   }
 
   // Add a moderator
-  async addModerator(streamerId: string, userId: string): Promise<{ success: boolean; error?: string }> {
+  async addModerator(streamerId: string, userId: string, addedBy: string): Promise<{ success: boolean; error?: string }> {
     try {
       const { error } = await supabase
         .from('moderators')
@@ -141,6 +233,9 @@ class ModerationService {
         return { success: false, error: error.message };
       }
 
+      // Log the action
+      await this.logModerationAction(addedBy, userId, streamerId, 'add_moderator');
+
       console.log('✅ Moderator added successfully');
       return { success: true };
     } catch (error) {
@@ -150,7 +245,7 @@ class ModerationService {
   }
 
   // Remove a moderator
-  async removeModerator(streamerId: string, userId: string): Promise<{ success: boolean; error?: string }> {
+  async removeModerator(streamerId: string, userId: string, removedBy: string): Promise<{ success: boolean; error?: string }> {
     try {
       const { error } = await supabase
         .from('moderators')
@@ -162,6 +257,9 @@ class ModerationService {
         console.error('Error removing moderator:', error);
         return { success: false, error: error.message };
       }
+
+      // Log the action
+      await this.logModerationAction(removedBy, userId, streamerId, 'remove_moderator');
 
       console.log('✅ Moderator removed successfully');
       return { success: true };
@@ -192,8 +290,8 @@ class ModerationService {
     }
   }
 
-  // Ban a user
-  async banUser(streamerId: string, userId: string, reason?: string): Promise<{ success: boolean; error?: string }> {
+  // Ban a user (persistent across all future streams)
+  async banUser(streamerId: string, userId: string, bannedBy: string, reason?: string): Promise<{ success: boolean; error?: string }> {
     try {
       const { error } = await supabase
         .from('banned_users')
@@ -207,6 +305,9 @@ class ModerationService {
         console.error('Error banning user:', error);
         return { success: false, error: error.message };
       }
+
+      // Log the action
+      await this.logModerationAction(bannedBy, userId, streamerId, 'ban', reason);
 
       console.log('✅ User banned successfully');
       
@@ -225,7 +326,7 @@ class ModerationService {
   }
 
   // Unban a user
-  async unbanUser(streamerId: string, userId: string): Promise<{ success: boolean; error?: string }> {
+  async unbanUser(streamerId: string, userId: string, unbannedBy: string): Promise<{ success: boolean; error?: string }> {
     try {
       const { error } = await supabase
         .from('banned_users')
@@ -237,6 +338,9 @@ class ModerationService {
         console.error('Error unbanning user:', error);
         return { success: false, error: error.message };
       }
+
+      // Log the action
+      await this.logModerationAction(unbannedBy, userId, streamerId, 'unban');
 
       console.log('✅ User unbanned successfully');
       return { success: true };
@@ -267,8 +371,8 @@ class ModerationService {
     }
   }
 
-  // Timeout a user
-  async timeoutUser(streamId: string, userId: string, durationMinutes: number): Promise<{ success: boolean; error?: string }> {
+  // Timeout a user (persistent, expires automatically)
+  async timeoutUser(streamId: string, userId: string, streamerId: string, timedOutBy: string, durationMinutes: number): Promise<{ success: boolean; error?: string }> {
     try {
       if (durationMinutes < 1 || durationMinutes > 60) {
         return { success: false, error: 'Timeout duration must be between 1 and 60 minutes' };
@@ -298,6 +402,9 @@ class ModerationService {
         return { success: false, error: error.message };
       }
 
+      // Log the action
+      await this.logModerationAction(timedOutBy, userId, streamerId, 'timeout', undefined, durationMinutes * 60);
+
       console.log(`✅ User timed out for ${durationMinutes} minutes`);
       
       // Broadcast timeout event
@@ -315,7 +422,7 @@ class ModerationService {
   }
 
   // Remove a comment
-  async removeComment(messageId: string): Promise<{ success: boolean; error?: string }> {
+  async removeComment(messageId: string, removedBy: string, streamerId: string, targetUserId: string): Promise<{ success: boolean; error?: string }> {
     try {
       const { error } = await supabase
         .from('chat_messages')
@@ -327,6 +434,9 @@ class ModerationService {
         return { success: false, error: error.message };
       }
 
+      // Log the action
+      await this.logModerationAction(removedBy, targetUserId, streamerId, 'remove_comment');
+
       console.log('✅ Comment removed successfully');
       return { success: true };
     } catch (error) {
@@ -336,7 +446,7 @@ class ModerationService {
   }
 
   // Pin a comment
-  async pinComment(streamId: string, messageId: string, pinnedBy: string, durationMinutes: number): Promise<{ success: boolean; error?: string }> {
+  async pinComment(streamId: string, messageId: string, pinnedBy: string, streamerId: string, targetUserId: string, durationMinutes: number): Promise<{ success: boolean; error?: string }> {
     try {
       if (durationMinutes < 1 || durationMinutes > 5) {
         return { success: false, error: 'Pin duration must be between 1 and 5 minutes' };
@@ -366,6 +476,9 @@ class ModerationService {
         return { success: false, error: error.message };
       }
 
+      // Log the action
+      await this.logModerationAction(pinnedBy, targetUserId, streamerId, 'pin_comment', undefined, durationMinutes * 60);
+
       console.log(`✅ Comment pinned for ${durationMinutes} minutes`);
       return { success: true };
     } catch (error) {
@@ -375,7 +488,7 @@ class ModerationService {
   }
 
   // Unpin a comment
-  async unpinComment(streamId: string): Promise<{ success: boolean; error?: string }> {
+  async unpinComment(streamId: string, unpinnedBy: string, streamerId: string): Promise<{ success: boolean; error?: string }> {
     try {
       const { error } = await supabase
         .from('pinned_comments')
@@ -386,6 +499,9 @@ class ModerationService {
         console.error('Error unpinning comment:', error);
         return { success: false, error: error.message };
       }
+
+      // Log the action (use streamer as target for unpin)
+      await this.logModerationAction(unpinnedBy, streamerId, streamerId, 'unpin_comment');
 
       console.log('✅ Comment unpinned successfully');
       return { success: true };
@@ -416,7 +532,7 @@ class ModerationService {
       const now = new Date();
       if (now > expiresAt) {
         // Auto-remove expired pin
-        await this.unpinComment(streamId);
+        await this.unpinComment(streamId, data.pinned_by, data.pinned_by);
         return null;
       }
 
