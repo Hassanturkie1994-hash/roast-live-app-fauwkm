@@ -31,7 +31,7 @@ interface Post {
 
 export default function ProfileScreen() {
   const { user, profile, signOut } = useAuth();
-  const [activeTab, setActiveTab] = useState<'posts' | 'liked' | 'stories'>('posts');
+  const [activeTab, setActiveTab] = useState<'replays' | 'posts' | 'stories'>('replays');
   const [posts, setPosts] = useState<Post[]>([]);
   const [likedPosts, setLikedPosts] = useState<Post[]>([]);
   const [followersCount, setFollowersCount] = useState(0);
@@ -115,63 +115,99 @@ export default function ProfileScreen() {
     router.push('/screens/SavedStreamsScreen');
   };
 
-  const renderPosts = () => {
-    const displayPosts = activeTab === 'posts' ? posts : likedPosts;
+  const handleArchivedStreams = () => {
+    router.push('/screens/ArchivedStreamsScreen');
+  };
 
-    if (displayPosts.length === 0) {
+  const renderContent = () => {
+    if (activeTab === 'replays') {
       return (
         <View style={styles.emptyState}>
           <IconSymbol
-            ios_icon_name="photo.on.rectangle"
-            android_material_icon_name="photo_library"
+            ios_icon_name="video.fill"
+            android_material_icon_name="videocam"
             size={48}
             color={colors.textSecondary}
           />
-          <Text style={styles.emptyText}>
-            {activeTab === 'posts' ? 'No posts yet' : 'No liked posts'}
+          <Text style={styles.emptyText}>No live replays yet</Text>
+          <Text style={styles.emptySubtext}>
+            Your past livestreams will appear here
           </Text>
-          {activeTab === 'posts' && (
-            <TouchableOpacity style={styles.createButton} onPress={handleCreatePost}>
-              <Text style={styles.createButtonText}>Create your first post</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity style={styles.viewAllButton} onPress={handleArchivedStreams}>
+            <Text style={styles.viewAllButtonText}>View Stream History</Text>
+          </TouchableOpacity>
         </View>
       );
     }
 
-    return (
-      <View style={styles.postsGrid}>
-        {displayPosts.map((post, index) => (
-          <TouchableOpacity
-            key={index}
-            style={styles.postCard}
-            activeOpacity={0.8}
-          >
-            <Image source={{ uri: post.media_url }} style={styles.postImage} />
-            <View style={styles.postOverlay}>
-              <View style={styles.postStats}>
-                <View style={styles.postStat}>
-                  <IconSymbol
-                    ios_icon_name="heart.fill"
-                    android_material_icon_name="favorite"
-                    size={16}
-                    color={colors.text}
-                  />
-                  <Text style={styles.postStatText}>{post.likes_count}</Text>
-                </View>
-                <View style={styles.postStat}>
-                  <IconSymbol
-                    ios_icon_name="bubble.left.fill"
-                    android_material_icon_name="comment"
-                    size={16}
-                    color={colors.text}
-                  />
-                  <Text style={styles.postStatText}>{post.comments_count}</Text>
+    if (activeTab === 'posts') {
+      if (posts.length === 0) {
+        return (
+          <View style={styles.emptyState}>
+            <IconSymbol
+              ios_icon_name="photo.on.rectangle"
+              android_material_icon_name="photo_library"
+              size={48}
+              color={colors.textSecondary}
+            />
+            <Text style={styles.emptyText}>No posts yet</Text>
+            <TouchableOpacity style={styles.createButton} onPress={handleCreatePost}>
+              <Text style={styles.createButtonText}>Create your first post</Text>
+            </TouchableOpacity>
+          </View>
+        );
+      }
+
+      return (
+        <View style={styles.postsGrid}>
+          {posts.map((post, index) => (
+            <TouchableOpacity
+              key={index}
+              style={styles.postCard}
+              activeOpacity={0.8}
+            >
+              <Image source={{ uri: post.media_url }} style={styles.postImage} />
+              <View style={styles.postOverlay}>
+                <View style={styles.postStats}>
+                  <View style={styles.postStat}>
+                    <IconSymbol
+                      ios_icon_name="heart.fill"
+                      android_material_icon_name="favorite"
+                      size={16}
+                      color={colors.text}
+                    />
+                    <Text style={styles.postStatText}>{post.likes_count}</Text>
+                  </View>
+                  <View style={styles.postStat}>
+                    <IconSymbol
+                      ios_icon_name="bubble.left.fill"
+                      android_material_icon_name="comment"
+                      size={16}
+                      color={colors.text}
+                    />
+                    <Text style={styles.postStatText}>{post.comments_count}</Text>
+                  </View>
                 </View>
               </View>
-            </View>
-          </TouchableOpacity>
-        ))}
+            </TouchableOpacity>
+          ))}
+        </View>
+      );
+    }
+
+    // Stories tab
+    return (
+      <View style={styles.emptyState}>
+        <IconSymbol
+          ios_icon_name="clock.fill"
+          android_material_icon_name="history"
+          size={48}
+          color={colors.textSecondary}
+        />
+        <Text style={styles.emptyText}>No story highlights</Text>
+        <TouchableOpacity style={styles.createButton} onPress={handleCreateStory}>
+          <Text style={styles.createButtonText}>Create a story</Text>
+        </TouchableOpacity>
       </View>
     );
   };
@@ -276,12 +312,35 @@ export default function ProfileScreen() {
           >
             <View style={styles.savedStreamsLeft}>
               <IconSymbol
+                ios_icon_name="bookmark.fill"
+                android_material_icon_name="bookmark"
+                size={20}
+                color={colors.gradientEnd}
+              />
+              <Text style={styles.savedStreamsLabel}>Saved Streams</Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="chevron_right"
+              size={16}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+
+          {/* Archived Streams Link */}
+          <TouchableOpacity 
+            style={styles.savedStreamsCard} 
+            onPress={handleArchivedStreams}
+            activeOpacity={0.7}
+          >
+            <View style={styles.savedStreamsLeft}>
+              <IconSymbol
                 ios_icon_name="video.fill"
                 android_material_icon_name="videocam"
                 size={20}
                 color={colors.gradientEnd}
               />
-              <Text style={styles.savedStreamsLabel}>Saved Streams</Text>
+              <Text style={styles.savedStreamsLabel}>Stream History</Text>
             </View>
             <IconSymbol
               ios_icon_name="chevron.right"
@@ -330,6 +389,21 @@ export default function ProfileScreen() {
         {/* Tabs */}
         <View style={styles.tabsContainer}>
           <TouchableOpacity
+            style={[styles.tab, activeTab === 'replays' && styles.tabActive]}
+            onPress={() => setActiveTab('replays')}
+          >
+            <IconSymbol
+              ios_icon_name="video.fill"
+              android_material_icon_name="videocam"
+              size={20}
+              color={activeTab === 'replays' ? colors.text : colors.textSecondary}
+            />
+            <Text style={[styles.tabText, activeTab === 'replays' && styles.tabTextActive]}>
+              LIVE REPLAYS
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={[styles.tab, activeTab === 'posts' && styles.tabActive]}
             onPress={() => setActiveTab('posts')}
           >
@@ -341,21 +415,6 @@ export default function ProfileScreen() {
             />
             <Text style={[styles.tabText, activeTab === 'posts' && styles.tabTextActive]}>
               POSTS
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'liked' && styles.tabActive]}
-            onPress={() => setActiveTab('liked')}
-          >
-            <IconSymbol
-              ios_icon_name="heart.fill"
-              android_material_icon_name="favorite"
-              size={20}
-              color={activeTab === 'liked' ? colors.text : colors.textSecondary}
-            />
-            <Text style={[styles.tabText, activeTab === 'liked' && styles.tabTextActive]}>
-              LIKED
             </Text>
           </TouchableOpacity>
 
@@ -376,7 +435,7 @@ export default function ProfileScreen() {
         </View>
 
         {/* Content */}
-        {renderPosts()}
+        {renderContent()}
       </ScrollView>
     </View>
   );
@@ -611,7 +670,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.text,
   },
   tabText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '700',
     color: colors.textSecondary,
   },
@@ -629,13 +688,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 60,
+    gap: 16,
   },
   emptyText: {
     fontSize: 18,
     fontWeight: '700',
     color: colors.text,
-    marginTop: 16,
-    marginBottom: 16,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
   createButton: {
     paddingHorizontal: 24,
@@ -648,6 +712,17 @@ const styles = StyleSheet.create({
   createButtonText: {
     fontSize: 14,
     fontWeight: '600',
+    color: colors.text,
+  },
+  viewAllButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: colors.gradientEnd,
+    borderRadius: 20,
+  },
+  viewAllButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
     color: colors.text,
   },
   postCard: {

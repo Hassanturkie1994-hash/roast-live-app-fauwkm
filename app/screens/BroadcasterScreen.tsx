@@ -20,6 +20,9 @@ import EnhancedChatOverlay from '@/components/EnhancedChatOverlay';
 import ModeratorChatOverlay from '@/components/ModeratorChatOverlay';
 import ModeratorControlPanel from '@/components/ModeratorControlPanel';
 import { moderationService } from '@/app/services/moderationService';
+import { viewerTrackingService } from '@/app/services/viewerTrackingService';
+import { liveStreamArchiveService } from '@/app/services/liveStreamArchiveService';
+import { commentService } from '@/app/services/commentService';
 
 interface StreamData {
   id: string;
@@ -59,10 +62,14 @@ export default function BroadcasterScreen() {
   const [isMinimized, setIsMinimized] = useState(false);
   const [isModerator, setIsModerator] = useState(false);
   const [showModeratorPanel, setShowModeratorPanel] = useState(false);
+  const [archiveId, setArchiveId] = useState<string | null>(null);
+  const [peakViewers, setPeakViewers] = useState(0);
+  const [totalViewers, setTotalViewers] = useState(0);
   const realtimeChannelRef = useRef<any>(null);
   const giftChannelRef = useRef<any>(null);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const appState = useRef<AppStateStatus>(AppState.currentState);
+  const streamStartTime = useRef<string | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -70,29 +77,20 @@ export default function BroadcasterScreen() {
     }
   }, [user]);
 
-  // Handle back button press when streaming - ENHANCED
+  // Handle back button press when streaming
   useEffect(() => {
     if (isLive) {
       const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
         console.log('🚫 Back button pressed during livestream - showing confirmation');
         setShowExitConfirmation(true);
-        return true; // Prevent default back behavior
+        return true;
       });
 
       return () => backHandler.remove();
     }
   }, [isLive]);
 
-  // Prevent navigation away from livestream
-  useEffect(() => {
-    if (isLive) {
-      // This will be caught by the router and show confirmation
-      const unsubscribe = router.canGoBack();
-      console.log('🔒 Navigation locked during livestream');
-    }
-  }, [isLive]);
-
-  // Handle multitask mode (app minimization) - ENHANCED
+  // Handle multitask mode (app minimization)
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextAppState) => {
       if (isLive) {
@@ -100,14 +98,12 @@ export default function BroadcasterScreen() {
           appState.current.match(/active/) &&
           nextAppState.match(/inactive|background/)
         ) {
-          // App is going to background - enable minimized mode
           console.log('📱 App minimized - enabling floating thumbnail mode');
           setIsMinimized(true);
         } else if (
           appState.current.match(/inactive|background/) &&
           nextAppState === 'active'
         ) {
-          // App is coming to foreground - disable minimized mode
           console.log('📱 App restored - disabling floating thumbnail mode');
           setIsMinimized(false);
         }
@@ -146,12 +142,18 @@ export default function BroadcasterScreen() {
       .channel(`stream:${currentStream.id}:broadcaster`)
       .on('broadcast', { event: 'viewer_count' }, (payload) => {
         console.log('👥 Viewer count update:', payload);
-        setViewerCount(payload.payload.count || 0);
+        const count = payload.payload.count || 0;
+        setViewerCount(count);
+        
+        // Track peak viewers
+        if (count > peakViewers) {
+          setPeakViewers(count);
+        }
       })
       .subscribe();
 
     realtimeChannelRef.current = channel;
-  }, [currentStream?.id]);
+  }, [currentStream?.id, peakViewers]);
 
   const subscribeToGifts = useCallback(() => {
     if (!currentStream?.id) return;
@@ -220,14 +222,12 @@ export default function BroadcasterScreen() {
   const toggleCameraFacing = () => {
     console.log('📷 Switching camera without restarting stream');
     setFacing((current) => (current === 'back' ? 'front' : 'back'));
-    // Flash is automatically disabled when switching to front camera
     if (facing === 'back') {
       setFlashMode('off');
     }
   };
 
   const toggleFlash = () => {
-    // Flash only available on back camera
     if (facing === 'back') {
       console.log('💡 Toggling flash');
       setFlashMode((current) => (current === 'off' ? 'on' : 'off'));
@@ -282,10 +282,26 @@ export default function BroadcasterScreen() {
 
       console.log('✅ Stream created successfully:', result);
 
+      // Create archive record
+      const startTime = new Date().toISOString();
+      streamStartTime.current = startTime;
+      const archiveResult = await liveStreamArchiveService.createArchive(
+        user.id,
+        streamTitle,
+        startTime
+      );
+
+      if (archiveResult.success && archiveResult.data) {
+        setArchiveId(archiveResult.data.id);
+        console.log('📦 Stream archive created:', archiveResult.data.id);
+      }
+
       setCurrentStream(result.stream);
       setIsLive(true);
-      setIsStreaming(true); // Hide navigation tabs
+      setIsStreaming(true);
       setViewerCount(0);
+      setPeakViewers(0);
+      setTotalViewers(0);
       setLiveTime(0);
       setShowSetup(false);
       setStreamTitle('');
@@ -335,6 +351,36 @@ export default function BroadcasterScreen() {
         streamId: currentStream.id,
       });
       
+      // Get total unique viewers
+      const totalViewerCount = await viewerTrackingService.getTotalViewerCount(currentStream.id);
+      setTotalViewers(totalViewerCount);
+
+      // Clean up viewer sessions
+      await viewerTrackingService.cleanupStreamViewers(currentStream.id);
+
+      // Update archive with final metrics
+      if (archiveId && streamStartTime.current) {
+        const endTime = new Date().toISOString();
+        const duration = liveStreamArchiveService.calculateDuration(
+          streamStartTime.current,
+          endTime
+        );
+
+        await liveStreamArchiveService.updateArchive(archiveId, {
+          ended_at: endTime,
+          viewer_peak: peakViewers,
+          total_viewers: totalViewerCount,
+          stream_duration_s: duration,
+          archived_url: currentStream.playback_url,
+        });
+
+        console.log('📦 Stream archive updated with metrics:', {
+          duration,
+          peakViewers,
+          totalViewers: totalViewerCount,
+        });
+      }
+
       await cloudflareService.stopLive({
         liveInputId: currentStream.live_input_id,
         streamId: currentStream.id,
@@ -343,16 +389,23 @@ export default function BroadcasterScreen() {
       console.log('✅ Stream ended successfully');
 
       setIsLive(false);
-      setIsStreaming(false); // Show navigation tabs again
+      setIsStreaming(false);
       setViewerCount(0);
+      setPeakViewers(0);
+      setTotalViewers(0);
       setLiveTime(0);
       setCurrentStream(null);
       setGiftAnimations([]);
       setIsMinimized(false);
       setSelectedFilter('none');
       setShowFilters(false);
+      setArchiveId(null);
+      streamStartTime.current = null;
 
-      Alert.alert('Stream Ended', 'Your live stream has been ended successfully.');
+      Alert.alert(
+        'Stream Ended',
+        `Your live stream has been ended successfully.\n\n📊 Stats:\n• Peak Viewers: ${peakViewers}\n• Total Viewers: ${totalViewerCount}\n• Duration: ${formatTime(liveTime)}`
+      );
     } catch (error) {
       console.error('❌ Error ending stream:', error);
       
@@ -377,25 +430,19 @@ export default function BroadcasterScreen() {
     return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Get filter style based on selected filter
   const getCameraStyle = () => {
     const baseStyle = styles.camera;
-    
-    // Note: React Native doesn't support CSS filters directly
-    // These would need to be implemented using native modules or image processing libraries
-    // For now, we'll just return the base style
     return baseStyle;
   };
 
   return (
     <View style={commonStyles.container}>
-      {/* Camera View - Full screen 9:16 aspect ratio */}
+      {/* Camera View */}
       {isCameraOn ? (
         <CameraView 
           style={getCameraStyle()} 
           facing={facing}
           flash={flashMode}
-          // TikTok-style vertical format settings
           videoQuality="1080p"
           ratio="16:9"
         />
@@ -411,7 +458,7 @@ export default function BroadcasterScreen() {
         </View>
       )}
 
-      {/* Floating Thumbnail for Multitask Mode - ENHANCED */}
+      {/* Floating Thumbnail for Multitask Mode */}
       {isMinimized && isLive && (
         <TouchableOpacity 
           style={styles.floatingThumbnail}
@@ -450,7 +497,7 @@ export default function BroadcasterScreen() {
       <View style={styles.overlay}>
         {isLive && !isMinimized && (
           <>
-            {/* Top Bar with LIVE badge, watermark, and stats */}
+            {/* Top Bar */}
             <View style={styles.topBar}>
               <View style={styles.topLeft}>
                 <LiveBadge size="small" />
@@ -522,7 +569,7 @@ export default function BroadcasterScreen() {
               visible={showFilters}
             />
 
-            {/* Moderator Chat Overlay - Bottom left */}
+            {/* Moderator Chat Overlay */}
             {currentStream && user && (
               <ModeratorChatOverlay
                 streamId={currentStream.id}
@@ -560,7 +607,7 @@ export default function BroadcasterScreen() {
         />
       ))}
 
-      {/* Sticky Bottom Control Panel (only visible when live and not minimized) */}
+      {/* Control Panel */}
       {isLive && !isMinimized && (
         <LiveStreamControlPanel
           isMicOn={isMicOn}
@@ -662,7 +709,7 @@ export default function BroadcasterScreen() {
         </View>
       </Modal>
 
-      {/* Exit Confirmation Modal - ENHANCED */}
+      {/* Exit Confirmation Modal */}
       <Modal
         visible={showExitConfirmation}
         transparent
@@ -706,7 +753,6 @@ export default function BroadcasterScreen() {
 const styles = StyleSheet.create({
   camera: {
     flex: 1,
-    // Edge-to-edge display with 9:16 aspect ratio
     width: '100%',
     height: '100%',
   },
