@@ -18,7 +18,11 @@ import { notificationService } from '@/app/services/notificationService';
 
 const { width: screenWidth } = Dimensions.get('window');
 
-export default function TikTokTabBar() {
+interface TikTokTabBarProps {
+  isStreaming?: boolean;
+}
+
+export default function TikTokTabBar({ isStreaming = false }: TikTokTabBarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { user } = useAuth();
@@ -28,7 +32,6 @@ export default function TikTokTabBar() {
     if (user) {
       fetchUnreadCount();
       
-      // Poll for unread count every 30 seconds
       const interval = setInterval(fetchUnreadCount, 30000);
       return () => clearInterval(interval);
     }
@@ -52,6 +55,11 @@ export default function TikTokTabBar() {
   const handleTabPress = (route: string) => {
     router.push(route as any);
   };
+
+  // Hide tab bar when streaming
+  if (isStreaming) {
+    return null;
+  }
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['bottom']}>

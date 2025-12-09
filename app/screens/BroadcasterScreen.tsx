@@ -1,18 +1,22 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, TextInput, Modal, Platform } from 'react-native';
-import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, TextInput, Modal, Platform, BackHandler } from 'react-native';
+import { CameraView, CameraType, useCameraPermissions, FlashMode } from 'expo-camera';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import GradientButton from '@/components/GradientButton';
 import LiveBadge from '@/components/LiveBadge';
 import RoastLiveLogo from '@/components/RoastLiveLogo';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useAuth } from '@/contexts/AuthContext';
+import { useStreaming } from '@/contexts/StreamingContext';
 import { supabase } from '@/app/integrations/supabase/client';
 import { cloudflareService } from '@/app/services/cloudflareService';
 import { router } from 'expo-router';
-import ChatOverlay from '@/components/ChatOverlay';
 import GiftAnimationOverlay from '@/components/GiftAnimationOverlay';
+import LiveStreamControlPanel from '@/components/LiveStreamControlPanel';
+import ViewerListModal from '@/components/ViewerListModal';
+import CameraFilterSelector, { CameraFilter } from '@/components/CameraFilterSelector';
+import EnhancedChatOverlay from '@/components/EnhancedChatOverlay';
 
 interface StreamData {
   id: string;
@@ -31,17 +35,24 @@ interface GiftAnimation {
 
 export default function BroadcasterScreen() {
   const { user } = useAuth();
+  const { setIsStreaming } = useStreaming();
   const [facing, setFacing] = useState<CameraType>('front');
   const [permission, requestPermission] = useCameraPermissions();
   const [isLive, setIsLive] = useState(false);
   const [viewerCount, setViewerCount] = useState(0);
   const [liveTime, setLiveTime] = useState(0);
   const [isMicOn, setIsMicOn] = useState(true);
+  const [isCameraOn, setIsCameraOn] = useState(true);
+  const [flashMode, setFlashMode] = useState<FlashMode>('off');
   const [showSetup, setShowSetup] = useState(false);
   const [streamTitle, setStreamTitle] = useState('');
   const [currentStream, setCurrentStream] = useState<StreamData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [giftAnimations, setGiftAnimations] = useState<GiftAnimation[]>([]);
+  const [showViewerList, setShowViewerList] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [selectedFilter, setSelectedFilter] = useState<CameraFilter>('none');
+  const [showExitConfirmation, setShowExitConfirmation] = useState(false);
   const realtimeChannelRef = useRef<any>(null);
   const giftChannelRef = useRef<any>(null);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -51,6 +62,18 @@ export default function BroadcasterScreen() {
       router.replace('/auth/login');
     }
   }, [user]);
+
+  // Handle back button press when streaming
+  useEffect(() => {
+    if (isLive) {
+      const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+        setShowExitConfirmation(true);
+        return true; // Prevent default back behavior
+      });
+
+      return () => backHandler.remove();
+    }
+  }, [isLive]);
 
   useEffect(() => {
     if (isLive) {
@@ -94,7 +117,6 @@ export default function BroadcasterScreen() {
         console.log('🎁 Gift received:', payload);
         const giftData = payload.payload;
         
-        // Add gift animation to queue
         const newAnimation: GiftAnimation = {
           id: `${Date.now()}-${Math.random()}`,
           giftName: giftData.gift_name,
@@ -154,23 +176,21 @@ export default function BroadcasterScreen() {
     setFacing((current) => (current === 'back' ? 'front' : 'back'));
   };
 
+  const toggleFlash = () => {
+    setFlashMode((current) => (current === 'off' ? 'on' : 'off'));
+  };
+
   const handleStartLiveSetup = () => {
     if (isLive) {
-      Alert.alert(
-        'End Stream',
-        'Are you sure you want to end your live stream?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'End Stream',
-            style: 'destructive',
-            onPress: endStream,
-          },
-        ]
-      );
+      setShowExitConfirmation(true);
     } else {
       setShowSetup(true);
     }
+  };
+
+  const handleEndStreamConfirm = () => {
+    setShowExitConfirmation(false);
+    endStream();
   };
 
   const startStream = async () => {
@@ -198,6 +218,7 @@ export default function BroadcasterScreen() {
 
       setCurrentStream(result.stream);
       setIsLive(true);
+      setIsStreaming(true); // Hide navigation tabs
       setViewerCount(0);
       setLiveTime(0);
       setShowSetup(false);
@@ -256,6 +277,7 @@ export default function BroadcasterScreen() {
       console.log('✅ Stream ended successfully');
 
       setIsLive(false);
+      setIsStreaming(false); // Show navigation tabs again
       setViewerCount(0);
       setLiveTime(0);
       setCurrentStream(null);
@@ -288,15 +310,40 @@ export default function BroadcasterScreen() {
 
   return (
     <View style={commonStyles.container}>
-      <CameraView style={styles.camera} facing={facing} />
+      {isCameraOn ? (
+        <CameraView 
+          style={styles.camera} 
+          facing={facing}
+          flash={flashMode}
+        />
+      ) : (
+        <View style={styles.cameraOffContainer}>
+          <IconSymbol
+            ios_icon_name="video.slash.fill"
+            android_material_icon_name="videocam_off"
+            size={64}
+            color={colors.textSecondary}
+          />
+          <Text style={styles.cameraOffText}>Camera Off — Stream Still Active</Text>
+        </View>
+      )}
 
       <View style={styles.overlay}>
         {isLive && (
           <>
+            {/* Top Bar with LIVE badge, watermark, and stats */}
             <View style={styles.topBar}>
-              <LiveBadge size="small" />
+              <View style={styles.topLeft}>
+                <LiveBadge size="small" />
+                <View style={styles.watermark}>
+                  <Text style={styles.watermarkText}>ROAST LIVE</Text>
+                </View>
+              </View>
               <View style={styles.statsContainer}>
-                <View style={styles.stat}>
+                <TouchableOpacity 
+                  style={styles.stat}
+                  onPress={() => setShowViewerList(true)}
+                >
                   <IconSymbol
                     ios_icon_name="eye.fill"
                     android_material_icon_name="visibility"
@@ -304,7 +351,7 @@ export default function BroadcasterScreen() {
                     color={colors.text}
                   />
                   <Text style={styles.statText}>{viewerCount}</Text>
-                </View>
+                </TouchableOpacity>
                 <View style={styles.stat}>
                   <IconSymbol
                     ios_icon_name="clock.fill"
@@ -317,54 +364,45 @@ export default function BroadcasterScreen() {
               </View>
             </View>
 
-            <View style={styles.watermarkContainer}>
-              <RoastLiveLogo size="small" opacity={0.25} />
-            </View>
+            {/* Filter Toggle Button */}
+            <TouchableOpacity
+              style={styles.filterToggle}
+              onPress={() => setShowFilters(!showFilters)}
+            >
+              <IconSymbol
+                ios_icon_name="camera.filters"
+                android_material_icon_name="filter"
+                size={24}
+                color={colors.text}
+              />
+            </TouchableOpacity>
 
+            {/* Filter Selector */}
+            <CameraFilterSelector
+              selectedFilter={selectedFilter}
+              onSelectFilter={setSelectedFilter}
+              visible={showFilters}
+            />
+
+            {/* Enhanced Chat Overlay */}
             {currentStream && (
-              <ChatOverlay streamId={currentStream.id} isBroadcaster={true} />
+              <EnhancedChatOverlay streamId={currentStream.id} />
             )}
           </>
         )}
 
-        <View style={styles.controlsContainer}>
-          <View style={styles.controls}>
-            <TouchableOpacity
-              style={[styles.controlButton, !isMicOn && styles.controlButtonOff]}
-              onPress={() => setIsMicOn(!isMicOn)}
+        {!isLive && (
+          <View style={styles.centerContent}>
+            <RoastLiveLogo size="large" />
+            <Text style={styles.welcomeText}>Ready to go live?</Text>
+            <GradientButton
+              title="GO LIVE"
+              onPress={handleStartLiveSetup}
+              size="large"
               disabled={isLoading}
-            >
-              <IconSymbol
-                ios_icon_name={isMicOn ? 'mic.fill' : 'mic.slash.fill'}
-                android_material_icon_name={isMicOn ? 'mic' : 'mic_off'}
-                size={24}
-                color={colors.text}
-              />
-            </TouchableOpacity>
-
-            <View style={styles.startButtonContainer}>
-              <GradientButton
-                title={isLive ? 'END STREAM' : 'GO LIVE'}
-                onPress={handleStartLiveSetup}
-                size="large"
-                disabled={isLoading}
-              />
-            </View>
-
-            <TouchableOpacity
-              style={styles.controlButton}
-              onPress={toggleCameraFacing}
-              disabled={isLoading}
-            >
-              <IconSymbol
-                ios_icon_name="arrow.triangle.2.circlepath.camera.fill"
-                android_material_icon_name="flip_camera_ios"
-                size={24}
-                color={colors.text}
-              />
-            </TouchableOpacity>
+            />
           </View>
-        </View>
+        )}
       </View>
 
       {/* Gift Animations */}
@@ -378,6 +416,33 @@ export default function BroadcasterScreen() {
         />
       ))}
 
+      {/* Sticky Bottom Control Panel (only visible when live) */}
+      {isLive && (
+        <LiveStreamControlPanel
+          isMicOn={isMicOn}
+          onToggleMic={() => setIsMicOn(!isMicOn)}
+          isCameraOn={isCameraOn}
+          onToggleCamera={() => setIsCameraOn(!isCameraOn)}
+          facing={facing}
+          onFlipCamera={toggleCameraFacing}
+          isFlashOn={flashMode === 'on'}
+          onToggleFlash={toggleFlash}
+          onEndStream={() => setShowExitConfirmation(true)}
+          isLoading={isLoading}
+        />
+      )}
+
+      {/* Viewer List Modal */}
+      {currentStream && (
+        <ViewerListModal
+          visible={showViewerList}
+          onClose={() => setShowViewerList(false)}
+          streamId={currentStream.id}
+          viewerCount={viewerCount}
+        />
+      )}
+
+      {/* Setup Modal */}
       <Modal
         visible={showSetup}
         transparent
@@ -435,6 +500,44 @@ export default function BroadcasterScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Exit Confirmation Modal */}
+      <Modal
+        visible={showExitConfirmation}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowExitConfirmation(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.confirmationModal}>
+            <IconSymbol
+              ios_icon_name="exclamationmark.triangle.fill"
+              android_material_icon_name="warning"
+              size={48}
+              color={colors.gradientEnd}
+            />
+            <Text style={styles.confirmationTitle}>End Livestream?</Text>
+            <Text style={styles.confirmationText}>
+              You cannot leave the livestream without ending it. Are you sure you want to end your livestream?
+            </Text>
+            <View style={styles.confirmationButtons}>
+              <TouchableOpacity
+                style={styles.confirmationCancelButton}
+                onPress={() => setShowExitConfirmation(false)}
+              >
+                <Text style={styles.confirmationCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <View style={styles.confirmationEndButton}>
+                <GradientButton
+                  title="Yes, End Stream"
+                  onPress={handleEndStreamConfirm}
+                  size="medium"
+                />
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -442,6 +545,18 @@ export default function BroadcasterScreen() {
 const styles = StyleSheet.create({
   camera: {
     flex: 1,
+  },
+  cameraOffContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+  },
+  cameraOffText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text,
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
@@ -466,6 +581,24 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingHorizontal: 20,
   },
+  topLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  watermark: {
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  watermarkText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: colors.text,
+    opacity: 0.5,
+    letterSpacing: 1,
+  },
   statsContainer: {
     flexDirection: 'row',
     gap: 16,
@@ -484,41 +617,29 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  watermarkContainer: {
+  filterToggle: {
     position: 'absolute',
-    bottom: 200,
+    top: 60,
     right: 20,
-    pointerEvents: 'none',
-  },
-  controlsContainer: {
-    position: 'absolute',
-    bottom: 40,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    gap: 20,
-  },
-  controls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 40,
-  },
-  controlButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: colors.border,
   },
-  controlButtonOff: {
-    backgroundColor: 'rgba(164, 0, 40, 0.7)',
+  centerContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 24,
   },
-  startButtonContainer: {
-    marginHorizontal: 20,
+  welcomeText: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: colors.text,
   },
   modalOverlay: {
     flex: 1,
@@ -599,6 +720,51 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   goLiveButtonContainer: {
+    flex: 1,
+  },
+  confirmationModal: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    alignItems: 'center',
+    gap: 16,
+  },
+  confirmationTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: colors.text,
+    textAlign: 'center',
+  },
+  confirmationText: {
+    fontSize: 16,
+    fontWeight: '400',
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  confirmationButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+    marginTop: 8,
+  },
+  confirmationCancelButton: {
+    flex: 1,
+    backgroundColor: colors.backgroundAlt,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: 25,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  confirmationCancelText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  confirmationEndButton: {
     flex: 1,
   },
 });
