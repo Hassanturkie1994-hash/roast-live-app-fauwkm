@@ -63,6 +63,23 @@ export default function ViewerScreen() {
     }
   }, [status]);
 
+  const checkFollowStatus = useCallback(async (broadcasterId: string) => {
+    if (!user) return;
+
+    try {
+      const { data } = await supabase
+        .from('followers')
+        .select('*')
+        .eq('follower_id', user.id)
+        .eq('following_id', broadcasterId)
+        .single();
+
+      setIsFollowing(!!data);
+    } catch (error) {
+      console.log('Not following');
+    }
+  }, [user]);
+
   const fetchStream = useCallback(async () => {
     try {
       const { data, error } = await supabase
@@ -88,7 +105,7 @@ export default function ViewerScreen() {
     } catch (error) {
       console.error('Error in fetchStream:', error);
     }
-  }, [streamId, user]);
+  }, [streamId, user, checkFollowStatus]);
 
   const joinViewerChannel = useCallback(() => {
     if (!streamId) return;
@@ -141,23 +158,6 @@ export default function ViewerScreen() {
       setHasJoinedChannel(true);
     }
   }, [stream, hasJoinedChannel, joinViewerChannel]);
-
-  const checkFollowStatus = async (broadcasterId: string) => {
-    if (!user) return;
-
-    try {
-      const { data } = await supabase
-        .from('followers')
-        .select('*')
-        .eq('follower_id', user.id)
-        .eq('following_id', broadcasterId)
-        .single();
-
-      setIsFollowing(!!data);
-    } catch (error) {
-      console.log('Not following');
-    }
-  };
 
   const leaveViewerChannel = () => {
     if (channelRef.current) {

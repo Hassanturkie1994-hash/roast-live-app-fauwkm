@@ -34,45 +34,7 @@ export default function WebRTCLivePublisher({
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
 
-  const initializeWebRTCStream = useCallback(async () => {
-    try {
-      console.log('Initializing WebRTC stream to:', rtcPublishUrl);
-
-      // Check if WebRTC is available (web only for now)
-      if (Platform.OS === 'web' && typeof RTCPeerConnection !== 'undefined') {
-        await startWebRTCStream();
-      } else {
-        // For native platforms, we need react-native-webrtc
-        console.log('WebRTC not available on this platform');
-        setError('WebRTC streaming requires native build with react-native-webrtc');
-        
-        // For now, we'll just show the camera preview
-        // In production, you would integrate react-native-webrtc here
-        if (onStreamStarted) {
-          onStreamStarted();
-        }
-      }
-    } catch (err) {
-      console.error('Error initializing WebRTC:', err);
-      const error = err instanceof Error ? err : new Error('Failed to initialize WebRTC');
-      setError(error.message);
-      if (onStreamError) {
-        onStreamError(error);
-      }
-    }
-  }, [rtcPublishUrl, onStreamStarted, onStreamError]);
-
-  useEffect(() => {
-    if (rtcPublishUrl) {
-      initializeWebRTCStream();
-    }
-
-    return () => {
-      cleanup();
-    };
-  }, [rtcPublishUrl, initializeWebRTCStream]);
-
-  const startWebRTCStream = async () => {
+  const startWebRTCStream = useCallback(async () => {
     try {
       // Get user media (camera and microphone)
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -153,7 +115,45 @@ export default function WebRTCLivePublisher({
       console.error('Error starting WebRTC stream:', err);
       throw err;
     }
-  };
+  }, [rtcPublishUrl, facing, onStreamStarted, onStreamError]);
+
+  const initializeWebRTCStream = useCallback(async () => {
+    try {
+      console.log('Initializing WebRTC stream to:', rtcPublishUrl);
+
+      // Check if WebRTC is available (web only for now)
+      if (Platform.OS === 'web' && typeof RTCPeerConnection !== 'undefined') {
+        await startWebRTCStream();
+      } else {
+        // For native platforms, we need react-native-webrtc
+        console.log('WebRTC not available on this platform');
+        setError('WebRTC streaming requires native build with react-native-webrtc');
+        
+        // For now, we'll just show the camera preview
+        // In production, you would integrate react-native-webrtc here
+        if (onStreamStarted) {
+          onStreamStarted();
+        }
+      }
+    } catch (err) {
+      console.error('Error initializing WebRTC:', err);
+      const error = err instanceof Error ? err : new Error('Failed to initialize WebRTC');
+      setError(error.message);
+      if (onStreamError) {
+        onStreamError(error);
+      }
+    }
+  }, [rtcPublishUrl, startWebRTCStream, onStreamStarted, onStreamError]);
+
+  useEffect(() => {
+    if (rtcPublishUrl) {
+      initializeWebRTCStream();
+    }
+
+    return () => {
+      cleanup();
+    };
+  }, [rtcPublishUrl, initializeWebRTCStream]);
 
   const cleanup = () => {
     console.log('Cleaning up WebRTC resources');
