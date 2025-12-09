@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -45,19 +45,7 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'live' | 'posts'>('live');
 
-  useEffect(() => {
-    fetchData();
-  }, [activeTab]);
-
-  const fetchData = async () => {
-    if (activeTab === 'live') {
-      await fetchStreams();
-    } else {
-      await fetchPosts();
-    }
-  };
-
-  const fetchStreams = async () => {
+  const fetchStreams = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('streams')
@@ -76,9 +64,9 @@ export default function HomeScreen() {
     } catch (error) {
       console.error('Error in fetchStreams:', error);
     }
-  };
+  }, []);
 
-  const fetchPosts = async () => {
+  const fetchPosts = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('posts')
@@ -97,7 +85,19 @@ export default function HomeScreen() {
     } catch (error) {
       console.error('Error in fetchPosts:', error);
     }
-  };
+  }, []);
+
+  const fetchData = useCallback(async () => {
+    if (activeTab === 'live') {
+      await fetchStreams();
+    } else {
+      await fetchPosts();
+    }
+  }, [activeTab, fetchStreams, fetchPosts]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const onRefresh = async () => {
     setRefreshing(true);

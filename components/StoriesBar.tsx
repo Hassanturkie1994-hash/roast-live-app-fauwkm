@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   ScrollView,
@@ -30,11 +30,7 @@ export default function StoriesBar() {
   const { user } = useAuth();
   const [stories, setStories] = useState<Story[]>([]);
 
-  useEffect(() => {
-    fetchStories();
-  }, []);
-
-  const fetchStories = async () => {
+  const fetchStories = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -69,7 +65,11 @@ export default function StoriesBar() {
     } catch (error) {
       console.error('Error in fetchStories:', error);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    fetchStories();
+  }, [fetchStories]);
 
   const handleCreateStory = () => {
     router.push('/screens/CreateStoryScreen');

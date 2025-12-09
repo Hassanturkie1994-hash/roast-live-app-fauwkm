@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   ScrollView,
@@ -23,11 +23,7 @@ export default function WithdrawScreen() {
   const [walletBalance, setWalletBalance] = useState(0);
   const [amount, setAmount] = useState('');
 
-  useEffect(() => {
-    fetchWalletBalance();
-  }, []);
-
-  const fetchWalletBalance = async () => {
+  const fetchWalletBalance = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -48,7 +44,11 @@ export default function WithdrawScreen() {
     } catch (error) {
       console.error('Error in fetchWalletBalance:', error);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    fetchWalletBalance();
+  }, [fetchWalletBalance]);
 
   const handleWithdraw = async () => {
     if (!user) return;
