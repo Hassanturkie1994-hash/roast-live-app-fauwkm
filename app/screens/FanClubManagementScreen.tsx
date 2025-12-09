@@ -17,6 +17,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { useAuth } from '@/contexts/AuthContext';
 import { fanClubService, FanClub, FanClubMember } from '@/app/services/fanClubService';
 import { moderationService } from '@/app/services/moderationService';
+import BadgeEditorModal from '@/components/BadgeEditorModal';
 
 const BADGE_COLORS = [
   '#FF1493', // Deep Pink
@@ -38,6 +39,7 @@ export default function FanClubManagementScreen() {
   const [clubName, setClubName] = useState('');
   const [selectedColor, setSelectedColor] = useState(BADGE_COLORS[0]);
   const [isCreating, setIsCreating] = useState(false);
+  const [showBadgeEditor, setShowBadgeEditor] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -207,6 +209,25 @@ export default function FanClubManagementScreen() {
         <View style={styles.placeholder} />
       </View>
 
+      {/* VIP Banner */}
+      {fanClub && (
+        <View style={styles.vipBanner}>
+          <IconSymbol
+            ios_icon_name="star.fill"
+            android_material_icon_name="star"
+            size={24}
+            color="#FFD700"
+          />
+          <Text style={styles.vipBannerText}>VIP FAN CLUB</Text>
+          <IconSymbol
+            ios_icon_name="star.fill"
+            android_material_icon_name="star"
+            size={24}
+            color="#FFD700"
+          />
+        </View>
+      )}
+
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.contentContainer}
@@ -236,7 +257,7 @@ export default function FanClubManagementScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Create Your Fan Club</Text>
             <Text style={styles.sectionSubtitle}>
-              Create a VIP fan club for €2.58/month. You earn 70% of each subscription.
+              Create a VIP fan club for $3/month. You earn 70% of each subscription.
             </Text>
 
             {!canCreateFanClub ? (
@@ -253,6 +274,20 @@ export default function FanClubManagementScreen() {
               </View>
             ) : (
               <>
+                {/* Badge Preview */}
+                <View style={styles.badgePreviewContainer}>
+                  <Text style={styles.badgePreviewLabel}>Badge Preview</Text>
+                  <View style={[styles.badgePreview, { backgroundColor: selectedColor }]}>
+                    <IconSymbol
+                      ios_icon_name="heart.fill"
+                      android_material_icon_name="favorite"
+                      size={16}
+                      color={colors.text}
+                    />
+                    <Text style={styles.badgePreviewText}>{clubName || 'VIP'}</Text>
+                  </View>
+                </View>
+
                 <View style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Club Name (max 5 characters)</Text>
                   <TextInput
@@ -301,7 +336,10 @@ export default function FanClubManagementScreen() {
                   {isCreating ? (
                     <ActivityIndicator size="small" color={colors.text} />
                   ) : (
-                    <Text style={styles.createButtonText}>Create Fan Club</Text>
+                    <>
+                      <Text style={styles.createButtonText}>Create Fan Club</Text>
+                      <Text style={styles.createButtonSubtext}>Fixed price: $3/month</Text>
+                    </>
                   )}
                 </TouchableOpacity>
               </>
@@ -311,64 +349,65 @@ export default function FanClubManagementScreen() {
           // Manage Fan Club Section
           <>
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Manage Fan Club</Text>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Club Name (max 5 characters)</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="VIP"
-                  placeholderTextColor={colors.placeholder}
-                  value={clubName}
-                  onChangeText={setClubName}
-                  maxLength={5}
-                  autoCapitalize="characters"
-                />
-                <Text style={styles.charCount}>{clubName.length}/5</Text>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Manage Fan Club</Text>
+                <TouchableOpacity
+                  style={styles.editBadgeButton}
+                  onPress={() => setShowBadgeEditor(true)}
+                >
+                  <IconSymbol
+                    ios_icon_name="pencil"
+                    android_material_icon_name="edit"
+                    size={16}
+                    color={colors.text}
+                  />
+                  <Text style={styles.editBadgeButtonText}>Edit Badge</Text>
+                </TouchableOpacity>
               </View>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Badge Color</Text>
-                <View style={styles.colorGrid}>
-                  {BADGE_COLORS.map((color) => (
-                    <TouchableOpacity
-                      key={color}
-                      style={[
-                        styles.colorOption,
-                        { backgroundColor: color },
-                        selectedColor === color && styles.colorOptionSelected,
-                      ]}
-                      onPress={() => setSelectedColor(color)}
-                    >
-                      {selectedColor === color && (
-                        <IconSymbol
-                          ios_icon_name="checkmark"
-                          android_material_icon_name="check"
-                          size={20}
-                          color="#FFFFFF"
-                        />
-                      )}
-                    </TouchableOpacity>
-                  ))}
+              {/* Badge Preview */}
+              <View style={styles.badgePreviewContainer}>
+                <Text style={styles.badgePreviewLabel}>Current Badge</Text>
+                <View style={[styles.badgePreview, { backgroundColor: selectedColor }]}>
+                  <IconSymbol
+                    ios_icon_name="heart.fill"
+                    android_material_icon_name="favorite"
+                    size={16}
+                    color={colors.text}
+                  />
+                  <Text style={styles.badgePreviewText}>{clubName}</Text>
                 </View>
               </View>
 
-              <TouchableOpacity style={styles.updateButton} onPress={handleUpdateFanClub}>
-                <Text style={styles.updateButtonText}>Update Fan Club</Text>
-              </TouchableOpacity>
+              <View style={styles.priceInfo}>
+                <IconSymbol
+                  ios_icon_name="dollarsign.circle.fill"
+                  android_material_icon_name="attach_money"
+                  size={20}
+                  color={colors.gradientEnd}
+                />
+                <Text style={styles.priceInfoText}>
+                  Subscription: $3/month • You earn: $2.10/member
+                </Text>
+              </View>
             </View>
 
             {/* Members Section */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>
-                <IconSymbol
-                  ios_icon_name="person.3.fill"
-                  android_material_icon_name="group"
-                  size={20}
-                  color={colors.text}
-                />
-                {' '}Members ({members.length})
-              </Text>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>
+                  <IconSymbol
+                    ios_icon_name="person.3.fill"
+                    android_material_icon_name="group"
+                    size={20}
+                    color={colors.text}
+                  />
+                  {' '}Members ({members.length})
+                </Text>
+                <TouchableOpacity style={styles.viewMembersButton}>
+                  <Text style={styles.viewMembersButtonText}>View All</Text>
+                </TouchableOpacity>
+              </View>
 
               {members.length === 0 ? (
                 <View style={styles.emptyState}>
@@ -459,6 +498,18 @@ export default function FanClubManagementScreen() {
           </>
         )}
       </ScrollView>
+
+      {/* Badge Editor Modal */}
+      {fanClub && user && (
+        <BadgeEditorModal
+          visible={showBadgeEditor}
+          onClose={() => setShowBadgeEditor(false)}
+          userId={user.id}
+          currentBadgeName={clubName}
+          currentBadgeColor={selectedColor}
+          onUpdate={fetchData}
+        />
+      )}
     </View>
   );
 }
@@ -487,6 +538,22 @@ const styles = StyleSheet.create({
   },
   placeholder: {
     width: 40,
+  },
+  vipBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    borderBottomWidth: 2,
+    borderBottomColor: '#FFD700',
+    paddingVertical: 12,
+  },
+  vipBannerText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFD700',
+    letterSpacing: 2,
   },
   scrollView: {
     flex: 1,
@@ -542,17 +609,77 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: colors.text,
-    marginBottom: 8,
   },
   sectionSubtitle: {
     fontSize: 14,
     fontWeight: '400',
     color: colors.textSecondary,
     marginBottom: 20,
+  },
+  editBadgeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.gradientEnd,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  editBadgeButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  badgePreviewContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+    padding: 16,
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: 12,
+  },
+  badgePreviewLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginBottom: 12,
+  },
+  badgePreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  badgePreviewText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  priceInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(227, 0, 82, 0.1)',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 12,
+  },
+  priceInfoText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.text,
   },
   lockedContainer: {
     alignItems: 'center',
@@ -622,15 +749,22 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.text,
   },
-  updateButton: {
-    backgroundColor: colors.gradientEnd,
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 8,
+  createButtonSubtext: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginTop: 4,
   },
-  updateButtonText: {
-    fontSize: 16,
+  viewMembersButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  viewMembersButtonText: {
+    fontSize: 12,
     fontWeight: '700',
     color: colors.text,
   },
