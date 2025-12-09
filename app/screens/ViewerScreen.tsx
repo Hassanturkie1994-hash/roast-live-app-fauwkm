@@ -19,9 +19,12 @@ import RoastLiveLogo from '@/components/RoastLiveLogo';
 import ChatOverlay from '@/components/ChatOverlay';
 import GiftSelector from '@/components/GiftSelector';
 import GiftAnimationOverlay from '@/components/GiftAnimationOverlay';
+import ReportModal from '@/components/ReportModal';
+import SafetyHintTooltip from '@/components/SafetyHintTooltip';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/app/integrations/supabase/client';
 import { Tables } from '@/app/integrations/supabase/types';
+import { streamSettingsService } from '@/app/services/streamSettingsService';
 
 type Stream = Tables<'streams'> & {
   users: Tables<'users'>;
@@ -36,6 +39,14 @@ interface GiftAnimation {
   tier: 'A' | 'B' | 'C';
 }
 
+const SAFETY_HINTS = [
+  'Please keep conversation respectful',
+  'Be kind to others in chat',
+  'Avoid sharing personal information',
+  'Report inappropriate behavior',
+  'Follow community guidelines',
+];
+
 export default function ViewerScreen() {
   const { streamId } = useLocalSearchParams<{ streamId: string }>();
   const { user } = useAuth();
@@ -46,6 +57,9 @@ export default function ViewerScreen() {
   const [hasJoinedChannel, setHasJoinedChannel] = useState(false);
   const [showGiftSelector, setShowGiftSelector] = useState(false);
   const [giftAnimations, setGiftAnimations] = useState<GiftAnimation[]>([]);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [safetyHint, setSafetyHint] = useState<string | null>(null);
+  const [streamDelay, setStreamDelay] = useState(0);
   const channelRef = useRef<any>(null);
   const giftChannelRef = useRef<any>(null);
 
@@ -115,6 +129,11 @@ export default function ViewerScreen() {
 
       if (data.broadcaster_id && user) {
         checkFollowStatus(data.broadcaster_id);
+        
+        // Fetch stream delay setting
+        const delay = await streamSettingsService.getStreamDelay(data.broadcaster_id);
+        setStreamDelay(delay);
+        console.log(`Stream delay set to ${delay} seconds`);
       }
     } catch (error) {
       console.error('Error in fetchStream:', error);
@@ -142,6 +161,11 @@ export default function ViewerScreen() {
       })
       .on('presence', { event: 'leave' }, () => {
         console.log('Viewer left');
+      })
+      .on('broadcast', { event: 'safety_hint' }, (payload) => {
+        // Show safety hint when triggered
+        const hint = payload.payload.message || SAFETY_HINTS[0];
+        setSafetyHint(hint);
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
@@ -291,10 +315,10 @@ export default function ViewerScreen() {
         event: 'gift_sent',
         payload: {
           gift_name: giftEvent.gift.name,
-          gift_emoji: giftEvent.gift_emoji,
+          gift_emoji: giftEvent.gift.emoji_icon,
           sender_username: giftEvent.sender_username,
           amount: giftEvent.price_sek,
-          tier: giftEvent.tier,
+          tier: giftEvent.gift.tier,
         },
       });
     }
@@ -375,12 +399,29 @@ export default function ViewerScreen() {
             </View>
           </View>
 
-          <View style={styles.placeholder} />
+          <TouchableOpacity
+            style={styles.reportButton}
+            onPress={() => setShowReportModal(true)}
+          >
+            <IconSymbol
+              ios_icon_name="flag.fill"
+              android_material_icon_name="flag"
+              size={20}
+              color={colors.text}
+            />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.watermarkContainer}>
           <RoastLiveLogo size="small" opacity={0.25} />
         </View>
+
+        {/* Safety Hint Tooltip */}
+        <SafetyHintTooltip
+          message={safetyHint || ''}
+          visible={!!safetyHint}
+          onHide={() => setSafetyHint(null)}
+        />
 
         <View style={styles.rightActions}>
           <TouchableOpacity style={styles.actionButton} onPress={handleLike}>
@@ -417,7 +458,11 @@ export default function ViewerScreen() {
           </TouchableOpacity>
         </View>
 
-        <ChatOverlay streamId={streamId} isBroadcaster={false} />
+        <ChatOverlay 
+          streamId={streamId} 
+          isBroadcaster={false}
+          streamDelay={streamDelay}
+        />
 
         <View style={styles.bottomBar}>
           <View style={styles.broadcasterInfo}>
@@ -454,6 +499,18 @@ export default function ViewerScreen() {
           receiverName={stream.users.display_name}
           livestreamId={streamId}
           onGiftSent={handleGiftSent}
+        />
+      )}
+
+      {/* Report Modal */}
+      {stream && user && (
+        <ReportModal
+          visible={showReportModal}
+          onClose={() => setShowReportModal(false)}
+          streamerId={stream.broadcaster_id}
+          streamerName={stream.users.display_name}
+          streamId={streamId}
+          reporterUserId={user.id}
         />
       )}
     </View>
@@ -550,8 +607,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text,
   },
-  placeholder: {
+  reportButton: {
     width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   watermarkContainer: {
     position: 'absolute',

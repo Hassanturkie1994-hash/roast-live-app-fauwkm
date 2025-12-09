@@ -1,5 +1,6 @@
 
 import { supabase } from '@/app/integrations/supabase/client';
+import { pushNotificationService } from '@/app/services/pushNotificationService';
 
 export type GiftTier = 'A' | 'B' | 'C';
 
@@ -23,6 +24,9 @@ export interface GiftEvent {
   gift_id: string;
   price_sek: number;
   livestream_id?: string;
+  session_id?: string;
+  animation_reference?: string;
+  currency: string;
   created_at: string;
 }
 
@@ -50,8 +54,9 @@ export async function fetchGifts(): Promise<{ data: Gift[] | null; error: any }>
  * 2. Deduct the cost from sender's wallet
  * 3. Add the amount to receiver's wallet
  * 4. Create transaction records for both users
- * 5. Create a gift event record
+ * 5. Create a gift event record with session_id and animation_reference
  * 6. Broadcast the gift event to all viewers
+ * 7. Send push notification to receiver
  */
 export async function purchaseGift(
   giftId: string,
@@ -184,6 +189,10 @@ export async function purchaseGift(
       .eq('id', senderId)
       .single();
 
+    // Generate session_id and animation_reference
+    const sessionId = livestreamId || `gift_${Date.now()}`;
+    const animationReference = `${gift.tier}_${gift.emoji_icon}_${Date.now()}`;
+
     // Create gift event record
     const { data: giftEventData, error: giftEventError } = await supabase
       .from('gift_events')
@@ -193,6 +202,9 @@ export async function purchaseGift(
         gift_id: giftId,
         price_sek: giftPrice,
         livestream_id: livestreamId,
+        session_id: sessionId,
+        animation_reference: animationReference,
+        currency: 'SEK',
       })
       .select('*')
       .single();
@@ -211,6 +223,19 @@ export async function purchaseGift(
     if (usageError) {
       console.error('Error incrementing gift usage:', usageError);
     }
+
+    // Send push notification to receiver
+    await pushNotificationService.sendNotification(
+      receiverId,
+      'gift_received',
+      'Gift Received!',
+      `${senderInfo?.display_name || 'Someone'} sent you ${gift.name}!`,
+      {
+        sender_id: senderId,
+        gift_id: giftId,
+        amount: giftPrice,
+      }
+    );
 
     // Return gift event with additional info for broadcasting
     const giftEventWithInfo = {
