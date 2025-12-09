@@ -86,7 +86,7 @@ const lightImages: ThemeImages = {
 };
 
 const darkImages: ThemeImages = {
-  logo: require('@/assets/images/d567f294-92c1-4b14-ada2-433ebed54e33.png'), // LOGO-DARK-THEME.png (white ROAST)
+  logo: require('@/assets/images/eb4234cd-94d4-45c6-9b52-1dde651790e0.png'), // NEW LOGO-DARK-THEME.png (LIVE badge logo)
 };
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
