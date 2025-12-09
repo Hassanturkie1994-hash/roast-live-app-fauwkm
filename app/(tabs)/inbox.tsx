@@ -47,7 +47,6 @@ export default function InboxScreen() {
 
       setNotifications(data as any);
 
-      // Count unread
       const unread = data.filter((n) => !n.read).length;
       setUnreadCount(unread);
     } catch (error) {
@@ -215,11 +214,11 @@ export default function InboxScreen() {
             </Text>
           </View>
         ) : (
-          notifications.map((notification, index) => {
+          notifications.map((notification) => {
             const icon = getNotificationIcon(notification.type);
             return (
               <TouchableOpacity
-                key={index}
+                key={notification.id}
                 style={[styles.notificationCard, !notification.read && styles.notificationUnread]}
                 onPress={() => handleNotificationPress(notification)}
                 activeOpacity={0.7}

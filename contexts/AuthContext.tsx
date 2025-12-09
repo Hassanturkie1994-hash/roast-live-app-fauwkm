@@ -104,7 +104,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         console.log('Profile created successfully:', newProfile);
         
-        // Ensure wallet exists for new profile
         await ensureWalletExists(userId);
         
         return newProfile;
@@ -112,7 +111,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       console.log('Profile fetched successfully:', data);
       
-      // Ensure wallet exists for existing profile
       await ensureWalletExists(userId);
       
       return data;
@@ -195,8 +193,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('Error creating profile:', profileError);
         return { error: profileError };
       }
-      
-      // Wallet will be created automatically by the trigger
     }
 
     return { error: null };

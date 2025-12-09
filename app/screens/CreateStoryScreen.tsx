@@ -86,26 +86,42 @@ export default function CreateStoryScreen() {
 
   const uploadMedia = async (uri: string, type: 'story' | 'post'): Promise<string | null> => {
     try {
+      console.log('Starting upload for:', type);
       const response = await fetch(uri);
       const blob = await response.blob();
-      const fileExt = uri.split('.').pop();
-      const fileName = `${user?.id}_${type}_${Date.now()}.${fileExt}`;
+      
+      const fileExt = uri.split('.').pop() || 'jpg';
+      const timestamp = Date.now();
+      const fileName = `${user?.id}_${timestamp}.${fileExt}`;
       const bucket = type === 'story' ? 'stories' : 'posts';
-      const filePath = `${bucket}/${fileName}`;
+      const filePath = `${fileName}`;
 
-      const { error: uploadError } = await supabase.storage
+      console.log('Uploading to bucket:', bucket, 'path:', filePath);
+
+      const { data, error: uploadError } = await supabase.storage
         .from(bucket)
-        .upload(filePath, blob);
+        .upload(filePath, blob, {
+          contentType: blob.type || 'image/jpeg',
+          upsert: false,
+        });
 
       if (uploadError) {
         console.error('Upload error:', uploadError);
+        Alert.alert('Upload Error', uploadError.message || 'Failed to upload media');
         return null;
       }
 
-      const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
-      return data.publicUrl;
+      console.log('Upload successful:', data);
+
+      const { data: urlData } = supabase.storage
+        .from(bucket)
+        .getPublicUrl(filePath);
+
+      console.log('Public URL:', urlData.publicUrl);
+      return urlData.publicUrl;
     } catch (error) {
       console.error('Error uploading media:', error);
+      Alert.alert('Error', 'An unexpected error occurred during upload');
       return null;
     }
   };
@@ -122,7 +138,6 @@ export default function CreateStoryScreen() {
     try {
       const mediaUrl = await uploadMedia(mediaUri, 'story');
       if (!mediaUrl) {
-        Alert.alert('Error', 'Failed to upload media');
         setLoading(false);
         return;
       }
@@ -158,7 +173,6 @@ export default function CreateStoryScreen() {
     try {
       const mediaUrl = await uploadMedia(mediaUri, 'post');
       if (!mediaUrl) {
-        Alert.alert('Error', 'Failed to upload media');
         setLoading(false);
         return;
       }

@@ -148,10 +148,10 @@ export default function TransactionHistoryScreen() {
                 <Text style={styles.emptyText}>No transactions yet</Text>
               </View>
             ) : (
-              transactions.map((transaction, index) => {
+              transactions.map((transaction) => {
                 const icon = getTransactionIcon(transaction.type);
                 return (
-                  <View key={index} style={styles.transactionItem}>
+                  <View key={transaction.id} style={styles.transactionItem}>
                     <View style={styles.transactionLeft}>
                       <View style={styles.iconContainer}>
                         <IconSymbol

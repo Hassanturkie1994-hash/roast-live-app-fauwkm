@@ -32,6 +32,7 @@ type Post = Tables<'posts'> & {
 interface ExploreItem {
   type: 'post' | 'stream';
   data: Post | Stream;
+  id: string;
 }
 
 export default function ExploreScreen() {
@@ -59,14 +60,15 @@ export default function ExploreScreen() {
       const posts: ExploreItem[] = (postsResult.data || []).map((post) => ({
         type: 'post' as const,
         data: post as Post,
+        id: `post-${post.id}`,
       }));
 
       const streams: ExploreItem[] = (streamsResult.data || []).map((stream) => ({
         type: 'stream' as const,
         data: stream as Stream,
+        id: `stream-${stream.id}`,
       }));
 
-      // Mix posts and streams for TikTok-style explore
       const mixed = [...streams, ...posts].sort(() => Math.random() - 0.5);
       setItems(mixed);
     } catch (error) {
@@ -159,9 +161,9 @@ export default function ExploreScreen() {
           </View>
         ) : (
           <View style={styles.grid}>
-            {filteredItems.map((item, index) => (
+            {filteredItems.map((item) => (
               <TouchableOpacity
-                key={index}
+                key={item.id}
                 style={styles.card}
                 onPress={() => handleItemPress(item)}
                 activeOpacity={0.9}

@@ -65,7 +65,6 @@ export default function GiftSelector({
       if (walletResult.data) {
         setWalletBalance(parseFloat(walletResult.data.balance));
       } else {
-        // Create wallet if it doesn't exist
         await supabase.from('wallet').insert({ user_id: user.id, balance: 0 });
         setWalletBalance(0);
       }
@@ -108,7 +107,6 @@ export default function GiftSelector({
       );
 
       if (result.success && result.giftEvent) {
-        // Notify parent component about the gift
         if (onGiftSent) {
           onGiftSent(result.giftEvent);
         }
@@ -127,7 +125,6 @@ export default function GiftSelector({
           ]
         );
 
-        // Refresh wallet balance
         const { data } = await supabase
           .from('wallet')
           .select('balance')
@@ -214,13 +211,13 @@ export default function GiftSelector({
               showsVerticalScrollIndicator={false}
             >
               <View style={styles.giftsGrid}>
-                {gifts.map((gift, index) => {
+                {gifts.map((gift) => {
                   const isDisabled = walletBalance < gift.price_sek;
                   const tierColor = getTierColor(gift.price_sek);
                   
                   return (
                     <TouchableOpacity
-                      key={index}
+                      key={gift.id}
                       style={[
                         styles.giftCard,
                         selectedGift?.id === gift.id && styles.giftCardSelected,

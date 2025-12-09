@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  ScrollView,
+  FlatList,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -42,16 +42,15 @@ export default function GiftInformationScreen() {
     }
   };
 
-  const renderGiftCard = (gift: Gift, index: number) => (
+  const renderGiftCard = ({ item }: { item: Gift }) => (
     <TouchableOpacity
-      key={index}
       style={styles.giftCard}
-      onPress={() => setSelectedGift(gift)}
+      onPress={() => setSelectedGift(item)}
       activeOpacity={0.8}
     >
       <View style={styles.giftImageContainer}>
-        {gift.icon_url ? (
-          <Image source={{ uri: gift.icon_url }} style={styles.giftImage} />
+        {item.icon_url ? (
+          <Image source={{ uri: item.icon_url }} style={styles.giftImage} />
         ) : (
           <View style={styles.giftPlaceholder}>
             <IconSymbol
@@ -64,10 +63,19 @@ export default function GiftInformationScreen() {
         )}
       </View>
       <Text style={styles.giftName} numberOfLines={1}>
-        {gift.name}
+        {item.name}
       </Text>
-      <Text style={styles.giftPrice}>{gift.price_sek} SEK</Text>
+      <Text style={styles.giftPrice}>{item.price_sek} SEK</Text>
     </TouchableOpacity>
+  );
+
+  const renderHeader = () => (
+    <View style={styles.introSection}>
+      <Text style={styles.introTitle}>🔥 Roast Live Gifts</Text>
+      <Text style={styles.introText}>
+        Send savage gifts during live streams to roast or support your favorite creators. Each gift has its own unique meaning and impact!
+      </Text>
+    </View>
   );
 
   return (
@@ -90,22 +98,16 @@ export default function GiftInformationScreen() {
           <ActivityIndicator size="large" color={colors.gradientEnd} />
         </View>
       ) : (
-        <ScrollView
-          style={styles.scrollView}
+        <FlatList
+          data={gifts}
+          renderItem={renderGiftCard}
+          keyExtractor={(item) => item.id}
+          numColumns={2}
+          ListHeaderComponent={renderHeader}
           contentContainerStyle={styles.contentContainer}
+          columnWrapperStyle={styles.columnWrapper}
           showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.introSection}>
-            <Text style={styles.introTitle}>🔥 Roast Live Gifts</Text>
-            <Text style={styles.introText}>
-              Send savage gifts during live streams to roast or support your favorite creators. Each gift has its own unique meaning and impact!
-            </Text>
-          </View>
-
-          <View style={styles.giftsGrid}>
-            {gifts.map((gift, index) => renderGiftCard(gift, index))}
-          </View>
-        </ScrollView>
+        />
       )}
 
       {/* Gift Detail Modal */}
@@ -213,9 +215,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  scrollView: {
-    flex: 1,
-  },
   contentContainer: {
     paddingBottom: 100,
   },
@@ -237,11 +236,10 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     lineHeight: 20,
   },
-  giftsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    padding: 20,
+  columnWrapper: {
+    paddingHorizontal: 20,
     gap: 16,
+    marginTop: 16,
   },
   giftCard: {
     width: cardWidth,

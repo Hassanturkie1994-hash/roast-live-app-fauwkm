@@ -81,7 +81,7 @@ export default function SearchScreen() {
         <Text style={styles.sectionTitle}>Users</Text>
         {users.map((user, index) => (
           <TouchableOpacity
-            key={index}
+            key={user.id || `user-${index}`}
             style={styles.userCard}
             onPress={() => handleUserPress(user.id)}
             activeOpacity={0.7}
@@ -119,7 +119,7 @@ export default function SearchScreen() {
         <View style={styles.postsGrid}>
           {posts.map((post, index) => (
             <TouchableOpacity
-              key={index}
+              key={post.id || `post-${index}`}
               style={styles.postCard}
               onPress={() => handlePostPress(post.id)}
               activeOpacity={0.8}
@@ -154,14 +154,16 @@ export default function SearchScreen() {
         <Text style={styles.sectionTitle}>Live Streams</Text>
         {streams.map((stream, index) => (
           <TouchableOpacity
-            key={index}
+            key={stream.id || `stream-${index}`}
             style={styles.streamCard}
             onPress={() => handleStreamPress(stream.id)}
             activeOpacity={0.7}
           >
             <Image
               source={{
-                uri: stream.users?.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
+                uri:
+                  stream.users?.avatar ||
+                  'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
               }}
               style={styles.streamThumbnail}
             />

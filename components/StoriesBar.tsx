@@ -34,7 +34,6 @@ export default function StoriesBar() {
     if (!user) return;
 
     try {
-      // Get stories from followed users that haven't expired
       const now = new Date().toISOString();
       
       const { data, error } = await supabase
@@ -52,7 +51,6 @@ export default function StoriesBar() {
       }
 
       if (data) {
-        // Group stories by user and take the first one for each user
         const uniqueStories = data.reduce((acc: Story[], story: any) => {
           if (!acc.find((s) => s.user_id === story.user_id)) {
             acc.push(story);
@@ -76,7 +74,6 @@ export default function StoriesBar() {
   };
 
   const handleViewStory = (story: Story) => {
-    // Navigate to story viewer (to be implemented)
     console.log('View story:', story.id);
   };
 
@@ -87,7 +84,6 @@ export default function StoriesBar() {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Add Story Button */}
         <TouchableOpacity style={styles.storyItem} onPress={handleCreateStory}>
           <View style={styles.addStoryContainer}>
             <View style={styles.addStoryButton}>
@@ -102,10 +98,9 @@ export default function StoriesBar() {
           <Text style={styles.storyUsername}>Your Story</Text>
         </TouchableOpacity>
 
-        {/* Stories from followed users */}
-        {stories.map((story, index) => (
+        {stories.map((story) => (
           <TouchableOpacity
-            key={index}
+            key={story.id}
             style={styles.storyItem}
             onPress={() => handleViewStory(story)}
           >

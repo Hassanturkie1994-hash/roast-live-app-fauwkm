@@ -68,7 +68,6 @@ export default function WithdrawScreen() {
     setLoading(true);
 
     try {
-      // Create transaction
       const { error: transactionError } = await supabase.from('transactions').insert({
         user_id: user.id,
         amount: -withdrawAmount,
@@ -83,7 +82,6 @@ export default function WithdrawScreen() {
         return;
       }
 
-      // Update wallet balance
       const { error: walletError } = await supabase
         .from('wallet')
         .update({

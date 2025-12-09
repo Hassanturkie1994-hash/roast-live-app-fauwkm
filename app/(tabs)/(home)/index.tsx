@@ -114,7 +114,6 @@ export default function HomeScreen() {
 
   const handlePostPress = (post: Post) => {
     console.log('Post pressed:', post.id);
-    // Navigate to post detail screen (to be implemented)
   };
 
   const renderPost = ({ item }: { item: Post }) => (
@@ -217,7 +216,7 @@ export default function HomeScreen() {
       {activeTab === 'live' ? (
         <FlatList
           data={streams}
-          keyExtractor={(item, index) => index.toString()}
+          keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <StreamPreviewCard
               stream={item}
@@ -238,7 +237,7 @@ export default function HomeScreen() {
       ) : (
         <FlatList
           data={posts}
-          keyExtractor={(item, index) => index.toString()}
+          keyExtractor={(item) => item.id}
           renderItem={renderPost}
           ListHeaderComponent={<StoriesBar />}
           contentContainerStyle={styles.listContent}
