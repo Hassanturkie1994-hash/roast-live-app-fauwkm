@@ -1,263 +1,378 @@
 
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, Dimensions } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '@/styles/commonStyles';
-import { IconSymbol } from '@/components/IconSymbol';
-import { getGiftTier } from '@/app/services/giftService';
+import { GiftTier, getAnimationDuration } from '@/app/services/giftService';
 
 const { width, height } = Dimensions.get('window');
 
 interface GiftAnimationOverlayProps {
   giftName: string;
+  giftEmoji: string;
   senderUsername: string;
   amount: number;
+  tier: GiftTier;
   onAnimationComplete: () => void;
 }
 
 export default function GiftAnimationOverlay({
   giftName,
+  giftEmoji,
   senderUsername,
   amount,
+  tier,
   onAnimationComplete,
 }: GiftAnimationOverlayProps) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.5)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.3)).current;
+  const slideAnim = useRef(new Animated.Value(100)).current;
+  const emojiScaleAnim = useRef(new Animated.Value(0.5)).current;
   
-  // Particle animations for medium/high tier gifts
-  const particle1 = useRef(new Animated.Value(0)).current;
-  const particle2 = useRef(new Animated.Value(0)).current;
-  const particle3 = useRef(new Animated.Value(0)).current;
-  const particle4 = useRef(new Animated.Value(0)).current;
+  // Particle animations for tier B and C
+  const particles = useRef(
+    Array.from({ length: tier === 'C' ? 12 : tier === 'B' ? 6 : 0 }, () => ({
+      opacity: new Animated.Value(0),
+      translateY: new Animated.Value(0),
+      translateX: new Animated.Value(0),
+      rotate: new Animated.Value(0),
+    }))
+  ).current;
   
-  // Shimmer effect for high tier gifts
-  const shimmerAnim = useRef(new Animated.Value(0)).current;
+  // Glow pulse for tier B and C
+  const glowAnim = useRef(new Animated.Value(0)).current;
+  
+  // Shake effect for tier B and C
+  const shakeAnim = useRef(new Animated.Value(0)).current;
 
-  const tier = getGiftTier(amount);
+  const duration = getAnimationDuration(tier);
 
   useEffect(() => {
+    const animations: Animated.CompositeAnimation[] = [];
+
     // Main animation sequence
-    Animated.sequence([
-      // Fade in and scale up
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          friction: 8,
-          tension: 40,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]),
-      // Hold
-      Animated.delay(2000),
-      // Fade out
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 500,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: -50,
-          duration: 500,
-          useNativeDriver: true,
-        }),
-      ]),
-    ]).start(() => {
-      onAnimationComplete();
+    animations.push(
+      Animated.sequence([
+        // Fade in and scale up
+        Animated.parallel([
+          Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.spring(scaleAnim, {
+            toValue: 1,
+            friction: tier === 'C' ? 6 : 8,
+            tension: tier === 'C' ? 50 : 40,
+            useNativeDriver: true,
+          }),
+          Animated.timing(slideAnim, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.spring(emojiScaleAnim, {
+            toValue: tier === 'C' ? 1.3 : tier === 'B' ? 1.1 : 1,
+            friction: 5,
+            tension: 40,
+            useNativeDriver: true,
+          }),
+        ]),
+        // Hold
+        Animated.delay(duration),
+        // Fade out
+        Animated.parallel([
+          Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: 400,
+            useNativeDriver: true,
+          }),
+          Animated.timing(slideAnim, {
+            toValue: tier === 'C' ? -100 : -50,
+            duration: 400,
+            useNativeDriver: true,
+          }),
+        ]),
+      ])
+    );
+
+    // Glow pulse for tier B and C
+    if (tier === 'B' || tier === 'C') {
+      animations.push(
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(glowAnim, {
+              toValue: 1,
+              duration: 800,
+              useNativeDriver: true,
+            }),
+            Animated.timing(glowAnim, {
+              toValue: 0,
+              duration: 800,
+              useNativeDriver: true,
+            }),
+          ])
+        )
+      );
+    }
+
+    // Shake effect for tier B and C
+    if (tier === 'B' || tier === 'C') {
+      animations.push(
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(shakeAnim, {
+              toValue: 10,
+              duration: 50,
+              useNativeDriver: true,
+            }),
+            Animated.timing(shakeAnim, {
+              toValue: -10,
+              duration: 50,
+              useNativeDriver: true,
+            }),
+            Animated.timing(shakeAnim, {
+              toValue: 10,
+              duration: 50,
+              useNativeDriver: true,
+            }),
+            Animated.timing(shakeAnim, {
+              toValue: 0,
+              duration: 50,
+              useNativeDriver: true,
+            }),
+            Animated.delay(tier === 'C' ? 500 : 1000),
+          ])
+        )
+      );
+    }
+
+    // Particle animations
+    particles.forEach((particle, index) => {
+      const angle = (index / particles.length) * Math.PI * 2;
+      const distance = tier === 'C' ? 150 : 100;
+      const delay = index * (tier === 'C' ? 50 : 100);
+
+      animations.push(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.parallel([
+            Animated.timing(particle.opacity, {
+              toValue: 1,
+              duration: 300,
+              useNativeDriver: true,
+            }),
+            Animated.timing(particle.translateX, {
+              toValue: Math.cos(angle) * distance,
+              duration: tier === 'C' ? 1200 : 1000,
+              useNativeDriver: true,
+            }),
+            Animated.timing(particle.translateY, {
+              toValue: Math.sin(angle) * distance,
+              duration: tier === 'C' ? 1200 : 1000,
+              useNativeDriver: true,
+            }),
+            Animated.timing(particle.rotate, {
+              toValue: 360,
+              duration: tier === 'C' ? 1200 : 1000,
+              useNativeDriver: true,
+            }),
+          ]),
+          Animated.timing(particle.opacity, {
+            toValue: 0,
+            duration: 200,
+            useNativeDriver: true,
+          }),
+        ])
+      );
     });
 
-    // Particle animations for medium and high tier
-    if (tier === 'medium' || tier === 'high') {
-      Animated.loop(
-        Animated.parallel([
-          Animated.sequence([
-            Animated.timing(particle1, {
-              toValue: 1,
-              duration: 1000,
-              useNativeDriver: true,
-            }),
-            Animated.timing(particle1, {
-              toValue: 0,
-              duration: 0,
-              useNativeDriver: true,
-            }),
-          ]),
-          Animated.sequence([
-            Animated.delay(200),
-            Animated.timing(particle2, {
-              toValue: 1,
-              duration: 1000,
-              useNativeDriver: true,
-            }),
-            Animated.timing(particle2, {
-              toValue: 0,
-              duration: 0,
-              useNativeDriver: true,
-            }),
-          ]),
-          Animated.sequence([
-            Animated.delay(400),
-            Animated.timing(particle3, {
-              toValue: 1,
-              duration: 1000,
-              useNativeDriver: true,
-            }),
-            Animated.timing(particle3, {
-              toValue: 0,
-              duration: 0,
-              useNativeDriver: true,
-            }),
-          ]),
-          Animated.sequence([
-            Animated.delay(600),
-            Animated.timing(particle4, {
-              toValue: 1,
-              duration: 1000,
-              useNativeDriver: true,
-            }),
-            Animated.timing(particle4, {
-              toValue: 0,
-              duration: 0,
-              useNativeDriver: true,
-            }),
-          ]),
-        ])
-      ).start();
-    }
-
-    // Shimmer effect for high tier
-    if (tier === 'high') {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(shimmerAnim, {
-            toValue: 1,
-            duration: 1000,
-            useNativeDriver: true,
-          }),
-          Animated.timing(shimmerAnim, {
-            toValue: 0,
-            duration: 1000,
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
-    }
-  }, [tier]);
+    // Start all animations
+    Animated.parallel(animations).start(({ finished }) => {
+      if (finished) {
+        onAnimationComplete();
+      }
+    });
+  }, [tier, duration]);
 
   const renderParticles = () => {
-    if (tier === 'cheap') return null;
-
-    const particles = [particle1, particle2, particle3, particle4];
-    const positions = [
-      { left: '20%', top: '30%' },
-      { right: '20%', top: '40%' },
-      { left: '30%', bottom: '35%' },
-      { right: '30%', bottom: '40%' },
-    ];
+    if (tier === 'A') return null;
 
     return particles.map((particle, index) => (
       <Animated.View
         key={index}
         style={[
           styles.particle,
-          positions[index],
           {
-            opacity: particle,
+            opacity: particle.opacity,
             transform: [
+              { translateX: particle.translateX },
+              { translateY: particle.translateY },
               {
-                translateY: particle.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, -100],
-                }),
-              },
-              {
-                scale: particle.interpolate({
-                  inputRange: [0, 0.5, 1],
-                  outputRange: [1, 1.5, 0],
+                rotate: particle.rotate.interpolate({
+                  inputRange: [0, 360],
+                  outputRange: ['0deg', '360deg'],
                 }),
               },
             ],
           },
         ]}
       >
-        <IconSymbol
-          ios_icon_name="sparkles"
-          android_material_icon_name="auto_awesome"
-          size={tier === 'high' ? 32 : 24}
-          color={tier === 'high' ? '#FFD700' : colors.gradientEnd}
-        />
+        <Text style={[styles.particleEmoji, tier === 'C' && styles.particleEmojiLarge]}>
+          {tier === 'C' ? '✨' : '💫'}
+        </Text>
       </Animated.View>
     ));
   };
 
-  const renderShimmer = () => {
-    if (tier !== 'high') return null;
+  const renderFullScreenEffect = () => {
+    if (tier !== 'C') return null;
 
     return (
       <Animated.View
         style={[
-          styles.shimmerOverlay,
+          styles.fullScreenOverlay,
           {
-            opacity: shimmerAnim.interpolate({
+            opacity: fadeAnim.interpolate({
               inputRange: [0, 1],
-              outputRange: [0, 0.3],
+              outputRange: [0, 0.2],
             }),
           },
         ]}
-      />
+      >
+        <LinearGradient
+          colors={['#FFD700', '#FFA500', '#FF1493', '#E30052']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </Animated.View>
     );
+  };
+
+  const getGlowColor = () => {
+    switch (tier) {
+      case 'C':
+        return '#FFD700';
+      case 'B':
+        return colors.gradientEnd;
+      default:
+        return colors.gradientStart;
+    }
+  };
+
+  const getBorderColor = () => {
+    switch (tier) {
+      case 'C':
+        return '#FFD700';
+      case 'B':
+        return colors.gradientEnd;
+      default:
+        return colors.gradientStart;
+    }
   };
 
   return (
     <View style={styles.container} pointerEvents="none">
-      {renderShimmer()}
+      {renderFullScreenEffect()}
       {renderParticles()}
       
       <Animated.View
         style={[
           styles.giftNotification,
-          tier === 'high' && styles.giftNotificationHigh,
+          tier === 'C' && styles.giftNotificationPremium,
           {
             opacity: fadeAnim,
             transform: [
               { scale: scaleAnim },
               { translateY: slideAnim },
+              { translateX: tier === 'B' || tier === 'C' ? shakeAnim : 0 },
             ],
+            borderColor: getBorderColor(),
+            shadowColor: getGlowColor(),
+            shadowOpacity: tier === 'B' || tier === 'C' ? glowAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0.3, 0.8],
+            }) : 0.3,
           },
         ]}
       >
-        <View style={styles.giftIcon}>
-          <IconSymbol
-            ios_icon_name="gift.fill"
-            android_material_icon_name="card_giftcard"
-            size={tier === 'high' ? 48 : tier === 'medium' ? 36 : 28}
-            color={tier === 'high' ? '#FFD700' : colors.gradientEnd}
-          />
-        </View>
+        {tier === 'C' && (
+          <Animated.View
+            style={[
+              styles.glowRing,
+              {
+                opacity: glowAnim,
+                transform: [
+                  {
+                    scale: glowAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [1, 1.1],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <LinearGradient
+              colors={['#FFD700', '#FFA500']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.glowRingGradient}
+            />
+          </Animated.View>
+        )}
+
+        <Animated.View
+          style={[
+            styles.giftEmojiContainer,
+            {
+              transform: [{ scale: emojiScaleAnim }],
+            },
+          ]}
+        >
+          <Text style={[styles.giftEmoji, tier === 'C' && styles.giftEmojiLarge]}>
+            {giftEmoji}
+          </Text>
+        </Animated.View>
         
         <View style={styles.giftTextContainer}>
-          <Text style={[styles.giftText, tier === 'high' && styles.giftTextHigh]}>
-            <Text style={styles.senderName}>{senderUsername}</Text>
-            {' sent '}
-            <Text style={styles.giftName}>{giftName}</Text>
-          </Text>
-          <Text style={[styles.giftAmount, tier === 'high' && styles.giftAmountHigh]}>
-            worth {amount} kr!
-          </Text>
+          {tier === 'C' ? (
+            <LinearGradient
+              colors={['#FFD700', '#FFA500', '#FF1493']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.textGradientContainer}
+            >
+              <Text style={[styles.giftText, styles.giftTextPremium]}>
+                <Text style={styles.senderNamePremium}>{senderUsername}</Text>
+                {' sent '}
+                <Text style={styles.giftNamePremium}>{giftName}</Text>
+              </Text>
+              <Text style={[styles.giftAmount, styles.giftAmountPremium]}>
+                worth {amount} kr!
+              </Text>
+            </LinearGradient>
+          ) : (
+            <>
+              <Text style={[styles.giftText, tier === 'B' && styles.giftTextMedium]}>
+                <Text style={[styles.senderName, tier === 'B' && styles.senderNameMedium]}>
+                  {senderUsername}
+                </Text>
+                {' sent '}
+                <Text style={[styles.giftName, tier === 'B' && styles.giftNameMedium]}>
+                  {giftName}
+                </Text>
+              </Text>
+              <Text style={[styles.giftAmount, tier === 'B' && styles.giftAmountMedium]}>
+                worth {amount} kr!
+              </Text>
+            </>
+          )}
         </View>
       </Animated.View>
 
-      {tier === 'high' && (
+      {tier === 'C' && (
         <Animated.View
           style={[
             styles.confettiContainer,
@@ -266,27 +381,29 @@ export default function GiftAnimationOverlay({
             },
           ]}
         >
-          {[...Array(20)].map((_, i) => (
+          {[...Array(30)].map((_, i) => (
             <Animated.View
               key={i}
               style={[
                 styles.confetti,
                 {
                   left: `${Math.random() * 100}%`,
-                  backgroundColor: ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A'][
-                    Math.floor(Math.random() * 5)
+                  backgroundColor: ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#FF1493'][
+                    Math.floor(Math.random() * 6)
                   ],
+                  width: Math.random() * 8 + 6,
+                  height: Math.random() * 8 + 6,
                   transform: [
                     {
                       translateY: fadeAnim.interpolate({
                         inputRange: [0, 1],
-                        outputRange: [-50, height],
+                        outputRange: [-50, height + 50],
                       }),
                     },
                     {
                       rotate: fadeAnim.interpolate({
                         inputRange: [0, 1],
-                        outputRange: ['0deg', `${Math.random() * 720}deg`],
+                        outputRange: ['0deg', `${Math.random() * 1080}deg`],
                       }),
                     },
                   ],
@@ -307,36 +424,63 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 1000,
   },
-  shimmerOverlay: {
+  fullScreenOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#FFD700',
   },
   particle: {
     position: 'absolute',
   },
+  particleEmoji: {
+    fontSize: 20,
+  },
+  particleEmojiLarge: {
+    fontSize: 28,
+  },
   giftNotification: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
-    borderRadius: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    borderRadius: 20,
     padding: 16,
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
     maxWidth: width * 0.85,
-    borderWidth: 2,
-    borderColor: colors.gradientEnd,
-    boxShadow: '0px 8px 24px rgba(227, 0, 82, 0.4)',
-    elevation: 8,
-  },
-  giftNotificationHigh: {
-    borderColor: '#FFD700',
-    boxShadow: '0px 12px 32px rgba(255, 215, 0, 0.6)',
+    borderWidth: 3,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 24,
     elevation: 12,
   },
-  giftIcon: {
-    marginRight: 12,
+  giftNotificationPremium: {
+    padding: 20,
+    paddingHorizontal: 28,
+    borderRadius: 24,
+    borderWidth: 4,
+    shadowRadius: 32,
+    elevation: 16,
+  },
+  glowRing: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 24,
+    overflow: 'hidden',
+  },
+  glowRingGradient: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.3,
+  },
+  giftEmojiContainer: {
+    marginRight: 16,
+  },
+  giftEmoji: {
+    fontSize: 48,
+  },
+  giftEmojiLarge: {
+    fontSize: 64,
   },
   giftTextContainer: {
     flex: 1,
+  },
+  textGradientContainer: {
+    borderRadius: 8,
+    padding: 4,
   },
   giftText: {
     fontSize: 16,
@@ -344,25 +488,52 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: 4,
   },
-  giftTextHigh: {
-    fontSize: 18,
+  giftTextMedium: {
+    fontSize: 17,
     fontWeight: '700',
+  },
+  giftTextPremium: {
+    fontSize: 19,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   senderName: {
     color: colors.gradientEnd,
     fontWeight: '700',
   },
+  senderNameMedium: {
+    color: colors.gradientEnd,
+    fontWeight: '800',
+  },
+  senderNamePremium: {
+    color: '#FFD700',
+    fontWeight: '900',
+  },
   giftName: {
     color: '#FFD700',
     fontWeight: '700',
+  },
+  giftNameMedium: {
+    color: '#FFD700',
+    fontWeight: '800',
+  },
+  giftNamePremium: {
+    color: '#FFFFFF',
+    fontWeight: '900',
   },
   giftAmount: {
     fontSize: 14,
     fontWeight: '700',
     color: colors.gradientEnd,
   },
-  giftAmountHigh: {
-    fontSize: 16,
+  giftAmountMedium: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.gradientEnd,
+  },
+  giftAmountPremium: {
+    fontSize: 17,
+    fontWeight: '900',
     color: '#FFD700',
   },
   confettiContainer: {
@@ -371,8 +542,7 @@ const styles = StyleSheet.create({
   },
   confetti: {
     position: 'absolute',
-    width: 10,
-    height: 10,
     top: -50,
+    borderRadius: 2,
   },
 });

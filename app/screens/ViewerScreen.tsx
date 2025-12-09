@@ -30,8 +30,10 @@ type Stream = Tables<'streams'> & {
 interface GiftAnimation {
   id: string;
   giftName: string;
+  giftEmoji: string;
   senderUsername: string;
   amount: number;
+  tier: 'A' | 'B' | 'C';
 }
 
 export default function ViewerScreen() {
@@ -166,8 +168,10 @@ export default function ViewerScreen() {
         const newAnimation: GiftAnimation = {
           id: `${Date.now()}-${Math.random()}`,
           giftName: giftData.gift_name,
+          giftEmoji: giftData.gift_emoji || '🎁',
           senderUsername: giftData.sender_username,
           amount: giftData.amount,
+          tier: giftData.tier || 'A',
         };
         
         setGiftAnimations((prev) => [...prev, newAnimation]);
@@ -287,8 +291,10 @@ export default function ViewerScreen() {
         event: 'gift_sent',
         payload: {
           gift_name: giftEvent.gift.name,
+          gift_emoji: giftEvent.gift_emoji,
           sender_username: giftEvent.sender_username,
           amount: giftEvent.price_sek,
+          tier: giftEvent.tier,
         },
       });
     }
@@ -431,8 +437,10 @@ export default function ViewerScreen() {
         <GiftAnimationOverlay
           key={animation.id}
           giftName={animation.giftName}
+          giftEmoji={animation.giftEmoji}
           senderUsername={animation.senderUsername}
           amount={animation.amount}
+          tier={animation.tier}
           onAnimationComplete={() => handleAnimationComplete(animation.id)}
         />
       ))}

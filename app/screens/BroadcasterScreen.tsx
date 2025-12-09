@@ -35,8 +35,10 @@ interface StreamData {
 interface GiftAnimation {
   id: string;
   giftName: string;
+  giftEmoji: string;
   senderUsername: string;
   amount: number;
+  tier: 'A' | 'B' | 'C';
 }
 
 export default function BroadcasterScreen() {
@@ -167,8 +169,10 @@ export default function BroadcasterScreen() {
         const newAnimation: GiftAnimation = {
           id: `${Date.now()}-${Math.random()}`,
           giftName: giftData.gift_name,
+          giftEmoji: giftData.gift_emoji || '🎁',
           senderUsername: giftData.sender_username,
           amount: giftData.amount,
+          tier: giftData.tier || 'A',
         };
         
         setGiftAnimations((prev) => [...prev, newAnimation]);
@@ -601,8 +605,10 @@ export default function BroadcasterScreen() {
         <GiftAnimationOverlay
           key={animation.id}
           giftName={animation.giftName}
+          giftEmoji={animation.giftEmoji}
           senderUsername={animation.senderUsername}
           amount={animation.amount}
+          tier={animation.tier}
           onAnimationComplete={() => handleAnimationComplete(animation.id)}
         />
       ))}

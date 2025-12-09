@@ -6,7 +6,6 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  Image,
   ActivityIndicator,
   Alert,
   Modal,
@@ -14,7 +13,7 @@ import {
 import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import GradientButton from '@/components/GradientButton';
-import { fetchGifts, purchaseGift, Gift, getGiftTier } from '@/app/services/giftService';
+import { fetchGifts, purchaseGift, Gift, GiftTier } from '@/app/services/giftService';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/app/integrations/supabase/client';
 import { router } from 'expo-router';
@@ -42,6 +41,7 @@ export default function GiftSelector({
   const [gifts, setGifts] = useState<Gift[]>([]);
   const [selectedGift, setSelectedGift] = useState<Gift | null>(null);
   const [walletBalance, setWalletBalance] = useState(0);
+  const [selectedTier, setSelectedTier] = useState<GiftTier | 'ALL'>('ALL');
 
   useEffect(() => {
     if (visible) {
@@ -107,13 +107,20 @@ export default function GiftSelector({
       );
 
       if (result.success && result.giftEvent) {
+        // Broadcast gift with emoji and tier
+        const giftEventData = {
+          ...result.giftEvent,
+          gift_emoji: selectedGift.emoji_icon,
+          tier: selectedGift.tier,
+        };
+
         if (onGiftSent) {
-          onGiftSent(result.giftEvent);
+          onGiftSent(giftEventData);
         }
 
         Alert.alert(
           'Gift Sent! 🎁',
-          `You sent ${selectedGift.name} to ${receiverName}!`,
+          `You sent ${selectedGift.emoji_icon} ${selectedGift.name} to ${receiverName}!`,
           [
             {
               text: 'OK',
@@ -144,12 +151,35 @@ export default function GiftSelector({
     }
   };
 
-  const getTierColor = (price: number) => {
-    const tier = getGiftTier(price);
-    if (tier === 'high') return '#FFD700';
-    if (tier === 'medium') return colors.gradientEnd;
-    return colors.textSecondary;
+  const getTierColor = (tier: GiftTier) => {
+    switch (tier) {
+      case 'C':
+        return '#FFD700';
+      case 'B':
+        return colors.gradientEnd;
+      case 'A':
+        return colors.textSecondary;
+      default:
+        return colors.textSecondary;
+    }
   };
+
+  const getTierLabel = (tier: GiftTier) => {
+    switch (tier) {
+      case 'C':
+        return 'PREMIUM';
+      case 'B':
+        return 'MEDIUM';
+      case 'A':
+        return 'CHEAP';
+      default:
+        return '';
+    }
+  };
+
+  const filteredGifts = selectedTier === 'ALL' 
+    ? gifts 
+    : gifts.filter(g => g.tier === selectedTier);
 
   return (
     <Modal
@@ -200,6 +230,32 @@ export default function GiftSelector({
             </TouchableOpacity>
           </View>
 
+          <View style={styles.tierFilter}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tierFilterContent}>
+              {(['ALL', 'A', 'B', 'C'] as const).map((tier) => (
+                <TouchableOpacity
+                  key={tier}
+                  style={[
+                    styles.tierButton,
+                    selectedTier === tier && styles.tierButtonActive,
+                    selectedTier === tier && tier !== 'ALL' && { borderColor: getTierColor(tier) },
+                  ]}
+                  onPress={() => setSelectedTier(tier)}
+                >
+                  <Text
+                    style={[
+                      styles.tierButtonText,
+                      selectedTier === tier && styles.tierButtonTextActive,
+                      selectedTier === tier && tier !== 'ALL' && { color: getTierColor(tier) },
+                    ]}
+                  >
+                    {tier === 'ALL' ? 'ALL' : getTierLabel(tier)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
           {loading ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={colors.gradientEnd} />
@@ -211,9 +267,9 @@ export default function GiftSelector({
               showsVerticalScrollIndicator={false}
             >
               <View style={styles.giftsGrid}>
-                {gifts.map((gift) => {
+                {filteredGifts.map((gift) => {
                   const isDisabled = walletBalance < gift.price_sek;
-                  const tierColor = getTierColor(gift.price_sek);
+                  const tierColor = getTierColor(gift.tier);
                   
                   return (
                     <TouchableOpacity
@@ -228,23 +284,18 @@ export default function GiftSelector({
                       disabled={isDisabled}
                       activeOpacity={0.7}
                     >
-                      <View style={styles.giftImageContainer}>
-                        {gift.icon_url ? (
-                          <Image source={{ uri: gift.icon_url }} style={styles.giftImage} />
-                        ) : (
-                          <View style={styles.giftPlaceholder}>
-                            <IconSymbol
-                              ios_icon_name="gift.fill"
-                              android_material_icon_name="card_giftcard"
-                              size={32}
-                              color={tierColor}
-                            />
-                          </View>
-                        )}
+                      <View style={[styles.tierBadge, { backgroundColor: tierColor }]}>
+                        <Text style={styles.tierBadgeText}>{getTierLabel(gift.tier)}</Text>
                       </View>
+                      
+                      <View style={styles.giftEmojiContainer}>
+                        <Text style={styles.giftEmoji}>{gift.emoji_icon}</Text>
+                      </View>
+                      
                       <Text style={styles.giftName} numberOfLines={2}>
                         {gift.name}
                       </Text>
+                      
                       <Text
                         style={[
                           styles.giftPrice,
@@ -254,6 +305,7 @@ export default function GiftSelector({
                       >
                         {gift.price_sek} kr
                       </Text>
+                      
                       {selectedGift?.id === gift.id && (
                         <View style={styles.selectedBadge}>
                           <IconSymbol
@@ -274,16 +326,19 @@ export default function GiftSelector({
           {selectedGift && (
             <View style={styles.footer}>
               <View style={styles.selectedGiftInfo}>
-                <View>
-                  <Text style={styles.selectedGiftName}>{selectedGift.name}</Text>
-                  <Text style={styles.selectedGiftDesc} numberOfLines={1}>
-                    {selectedGift.description}
-                  </Text>
+                <View style={styles.selectedGiftLeft}>
+                  <Text style={styles.selectedGiftEmoji}>{selectedGift.emoji_icon}</Text>
+                  <View>
+                    <Text style={styles.selectedGiftName}>{selectedGift.name}</Text>
+                    <Text style={styles.selectedGiftDesc} numberOfLines={1}>
+                      {selectedGift.description}
+                    </Text>
+                  </View>
                 </View>
                 <Text
                   style={[
                     styles.selectedGiftPrice,
-                    { color: getTierColor(selectedGift.price_sek) },
+                    { color: getTierColor(selectedGift.tier) },
                   ]}
                 >
                   {selectedGift.price_sek} kr
@@ -370,6 +425,35 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.gradientEnd,
   },
+  tierFilter: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  tierFilterContent: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  tierButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+  },
+  tierButtonActive: {
+    backgroundColor: colors.backgroundAlt,
+    borderColor: colors.gradientEnd,
+  },
+  tierButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.textSecondary,
+  },
+  tierButtonTextActive: {
+    color: colors.gradientEnd,
+  },
   loadingContainer: {
     padding: 40,
     alignItems: 'center',
@@ -402,23 +486,28 @@ const styles = StyleSheet.create({
   giftCardDisabled: {
     opacity: 0.4,
   },
-  giftImageContainer: {
+  tierBadge: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  tierBadgeText: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: '#000',
+  },
+  giftEmojiContainer: {
     width: '100%',
     aspectRatio: 1,
-    marginBottom: 6,
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
-  giftImage: {
-    width: '100%',
-    height: '100%',
-  },
-  giftPlaceholder: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: colors.backgroundAlt,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 6,
+  },
+  giftEmoji: {
+    fontSize: 48,
   },
   giftName: {
     fontSize: 11,
@@ -451,6 +540,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 12,
+  },
+  selectedGiftLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  selectedGiftEmoji: {
+    fontSize: 40,
   },
   selectedGiftName: {
     fontSize: 16,

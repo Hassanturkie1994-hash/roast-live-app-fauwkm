@@ -1,13 +1,18 @@
 
 import { supabase } from '@/app/integrations/supabase/client';
 
+export type GiftTier = 'A' | 'B' | 'C';
+
 export interface Gift {
   id: string;
   name: string;
   description: string;
   price_sek: number;
+  emoji_icon: string;
+  tier: GiftTier;
   icon_url: string | null;
   animation_url: string | null;
+  usage_count?: number;
   created_at?: string;
 }
 
@@ -197,6 +202,16 @@ export async function purchaseGift(
       return { success: false, error: 'Failed to record gift event' };
     }
 
+    // Increment gift usage count
+    const { error: usageError } = await supabase
+      .from('gifts')
+      .update({ usage_count: (gift.usage_count || 0) + 1 })
+      .eq('id', giftId);
+
+    if (usageError) {
+      console.error('Error incrementing gift usage:', usageError);
+    }
+
     // Return gift event with additional info for broadcasting
     const giftEventWithInfo = {
       ...giftEventData,
@@ -242,8 +257,35 @@ export async function fetchGiftEvents(
 /**
  * Get gift tier based on price
  */
-export function getGiftTier(price: number): 'cheap' | 'medium' | 'high' {
-  if (price <= 20) return 'cheap';
-  if (price <= 500) return 'medium';
-  return 'high';
+export function getGiftTier(price: number): GiftTier {
+  if (price < 20) return 'A';
+  if (price < 600) return 'B';
+  return 'C';
+}
+
+/**
+ * Get animation duration based on tier
+ */
+export function getAnimationDuration(tier: GiftTier): number {
+  switch (tier) {
+    case 'A':
+      return 1000; // 1 second
+    case 'B':
+      return 1500; // 1.5 seconds
+    case 'C':
+      return 2000; // 2 seconds
+    default:
+      return 1000;
+  }
+}
+
+/**
+ * Increment gift usage count
+ */
+export async function incrementGiftUsage(giftId: string): Promise<void> {
+  try {
+    await supabase.rpc('increment_gift_usage', { gift_id: giftId });
+  } catch (error) {
+    console.error('Error incrementing gift usage:', error);
+  }
 }

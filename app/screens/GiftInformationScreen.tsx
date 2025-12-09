@@ -6,14 +6,16 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  Image,
   ActivityIndicator,
   Dimensions,
+  Modal,
+  ScrollView,
 } from 'react-native';
 import { router } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
-import { fetchGifts, Gift } from '@/app/services/giftService';
+import { fetchGifts, Gift, GiftTier } from '@/app/services/giftService';
 
 const { width: screenWidth } = Dimensions.get('window');
 const cardWidth = (screenWidth - 60) / 2;
@@ -42,30 +44,66 @@ export default function GiftInformationScreen() {
     }
   };
 
+  const getTierColor = (tier: GiftTier) => {
+    switch (tier) {
+      case 'C':
+        return '#FFD700';
+      case 'B':
+        return colors.gradientEnd;
+      case 'A':
+        return colors.textSecondary;
+      default:
+        return colors.textSecondary;
+    }
+  };
+
+  const getTierLabel = (tier: GiftTier) => {
+    switch (tier) {
+      case 'C':
+        return 'PREMIUM';
+      case 'B':
+        return 'MEDIUM';
+      case 'A':
+        return 'CHEAP';
+      default:
+        return '';
+    }
+  };
+
+  const getTierDescription = (tier: GiftTier) => {
+    switch (tier) {
+      case 'C':
+        return 'Full-screen effect with neon flames, particle bursts, and gold gradient text. 2-second duration.';
+      case 'B':
+        return 'Glow pulse with light particle sparks and shake effect. 1.5-second duration.';
+      case 'A':
+        return 'Small size animation that slides in, bounces, and fades. 1-second duration.';
+      default:
+        return '';
+    }
+  };
+
   const renderGiftCard = ({ item }: { item: Gift }) => (
     <TouchableOpacity
       style={styles.giftCard}
       onPress={() => setSelectedGift(item)}
       activeOpacity={0.8}
     >
-      <View style={styles.giftImageContainer}>
-        {item.icon_url ? (
-          <Image source={{ uri: item.icon_url }} style={styles.giftImage} />
-        ) : (
-          <View style={styles.giftPlaceholder}>
-            <IconSymbol
-              ios_icon_name="gift.fill"
-              android_material_icon_name="card_giftcard"
-              size={40}
-              color={colors.gradientEnd}
-            />
-          </View>
-        )}
+      <View style={[styles.tierBadge, { backgroundColor: getTierColor(item.tier) }]}>
+        <Text style={styles.tierBadgeText}>{getTierLabel(item.tier)}</Text>
       </View>
-      <Text style={styles.giftName} numberOfLines={1}>
+
+      <View style={styles.giftEmojiContainer}>
+        <Text style={styles.giftEmoji}>{item.emoji_icon}</Text>
+      </View>
+
+      <Text style={styles.giftName} numberOfLines={2}>
         {item.name}
       </Text>
-      <Text style={styles.giftPrice}>{item.price_sek} SEK</Text>
+
+      <Text style={[styles.giftPrice, { color: getTierColor(item.tier) }]}>
+        {item.price_sek} kr
+      </Text>
     </TouchableOpacity>
   );
 
@@ -73,8 +111,34 @@ export default function GiftInformationScreen() {
     <View style={styles.introSection}>
       <Text style={styles.introTitle}>🔥 Roast Live Gifts</Text>
       <Text style={styles.introText}>
-        Send savage gifts during live streams to roast or support your favorite creators. Each gift has its own unique meaning and impact!
+        Send savage gifts during live streams to roast or support your favorite creators. Each gift has its own unique animation and impact!
       </Text>
+
+      <View style={styles.tierInfoContainer}>
+        <View style={styles.tierInfoCard}>
+          <View style={[styles.tierInfoBadge, { backgroundColor: colors.textSecondary }]}>
+            <Text style={styles.tierInfoBadgeText}>CHEAP</Text>
+          </View>
+          <Text style={styles.tierInfoPrice}>1-19 kr</Text>
+          <Text style={styles.tierInfoDesc}>Quick roasts</Text>
+        </View>
+
+        <View style={styles.tierInfoCard}>
+          <View style={[styles.tierInfoBadge, { backgroundColor: colors.gradientEnd }]}>
+            <Text style={styles.tierInfoBadgeText}>MEDIUM</Text>
+          </View>
+          <Text style={styles.tierInfoPrice}>20-600 kr</Text>
+          <Text style={styles.tierInfoDesc}>Solid burns</Text>
+        </View>
+
+        <View style={styles.tierInfoCard}>
+          <View style={[styles.tierInfoBadge, { backgroundColor: '#FFD700' }]}>
+            <Text style={styles.tierInfoBadgeText}>PREMIUM</Text>
+          </View>
+          <Text style={styles.tierInfoPrice}>600-3000 kr</Text>
+          <Text style={styles.tierInfoDesc}>Epic roasts</Text>
+        </View>
+      </View>
     </View>
   );
 
@@ -112,74 +176,100 @@ export default function GiftInformationScreen() {
 
       {/* Gift Detail Modal */}
       {selectedGift && (
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity
-            style={styles.modalBackdrop}
-            activeOpacity={1}
-            onPress={() => setSelectedGift(null)}
-          />
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{selectedGift.name}</Text>
-              <TouchableOpacity onPress={() => setSelectedGift(null)}>
-                <IconSymbol
-                  ios_icon_name="xmark.circle.fill"
-                  android_material_icon_name="cancel"
-                  size={28}
-                  color={colors.textSecondary}
-                />
-              </TouchableOpacity>
-            </View>
+        <Modal
+          visible={!!selectedGift}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setSelectedGift(null)}
+        >
+          <View style={styles.modalOverlay}>
+            <TouchableOpacity
+              style={styles.modalBackdrop}
+              activeOpacity={1}
+              onPress={() => setSelectedGift(null)}
+            />
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Gift Details</Text>
+                <TouchableOpacity onPress={() => setSelectedGift(null)}>
+                  <IconSymbol
+                    ios_icon_name="xmark.circle.fill"
+                    android_material_icon_name="cancel"
+                    size={28}
+                    color={colors.textSecondary}
+                  />
+                </TouchableOpacity>
+              </View>
 
-            <View style={styles.modalBody}>
-              <View style={styles.modalImageContainer}>
-                {selectedGift.icon_url ? (
-                  <Image source={{ uri: selectedGift.icon_url }} style={styles.modalImage} />
-                ) : (
-                  <View style={styles.modalPlaceholder}>
-                    <IconSymbol
-                      ios_icon_name="gift.fill"
-                      android_material_icon_name="card_giftcard"
-                      size={80}
-                      color={colors.gradientEnd}
-                    />
+              <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+                <View style={styles.modalEmojiContainer}>
+                  <Text style={styles.modalEmoji}>{selectedGift.emoji_icon}</Text>
+                </View>
+
+                <Text style={styles.modalGiftName}>{selectedGift.name}</Text>
+
+                <View style={styles.modalPriceRow}>
+                  <Text style={[styles.modalPrice, { color: getTierColor(selectedGift.tier) }]}>
+                    {selectedGift.price_sek} kr
+                  </Text>
+                  <View style={[styles.modalTierBadge, { backgroundColor: getTierColor(selectedGift.tier) }]}>
+                    <Text style={styles.modalTierBadgeText}>{getTierLabel(selectedGift.tier)}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalSectionTitle}>Description</Text>
+                  <Text style={styles.modalSectionText}>{selectedGift.description}</Text>
+                </View>
+
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalSectionTitle}>Animation Tier</Text>
+                  <Text style={styles.modalSectionText}>{getTierDescription(selectedGift.tier)}</Text>
+                </View>
+
+                {selectedGift.usage_count !== undefined && selectedGift.usage_count > 0 && (
+                  <View style={styles.modalSection}>
+                    <Text style={styles.modalSectionTitle}>Popularity</Text>
+                    <View style={styles.popularityRow}>
+                      <IconSymbol
+                        ios_icon_name="flame.fill"
+                        android_material_icon_name="local_fire_department"
+                        size={20}
+                        color={colors.gradientEnd}
+                      />
+                      <Text style={styles.modalSectionText}>
+                        Sent {selectedGift.usage_count} times
+                      </Text>
+                    </View>
                   </View>
                 )}
-              </View>
 
-              <View style={styles.modalPriceContainer}>
-                <Text style={styles.modalPrice}>{selectedGift.price_sek} SEK</Text>
-              </View>
+                <View style={styles.infoCard}>
+                  <IconSymbol
+                    ios_icon_name="info.circle.fill"
+                    android_material_icon_name="info"
+                    size={18}
+                    color={colors.gradientEnd}
+                  />
+                  <Text style={styles.infoText}>
+                    Send during livestream to appear on screen! Gifts are purchased using your Saldo balance.
+                  </Text>
+                </View>
 
-              <View style={styles.modalSection}>
-                <Text style={styles.modalSectionTitle}>Description</Text>
-                <Text style={styles.modalSectionText}>{selectedGift.description}</Text>
-              </View>
-
-              <View style={styles.modalSection}>
-                <Text style={styles.modalSectionTitle}>How to Use</Text>
-                <Text style={styles.modalSectionText}>
-                  - Tap the gift icon during a live stream{'\n'}
-                  - Select this gift from the menu{'\n'}
-                  - Confirm your purchase{'\n'}
-                  - Watch the animation appear on screen!
-                </Text>
-              </View>
-
-              <View style={styles.infoCard}>
-                <IconSymbol
-                  ios_icon_name="info.circle.fill"
-                  android_material_icon_name="info"
-                  size={18}
-                  color={colors.gradientEnd}
-                />
-                <Text style={styles.infoText}>
-                  Gifts are purchased using your Saldo balance. Make sure you have enough balance before sending!
-                </Text>
-              </View>
+                <View style={styles.ctaContainer}>
+                  <LinearGradient
+                    colors={[colors.gradientStart, colors.gradientEnd]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.ctaGradient}
+                  >
+                    <Text style={styles.ctaText}>Send during livestream to appear on screen!</Text>
+                  </LinearGradient>
+                </View>
+              </ScrollView>
             </View>
           </View>
-        </View>
+        </Modal>
       )}
     </View>
   );
@@ -235,6 +325,42 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: colors.textSecondary,
     lineHeight: 20,
+    marginBottom: 20,
+  },
+  tierInfoContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  tierInfoCard: {
+    flex: 1,
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  tierInfoBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginBottom: 8,
+  },
+  tierInfoBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#000',
+  },
+  tierInfoPrice: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  tierInfoDesc: {
+    fontSize: 11,
+    fontWeight: '400',
+    color: colors.textSecondary,
   },
   columnWrapper: {
     paddingHorizontal: 20,
@@ -249,24 +375,31 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: 'center',
+    position: 'relative',
   },
-  giftImageContainer: {
+  tierBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    zIndex: 1,
+  },
+  tierBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#000',
+  },
+  giftEmojiContainer: {
     width: '100%',
     aspectRatio: 1,
-    marginBottom: 8,
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
-  giftImage: {
-    width: '100%',
-    height: '100%',
-  },
-  giftPlaceholder: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: colors.backgroundAlt,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 8,
+  },
+  giftEmoji: {
+    fontSize: 56,
   },
   giftName: {
     fontSize: 14,
@@ -274,14 +407,14 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: 4,
     textAlign: 'center',
+    minHeight: 36,
   },
   giftPrice: {
     fontSize: 16,
     fontWeight: '700',
-    color: colors.gradientEnd,
   },
   modalOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    flex: 1,
     justifyContent: 'flex-end',
   },
   modalBackdrop: {
@@ -292,7 +425,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: '80%',
+    maxHeight: '85%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -311,32 +444,40 @@ const styles = StyleSheet.create({
   modalBody: {
     padding: 20,
   },
-  modalImageContainer: {
-    width: '100%',
-    aspectRatio: 1,
-    borderRadius: 16,
-    overflow: 'hidden',
+  modalEmojiContainer: {
+    alignItems: 'center',
     marginBottom: 16,
   },
-  modalImage: {
-    width: '100%',
-    height: '100%',
+  modalEmoji: {
+    fontSize: 80,
   },
-  modalPlaceholder: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: colors.backgroundAlt,
+  modalGiftName: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: colors.text,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  modalPriceRow: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  modalPriceContainer: {
-    alignItems: 'center',
+    gap: 12,
     marginBottom: 24,
   },
   modalPrice: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '800',
-    color: colors.gradientEnd,
+  },
+  modalTierBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  modalTierBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#000',
   },
   modalSection: {
     marginBottom: 20,
@@ -353,6 +494,11 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     lineHeight: 20,
   },
+  popularityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   infoCard: {
     flexDirection: 'row',
     backgroundColor: colors.backgroundAlt,
@@ -360,6 +506,7 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 10,
     alignItems: 'flex-start',
+    marginBottom: 20,
   },
   infoText: {
     flex: 1,
@@ -367,5 +514,19 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: colors.textSecondary,
     lineHeight: 16,
+  },
+  ctaContainer: {
+    marginBottom: 20,
+  },
+  ctaGradient: {
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+  },
+  ctaText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFF',
+    textAlign: 'center',
   },
 });
