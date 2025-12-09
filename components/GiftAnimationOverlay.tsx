@@ -2,6 +2,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Audio } from 'expo-av';
 import { colors } from '@/styles/commonStyles';
 import { GiftTier, getAnimationDuration } from '@/app/services/giftService';
 
@@ -28,6 +29,7 @@ export default function GiftAnimationOverlay({
   const scaleAnim = useRef(new Animated.Value(0.3)).current;
   const slideAnim = useRef(new Animated.Value(100)).current;
   const emojiScaleAnim = useRef(new Animated.Value(0.5)).current;
+  const soundRef = useRef<Audio.Sound | null>(null);
   
   // Particle animations for tier B and C
   const particles = useRef(
@@ -47,7 +49,87 @@ export default function GiftAnimationOverlay({
 
   const duration = getAnimationDuration(tier);
 
+  // Play sound effect based on gift emoji
+  const playSoundEffect = async () => {
+    try {
+      // Configure audio mode
+      await Audio.setAudioModeAsync({
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+        shouldDuckAndroid: true,
+      });
+
+      // Map gift emojis to sound frequencies/types
+      const soundMap: { [key: string]: { frequency: number; type: 'success' | 'notification' | 'celebration' } } = {
+        '🔥': { frequency: 800, type: 'celebration' },
+        '🤡': { frequency: 400, type: 'notification' },
+        '🎤': { frequency: 600, type: 'success' },
+        '💨': { frequency: 300, type: 'notification' },
+        '😂': { frequency: 500, type: 'success' },
+        '🥵': { frequency: 700, type: 'celebration' },
+        '🌶️': { frequency: 750, type: 'celebration' },
+        '💣': { frequency: 200, type: 'celebration' },
+        '🧯': { frequency: 450, type: 'notification' },
+        '🧱': { frequency: 250, type: 'notification' },
+        '🧀': { frequency: 550, type: 'success' },
+        '🚮': { frequency: 350, type: 'notification' },
+        '🤬': { frequency: 650, type: 'celebration' },
+        '⚡': { frequency: 900, type: 'celebration' },
+        '🪞': { frequency: 600, type: 'success' },
+        '📢': { frequency: 700, type: 'celebration' },
+        '💎': { frequency: 1000, type: 'celebration' },
+        '🥇': { frequency: 950, type: 'celebration' },
+        '🍿': { frequency: 500, type: 'success' },
+        '🎯': { frequency: 800, type: 'celebration' },
+        '🚀': { frequency: 1100, type: 'celebration' },
+        '🥊': { frequency: 600, type: 'celebration' },
+        '🔊': { frequency: 850, type: 'celebration' },
+        '🎭': { frequency: 750, type: 'celebration' },
+        '👑': { frequency: 1000, type: 'celebration' },
+        '🐐': { frequency: 950, type: 'celebration' },
+        '🧨': { frequency: 1200, type: 'celebration' },
+        '🕶️': { frequency: 900, type: 'celebration' },
+      };
+
+      const soundConfig = soundMap[giftEmoji] || { frequency: 600, type: 'success' };
+      
+      // Use system sounds based on tier and type
+      let soundUri: string;
+      
+      if (tier === 'C') {
+        // Premium tier - celebration sound
+        soundUri = 'https://assets.mixkit.co/active_storage/sfx/2018/2018-preview.mp3';
+      } else if (tier === 'B') {
+        // Medium tier - success sound
+        soundUri = 'https://assets.mixkit.co/active_storage/sfx/2000/2000-preview.mp3';
+      } else {
+        // Cheap tier - notification sound
+        soundUri = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
+      }
+
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: soundUri },
+        { shouldPlay: true, volume: tier === 'C' ? 1.0 : tier === 'B' ? 0.8 : 0.6 }
+      );
+
+      soundRef.current = sound;
+
+      // Unload sound after animation completes
+      setTimeout(async () => {
+        if (soundRef.current) {
+          await soundRef.current.unloadAsync();
+          soundRef.current = null;
+        }
+      }, duration + 500);
+    } catch (error) {
+      console.error('Error playing sound effect:', error);
+    }
+  };
+
   useEffect(() => {
+    // Play sound effect
+    playSoundEffect();
+
     const animations: Animated.CompositeAnimation[] = [];
 
     // Main animation sequence
@@ -193,6 +275,13 @@ export default function GiftAnimationOverlay({
         onAnimationComplete();
       }
     });
+
+    // Cleanup
+    return () => {
+      if (soundRef.current) {
+        soundRef.current.unloadAsync().catch(console.error);
+      }
+    };
   }, [tier, duration]);
 
   const renderParticles = () => {
