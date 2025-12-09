@@ -2,36 +2,38 @@
 import { StyleSheet, ViewStyle, TextStyle } from 'react-native';
 
 export const colors = {
-  // Primary Colors
-  background: '#000000',        // Pure Black
-  backgroundAlt: '#0A0A0A',     // Dark Charcoal
-  card: '#0A0A0A',              // Dark Charcoal for cards
+  // Primary Colors - Light Theme
+  background: '#FFFFFF',        // Pure White
+  backgroundAlt: '#F7F7F7',     // Light Gray for secondary sections
+  card: '#FBFBFB',              // Very Light Gray for cards
   
-  // Brand Gradient Colors
+  // Brand Colors
+  brandPrimary: '#A40028',      // Primary brand color (RoastLive red)
   gradientStart: '#A40028',     // Left side of gradient
-  gradientEnd: '#E30052',       // Right side of gradient
-  highlight: '#E30052',         // Highlight color
+  gradientEnd: '#A40028',       // Consistent brand color
+  highlight: '#A40028',         // Highlight color
   
   // Text Colors
-  text: '#FFFFFF',              // White
-  textSecondary: '#B7B7B7',     // Soft Gray
-  placeholder: '#EDEDED',       // Light Gray
+  text: '#000000',              // Black for headings
+  textSecondary: '#505050',     // Dark gray for subtitles
+  placeholder: '#A0A0A0',       // Medium gray for placeholders
   
   // Border & Divider
-  border: '#333333',            // Subtle border
-  divider: '#1A1A1A',           // Divider line
+  border: '#D4D4D4',            // Light gray border
+  divider: '#E5E5E5',           // Divider line
 };
 
 export const buttonStyles = StyleSheet.create({
   gradientButton: {
-    borderRadius: 25,
+    borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 32,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.brandPrimary,
   },
   gradientButtonText: {
-    color: colors.text,
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -43,12 +45,30 @@ export const buttonStyles = StyleSheet.create({
     paddingHorizontal: 24,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.brandPrimary,
   },
   pillButtonText: {
-    color: colors.text,
+    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '700',
     textTransform: 'uppercase',
+  },
+  secondaryButton: {
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: colors.brandPrimary,
+  },
+  secondaryButtonText: {
+    color: colors.brandPrimary,
+    fontSize: 16,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
 });
 
@@ -109,11 +129,14 @@ export const commonStyles = StyleSheet.create({
     padding: 16,
     marginVertical: 8,
     width: '100%',
-    boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.3)',
-    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   input: {
-    backgroundColor: colors.backgroundAlt,
+    backgroundColor: colors.background,
     borderColor: colors.border,
     borderWidth: 1,
     borderRadius: 12,
@@ -124,7 +147,7 @@ export const commonStyles = StyleSheet.create({
     marginBottom: 16,
   },
   inputFocused: {
-    borderColor: colors.gradientEnd,
-    boxShadow: `0 0 0 2px ${colors.gradientEnd}40`,
+    borderColor: colors.brandPrimary,
+    borderWidth: 2,
   },
 });

@@ -98,13 +98,12 @@ export default function LoginScreen() {
             <View style={styles.dividerLine} />
           </View>
 
-          <TouchableOpacity
-            style={styles.secondaryButton}
+          <GradientButton
+            title="Create New Account"
             onPress={() => router.push('/auth/register')}
             disabled={loading}
-          >
-            <Text style={styles.secondaryButtonText}>Create New Account</Text>
-          </TouchableOpacity>
+            variant="secondary"
+          />
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -142,7 +141,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   input: {
-    backgroundColor: colors.backgroundAlt,
+    backgroundColor: colors.background,
     borderColor: colors.border,
     borderWidth: 1,
     borderRadius: 12,
@@ -158,7 +157,7 @@ const styles = StyleSheet.create({
   forgotPasswordText: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.gradientEnd,
+    color: colors.brandPrimary,
   },
   divider: {
     flexDirection: 'row',
@@ -175,18 +174,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.textSecondary,
     marginHorizontal: 16,
-  },
-  secondaryButton: {
-    backgroundColor: colors.card,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: 25,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  secondaryButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text,
   },
 });

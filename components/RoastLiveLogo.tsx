@@ -6,14 +6,20 @@ interface RoastLiveLogoProps {
   size?: 'small' | 'medium' | 'large' | 'xlarge';
   style?: ViewStyle;
   opacity?: number;
+  withShadow?: boolean;
 }
 
-export default function RoastLiveLogo({ size = 'medium', style, opacity = 1 }: RoastLiveLogoProps) {
+export default function RoastLiveLogo({ 
+  size = 'medium', 
+  style, 
+  opacity = 1,
+  withShadow = false 
+}: RoastLiveLogoProps) {
   const sizeStyles = {
-    small: { width: 80, height: 24 },
-    medium: { width: 120, height: 36 },
-    large: { width: 160, height: 48 },
-    xlarge: { width: 240, height: 72 },
+    small: { width: 100, height: 30 },
+    medium: { width: 150, height: 45 },
+    large: { width: 200, height: 60 },
+    xlarge: { width: 280, height: 84 },
   };
 
   const currentSize = sizeStyles[size];
@@ -21,7 +27,7 @@ export default function RoastLiveLogo({ size = 'medium', style, opacity = 1 }: R
   return (
     <View style={[styles.container, style]}>
       <Image
-        source={require('@/assets/images/edb5f73e-bafa-40d0-a38f-dd668034d64f.png')}
+        source={require('@/assets/images/73ab0bd2-0be4-4076-9012-fa4dab631eee.png')}
         style={[
           styles.logo,
           {
@@ -29,6 +35,7 @@ export default function RoastLiveLogo({ size = 'medium', style, opacity = 1 }: R
             height: currentSize.height,
             opacity,
           },
+          withShadow && styles.logoWithShadow,
         ]}
         resizeMode="contain"
       />
@@ -43,5 +50,12 @@ const styles = StyleSheet.create({
   },
   logo: {
     // Image styling
+  },
+  logoWithShadow: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
 });

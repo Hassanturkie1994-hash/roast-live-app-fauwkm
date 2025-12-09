@@ -174,7 +174,7 @@ export default function ProfileScreen() {
                       ios_icon_name="heart.fill"
                       android_material_icon_name="favorite"
                       size={16}
-                      color={colors.text}
+                      color="#FFFFFF"
                     />
                     <Text style={styles.postStatText}>{post.likes_count}</Text>
                   </View>
@@ -183,7 +183,7 @@ export default function ProfileScreen() {
                       ios_icon_name="bubble.left.fill"
                       android_material_icon_name="comment"
                       size={16}
-                      color={colors.text}
+                      color="#FFFFFF"
                     />
                     <Text style={styles.postStatText}>{post.comments_count}</Text>
                   </View>
@@ -228,7 +228,7 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.logoHeader}>
-          <RoastLiveLogo size="small" />
+          <View style={styles.logoPlaceholder} />
           <TouchableOpacity onPress={handleSettings} style={styles.settingsButton}>
             <IconSymbol
               ios_icon_name="gearshape.fill"
@@ -244,8 +244,12 @@ export default function ProfileScreen() {
           <Image source={{ uri: profile.banner_url }} style={styles.banner} />
         )}
 
-        {/* Profile Header */}
+        {/* Profile Header with Logo */}
         <View style={styles.header}>
+          <View style={styles.logoContainer}>
+            <RoastLiveLogo size="medium" />
+          </View>
+          
           <Image
             source={{
               uri: profile.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
@@ -289,7 +293,7 @@ export default function ProfileScreen() {
                 ios_icon_name="wallet.pass.fill"
                 android_material_icon_name="account_balance_wallet"
                 size={20}
-                color={colors.gradientEnd}
+                color={colors.brandPrimary}
               />
               <Text style={styles.walletLabel}>Saldo Balance</Text>
             </View>
@@ -315,7 +319,7 @@ export default function ProfileScreen() {
                 ios_icon_name="bookmark.fill"
                 android_material_icon_name="bookmark"
                 size={20}
-                color={colors.gradientEnd}
+                color={colors.brandPrimary}
               />
               <Text style={styles.savedStreamsLabel}>Saved Streams</Text>
             </View>
@@ -338,7 +342,7 @@ export default function ProfileScreen() {
                 ios_icon_name="video.fill"
                 android_material_icon_name="videocam"
                 size={20}
-                color={colors.gradientEnd}
+                color={colors.brandPrimary}
               />
               <Text style={styles.savedStreamsLabel}>Stream History</Text>
             </View>
@@ -396,7 +400,7 @@ export default function ProfileScreen() {
               ios_icon_name="video.fill"
               android_material_icon_name="videocam"
               size={20}
-              color={activeTab === 'replays' ? colors.text : colors.textSecondary}
+              color={activeTab === 'replays' ? colors.brandPrimary : colors.textSecondary}
             />
             <Text style={[styles.tabText, activeTab === 'replays' && styles.tabTextActive]}>
               LIVE REPLAYS
@@ -411,7 +415,7 @@ export default function ProfileScreen() {
               ios_icon_name="square.grid.3x3.fill"
               android_material_icon_name="grid_on"
               size={20}
-              color={activeTab === 'posts' ? colors.text : colors.textSecondary}
+              color={activeTab === 'posts' ? colors.brandPrimary : colors.textSecondary}
             />
             <Text style={[styles.tabText, activeTab === 'posts' && styles.tabTextActive]}>
               POSTS
@@ -426,7 +430,7 @@ export default function ProfileScreen() {
               ios_icon_name="clock.fill"
               android_material_icon_name="history"
               size={20}
-              color={activeTab === 'stories' ? colors.text : colors.textSecondary}
+              color={activeTab === 'stories' ? colors.brandPrimary : colors.textSecondary}
             />
             <Text style={[styles.tabText, activeTab === 'stories' && styles.tabTextActive]}>
               STORIES
@@ -477,6 +481,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
+  logoPlaceholder: {
+    width: 40,
+  },
   settingsButton: {
     width: 40,
     height: 40,
@@ -493,6 +500,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 24,
     paddingBottom: 24,
+  },
+  logoContainer: {
+    marginBottom: 16,
   },
   avatar: {
     width: 100,
@@ -526,7 +536,7 @@ const styles = StyleSheet.create({
   profileLink: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.gradientEnd,
+    color: colors.brandPrimary,
     marginBottom: 20,
   },
   statsContainer: {
@@ -626,7 +636,7 @@ const styles = StyleSheet.create({
   walletAmount: {
     fontSize: 16,
     fontWeight: '700',
-    color: colors.gradientEnd,
+    color: colors.brandPrimary,
   },
   savedStreamsCard: {
     flexDirection: 'row',
@@ -667,7 +677,7 @@ const styles = StyleSheet.create({
   },
   tabActive: {
     borderBottomWidth: 2,
-    borderBottomColor: colors.text,
+    borderBottomColor: colors.brandPrimary,
   },
   tabText: {
     fontSize: 12,
@@ -675,7 +685,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   tabTextActive: {
-    color: colors.text,
+    color: colors.brandPrimary,
   },
   postsGrid: {
     flexDirection: 'row',
@@ -717,13 +727,13 @@ const styles = StyleSheet.create({
   viewAllButton: {
     paddingHorizontal: 24,
     paddingVertical: 12,
-    backgroundColor: colors.gradientEnd,
+    backgroundColor: colors.brandPrimary,
     borderRadius: 20,
   },
   viewAllButtonText: {
     fontSize: 14,
     fontWeight: '700',
-    color: colors.text,
+    color: '#FFFFFF',
   },
   postCard: {
     width: (screenWidth - 6) / 3,
@@ -753,6 +763,6 @@ const styles = StyleSheet.create({
   postStatText: {
     fontSize: 12,
     fontWeight: '700',
-    color: colors.text,
+    color: '#FFFFFF',
   },
 });

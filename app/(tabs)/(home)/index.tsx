@@ -14,6 +14,7 @@ import { router } from 'expo-router';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import StreamPreviewCard from '@/components/StreamPreviewCard';
 import StoriesBar from '@/components/StoriesBar';
+import RoastLiveLogo from '@/components/RoastLiveLogo';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/app/integrations/supabase/client';
@@ -181,6 +182,11 @@ export default function HomeScreen() {
 
   return (
     <View style={commonStyles.container}>
+      {/* Header with Logo */}
+      <View style={styles.header}>
+        <RoastLiveLogo size="small" withShadow />
+      </View>
+
       <View style={styles.tabBar}>
         <TouchableOpacity
           style={[styles.tabButton, activeTab === 'live' && styles.tabButtonActive]}
@@ -190,7 +196,7 @@ export default function HomeScreen() {
             ios_icon_name="video.fill"
             android_material_icon_name="videocam"
             size={20}
-            color={activeTab === 'live' ? colors.text : colors.textSecondary}
+            color={activeTab === 'live' ? colors.brandPrimary : colors.textSecondary}
           />
           <Text style={[styles.tabButtonText, activeTab === 'live' && styles.tabButtonTextActive]}>
             LIVE
@@ -205,7 +211,7 @@ export default function HomeScreen() {
             ios_icon_name="square.grid.2x2.fill"
             android_material_icon_name="grid_view"
             size={20}
-            color={activeTab === 'posts' ? colors.text : colors.textSecondary}
+            color={activeTab === 'posts' ? colors.brandPrimary : colors.textSecondary}
           />
           <Text style={[styles.tabButtonText, activeTab === 'posts' && styles.tabButtonTextActive]}>
             POSTS
@@ -230,7 +236,7 @@ export default function HomeScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor={colors.gradientEnd}
+              tintColor={colors.brandPrimary}
             />
           }
         />
@@ -246,7 +252,7 @@ export default function HomeScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor={colors.gradientEnd}
+              tintColor={colors.brandPrimary}
             />
           }
         />
@@ -256,11 +262,18 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  header: {
+    paddingHorizontal: 16,
+    paddingTop: 60,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.background,
+  },
   tabBar: {
     flexDirection: 'row',
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
-    paddingTop: 60,
   },
   tabButton: {
     flex: 1,
@@ -272,7 +285,7 @@ const styles = StyleSheet.create({
   },
   tabButtonActive: {
     borderBottomWidth: 2,
-    borderBottomColor: colors.text,
+    borderBottomColor: colors.brandPrimary,
   },
   tabButtonText: {
     fontSize: 14,
@@ -280,7 +293,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   tabButtonTextActive: {
-    color: colors.text,
+    color: colors.brandPrimary,
   },
   listContent: {
     paddingBottom: 100,

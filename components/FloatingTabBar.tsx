@@ -112,13 +112,13 @@ export default function FloatingTabBar({
       borderColor: colors.border,
       ...Platform.select({
         ios: {
-          backgroundColor: 'rgba(10, 10, 10, 0.8)',
+          backgroundColor: 'rgba(255, 255, 255, 0.9)',
         },
         android: {
-          backgroundColor: 'rgba(10, 10, 10, 0.95)',
+          backgroundColor: 'rgba(255, 255, 255, 0.95)',
         },
         web: {
-          backgroundColor: 'rgba(10, 10, 10, 0.95)',
+          backgroundColor: 'rgba(255, 255, 255, 0.95)',
           backdropFilter: 'blur(10px)',
         },
       }),
@@ -128,7 +128,7 @@ export default function FloatingTabBar({
     },
     indicator: {
       ...styles.indicator,
-      backgroundColor: 'rgba(227, 0, 82, 0.2)',
+      backgroundColor: colors.backgroundAlt,
       width: `${tabWidthPercent}%` as `${number}%`,
     },
   };
@@ -164,13 +164,13 @@ export default function FloatingTabBar({
                         android_material_icon_name={tab.icon}
                         ios_icon_name={tab.icon}
                         size={24}
-                        color={isActive ? colors.gradientEnd : colors.textSecondary}
+                        color={isActive ? colors.brandPrimary : colors.textSecondary}
                       />
                       <Text
                         style={[
                           styles.tabLabel,
                           { color: colors.textSecondary },
-                          isActive && { color: colors.gradientEnd, fontWeight: '600' },
+                          isActive && { color: colors.brandPrimary, fontWeight: '600' },
                         ]}
                       >
                         {tab.label}
@@ -202,6 +202,11 @@ const styles = StyleSheet.create({
   },
   blurContainer: {
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 8,
   },
   background: {
     ...StyleSheet.absoluteFillObject,

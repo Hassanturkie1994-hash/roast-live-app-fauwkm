@@ -35,7 +35,7 @@ export default function StreamPreviewCard({ stream, onPress }: StreamPreviewCard
                 ios_icon_name="eye.fill"
                 android_material_icon_name="visibility"
                 size={12}
-                color={colors.text}
+                color="#FFFFFF"
               />
               <Text style={styles.viewerCount}>{stream.viewer_count || 0}</Text>
             </View>
@@ -76,7 +76,7 @@ export default function StreamPreviewCard({ stream, onPress }: StreamPreviewCard
                 ios_icon_name="checkmark.seal.fill"
                 android_material_icon_name="verified"
                 size={14}
-                color={colors.gradientEnd}
+                color={colors.brandPrimary}
               />
             )}
           </View>
@@ -93,6 +93,13 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: colors.border,
+    marginHorizontal: 16,
+    marginVertical: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   thumbnailContainer: {
     width: '100%',
@@ -125,7 +132,7 @@ const styles = StyleSheet.create({
   viewerCount: {
     fontSize: 12,
     fontWeight: '600',
-    color: colors.text,
+    color: '#FFFFFF',
   },
   info: {
     flexDirection: 'row',
@@ -141,7 +148,7 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     borderWidth: 2,
-    borderColor: colors.gradientEnd,
+    borderColor: colors.brandPrimary,
   },
   avatarPlaceholder: {
     backgroundColor: colors.backgroundAlt,

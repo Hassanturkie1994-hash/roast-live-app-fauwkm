@@ -1,7 +1,6 @@
 
 import React from 'react';
 import { TouchableOpacity, Text, StyleSheet, ViewStyle } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { colors, buttonStyles } from '@/styles/commonStyles';
 
 interface GradientButtonProps {
@@ -10,6 +9,7 @@ interface GradientButtonProps {
   size?: 'small' | 'medium' | 'large';
   style?: ViewStyle;
   disabled?: boolean;
+  variant?: 'primary' | 'secondary';
 }
 
 export default function GradientButton({
@@ -18,6 +18,7 @@ export default function GradientButton({
   size = 'medium',
   style,
   disabled = false,
+  variant = 'primary',
 }: GradientButtonProps) {
   const buttonSize = {
     small: { paddingVertical: 8, paddingHorizontal: 20 },
@@ -31,43 +32,65 @@ export default function GradientButton({
     large: 16,
   };
 
+  const isPrimary = variant === 'primary';
+
   return (
     <TouchableOpacity
       onPress={onPress}
       disabled={disabled}
-      style={[styles.container, style]}
+      style={[
+        styles.button,
+        isPrimary ? styles.primaryButton : styles.secondaryButton,
+        buttonSize[size],
+        disabled && styles.disabledButton,
+        style,
+      ]}
       activeOpacity={0.8}
     >
-      <LinearGradient
-        colors={
-          disabled
-            ? ['#666666', '#444444']
-            : [colors.gradientStart, colors.gradientEnd]
-        }
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={[buttonStyles.gradientButton, buttonSize[size]]}
+      <Text
+        style={[
+          styles.buttonText,
+          isPrimary ? styles.primaryButtonText : styles.secondaryButtonText,
+          { fontSize: textSize[size] },
+          disabled && styles.disabledText,
+        ]}
       >
-        <Text
-          style={[
-            buttonStyles.gradientButtonText,
-            { fontSize: textSize[size] },
-            disabled && styles.disabledText,
-          ]}
-        >
-          {title}
-        </Text>
-      </LinearGradient>
+        {title}
+      </Text>
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    borderRadius: 25,
-    overflow: 'hidden',
+  button: {
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryButton: {
+    backgroundColor: colors.brandPrimary,
+  },
+  secondaryButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: colors.brandPrimary,
+  },
+  disabledButton: {
+    backgroundColor: '#CCCCCC',
+    borderColor: '#CCCCCC',
+  },
+  buttonText: {
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  primaryButtonText: {
+    color: '#FFFFFF',
+  },
+  secondaryButtonText: {
+    color: colors.brandPrimary,
   },
   disabledText: {
-    opacity: 0.6,
+    color: '#888888',
   },
 });
