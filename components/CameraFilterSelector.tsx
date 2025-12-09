@@ -16,7 +16,9 @@ export type CameraFilter =
   | 'cold'
   | 'saturated'
   | 'smooth'
-  | 'sharpen';
+  | 'sharpen'
+  | 'brightness'
+  | 'exposure';
 
 interface CameraFilterSelectorProps {
   selectedFilter: CameraFilter;
@@ -24,13 +26,15 @@ interface CameraFilterSelectorProps {
   visible: boolean;
 }
 
-const FILTERS: { id: CameraFilter; name: string; icon: string }[] = [
-  { id: 'none', name: 'None', icon: 'circle' },
-  { id: 'warm', name: 'Warm', icon: 'sun.max.fill' },
-  { id: 'cold', name: 'Cold', icon: 'snowflake' },
-  { id: 'saturated', name: 'Vibrant', icon: 'sparkles' },
-  { id: 'smooth', name: 'Smooth', icon: 'wand.and.stars' },
-  { id: 'sharpen', name: 'Sharp', icon: 'diamond.fill' },
+const FILTERS: { id: CameraFilter; name: string; icon: string; androidIcon: string }[] = [
+  { id: 'none', name: 'None', icon: 'circle', androidIcon: 'circle' },
+  { id: 'warm', name: 'Warm', icon: 'sun.max.fill', androidIcon: 'wb_sunny' },
+  { id: 'cold', name: 'Cold', icon: 'snowflake', androidIcon: 'ac_unit' },
+  { id: 'saturated', name: 'Vibrant', icon: 'sparkles', androidIcon: 'auto_awesome' },
+  { id: 'smooth', name: 'Smooth', icon: 'wand.and.stars', androidIcon: 'blur_on' },
+  { id: 'sharpen', name: 'Sharp', icon: 'diamond.fill', androidIcon: 'details' },
+  { id: 'brightness', name: 'Bright', icon: 'light.max', androidIcon: 'brightness_high' },
+  { id: 'exposure', name: 'Exposure', icon: 'camera.aperture', androidIcon: 'exposure' },
 ];
 
 export default function CameraFilterSelector({
@@ -49,7 +53,8 @@ export default function CameraFilterSelector({
           size={20}
           color={colors.text}
         />
-        <Text style={styles.headerText}>Filters</Text>
+        <Text style={styles.headerText}>Camera Filters</Text>
+        <Text style={styles.headerSubtext}>Tap to apply</Text>
       </View>
       <ScrollView
         horizontal
@@ -64,15 +69,21 @@ export default function CameraFilterSelector({
               selectedFilter === filter.id && styles.filterButtonActive,
             ]}
             onPress={() => onSelectFilter(filter.id)}
+            activeOpacity={0.7}
           >
-            <IconSymbol
-              ios_icon_name={filter.icon}
-              android_material_icon_name={filter.icon.replace('.', '_')}
-              size={24}
-              color={
-                selectedFilter === filter.id ? colors.text : colors.textSecondary
-              }
-            />
+            <View style={[
+              styles.filterIconContainer,
+              selectedFilter === filter.id && styles.filterIconContainerActive,
+            ]}>
+              <IconSymbol
+                ios_icon_name={filter.icon}
+                android_material_icon_name={filter.androidIcon}
+                size={24}
+                color={
+                  selectedFilter === filter.id ? colors.text : colors.textSecondary
+                }
+              />
+            </View>
             <Text
               style={[
                 styles.filterName,
@@ -94,9 +105,9 @@ const styles = StyleSheet.create({
     top: 120,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    paddingVertical: 16,
+    borderBottomWidth: 2,
     borderBottomColor: colors.border,
   },
   header: {
@@ -111,6 +122,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.text,
   },
+  headerSubtext: {
+    fontSize: 11,
+    fontWeight: '400',
+    color: colors.textSecondary,
+    marginLeft: 'auto',
+  },
   filtersContainer: {
     paddingHorizontal: 16,
     gap: 12,
@@ -118,15 +135,25 @@ const styles = StyleSheet.create({
   filterButton: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     minWidth: 70,
-    borderWidth: 2,
-    borderColor: 'transparent',
   },
   filterButtonActive: {
+    // Active state handled by icon container
+  },
+  filterIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+    marginBottom: 6,
+  },
+  filterIconContainerActive: {
     backgroundColor: 'rgba(227, 0, 82, 0.3)',
     borderColor: colors.gradientEnd,
   },
@@ -134,9 +161,9 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: colors.textSecondary,
-    marginTop: 4,
   },
   filterNameActive: {
     color: colors.text,
+    fontWeight: '700',
   },
 });

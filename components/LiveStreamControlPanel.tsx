@@ -40,6 +40,7 @@ export default function LiveStreamControlPanel({
           style={[styles.controlButton, !isMicOn && styles.controlButtonOff]}
           onPress={onToggleMic}
           disabled={isLoading}
+          activeOpacity={0.7}
         >
           <IconSymbol
             ios_icon_name={isMicOn ? 'mic.fill' : 'mic.slash.fill'}
@@ -55,6 +56,7 @@ export default function LiveStreamControlPanel({
           style={[styles.controlButton, !isCameraOn && styles.controlButtonOff]}
           onPress={onToggleCamera}
           disabled={isLoading}
+          activeOpacity={0.7}
         >
           <IconSymbol
             ios_icon_name={isCameraOn ? 'video.fill' : 'video.slash.fill'}
@@ -65,11 +67,12 @@ export default function LiveStreamControlPanel({
           <Text style={styles.controlLabel}>{isCameraOn ? 'Camera' : 'Off'}</Text>
         </TouchableOpacity>
 
-        {/* Flip Camera */}
+        {/* Switch Camera */}
         <TouchableOpacity
           style={styles.controlButton}
           onPress={onFlipCamera}
           disabled={isLoading || !isCameraOn}
+          activeOpacity={0.7}
         >
           <IconSymbol
             ios_icon_name="arrow.triangle.2.circlepath.camera.fill"
@@ -77,7 +80,7 @@ export default function LiveStreamControlPanel({
             size={24}
             color={colors.text}
           />
-          <Text style={styles.controlLabel}>{facing === 'front' ? 'Front' : 'Back'}</Text>
+          <Text style={styles.controlLabel}>Switch</Text>
         </TouchableOpacity>
 
         {/* Flash Toggle - Only enabled for back camera */}
@@ -89,6 +92,7 @@ export default function LiveStreamControlPanel({
           ]}
           onPress={onToggleFlash}
           disabled={isLoading || !isCameraOn || !isBackCamera}
+          activeOpacity={0.7}
         >
           <IconSymbol
             ios_icon_name={isFlashOn ? 'bolt.fill' : 'bolt.slash.fill'}
@@ -100,14 +104,14 @@ export default function LiveStreamControlPanel({
             styles.controlLabel,
             !isBackCamera && styles.controlLabelDisabled
           ]}>
-            {isFlashOn ? 'Flash' : 'Off'}
+            Flash
           </Text>
         </TouchableOpacity>
 
         {/* End Stream Button */}
         <View style={styles.endStreamButton}>
           <GradientButton
-            title="END"
+            title="End Stream"
             onPress={onEndStream}
             size="small"
             disabled={isLoading}
@@ -124,12 +128,15 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.9)',
-    borderTopWidth: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    borderTopWidth: 2,
     borderTopColor: colors.border,
     paddingBottom: 20,
-    paddingTop: 12,
-    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingHorizontal: 12,
+    // Ensure it floats above everything
+    zIndex: 1000,
+    elevation: 10,
   },
   controlsRow: {
     flexDirection: 'row',
@@ -140,24 +147,24 @@ const styles = StyleSheet.create({
   controlButton: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     borderRadius: 12,
     paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     minWidth: 60,
     borderWidth: 1,
     borderColor: colors.border,
   },
   controlButtonOff: {
-    backgroundColor: 'rgba(164, 0, 40, 0.3)',
+    backgroundColor: 'rgba(164, 0, 40, 0.4)',
     borderColor: colors.gradientStart,
   },
   controlButtonActive: {
-    backgroundColor: 'rgba(227, 0, 82, 0.3)',
+    backgroundColor: 'rgba(227, 0, 82, 0.4)',
     borderColor: colors.gradientEnd,
   },
   controlButtonDisabled: {
-    opacity: 0.4,
+    opacity: 0.3,
   },
   controlLabel: {
     fontSize: 10,
@@ -169,6 +176,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   endStreamButton: {
-    minWidth: 70,
+    minWidth: 80,
   },
 });

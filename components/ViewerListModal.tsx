@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   FlatList,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -40,6 +41,10 @@ export default function ViewerListModal({
   useEffect(() => {
     if (visible) {
       fetchViewers();
+      
+      // Auto-refresh viewer list every 5 seconds
+      const interval = setInterval(fetchViewers, 5000);
+      return () => clearInterval(interval);
     }
   }, [visible, streamId]);
 
@@ -57,6 +62,7 @@ export default function ViewerListModal({
         return;
       }
 
+      console.log('👥 Fetched viewers:', data?.length || 0);
       setViewers(data as Viewer[]);
     } catch (error) {
       console.error('Error in fetchViewers:', error);
@@ -109,7 +115,7 @@ export default function ViewerListModal({
                 size={24}
                 color={colors.gradientEnd}
               />
-              <Text style={styles.title}>Viewers ({viewerCount})</Text>
+              <Text style={styles.title}>Active Viewers ({viewerCount})</Text>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <IconSymbol
@@ -121,8 +127,9 @@ export default function ViewerListModal({
             </TouchableOpacity>
           </View>
 
-          {isLoading ? (
+          {isLoading && viewers.length === 0 ? (
             <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={colors.gradientEnd} />
               <Text style={styles.loadingText}>Loading viewers...</Text>
             </View>
           ) : viewers.length === 0 ? (
@@ -139,13 +146,24 @@ export default function ViewerListModal({
               </Text>
             </View>
           ) : (
-            <FlatList
-              data={viewers}
-              renderItem={renderViewer}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={styles.listContent}
-              showsVerticalScrollIndicator={false}
-            />
+            <>
+              <View style={styles.updateIndicator}>
+                <IconSymbol
+                  ios_icon_name="arrow.clockwise"
+                  android_material_icon_name="refresh"
+                  size={14}
+                  color={colors.textSecondary}
+                />
+                <Text style={styles.updateText}>Auto-updating live</Text>
+              </View>
+              <FlatList
+                data={viewers}
+                renderItem={renderViewer}
+                keyExtractor={(item) => item.id}
+                contentContainerStyle={styles.listContent}
+                showsVerticalScrollIndicator={false}
+              />
+            </>
           )}
         </View>
       </View>
@@ -156,7 +174,7 @@ export default function ViewerListModal({
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
     justifyContent: 'flex-end',
   },
   modalContent: {
@@ -187,6 +205,19 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     padding: 8,
+  },
+  updateIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(227, 0, 82, 0.1)',
+  },
+  updateText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textSecondary,
   },
   listContent: {
     padding: 20,
@@ -244,6 +275,7 @@ const styles = StyleSheet.create({
   loadingContainer: {
     padding: 40,
     alignItems: 'center',
+    gap: 16,
   },
   loadingText: {
     fontSize: 16,

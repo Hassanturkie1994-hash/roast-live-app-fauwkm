@@ -10,6 +10,7 @@ import {
 import { colors } from '@/styles/commonStyles';
 import { supabase } from '@/app/integrations/supabase/client';
 import { Tables } from '@/app/integrations/supabase/types';
+import { IconSymbol } from '@/components/IconSymbol';
 
 type ChatMessage = Tables<'chat_messages'> & {
   users: Tables<'users'>;
@@ -65,6 +66,7 @@ export default function EnhancedChatOverlay({ streamId }: EnhancedChatOverlayPro
     const chatChannel = supabase
       .channel(`stream:${streamId}:chat`)
       .on('broadcast', { event: 'message' }, (payload) => {
+        console.log('💬 New chat message received:', payload);
         const newMessage: Message = {
           ...payload.payload,
           type: 'chat' as const,
@@ -80,6 +82,7 @@ export default function EnhancedChatOverlay({ streamId }: EnhancedChatOverlayPro
     const giftChannel = supabase
       .channel(`stream:${streamId}:gifts`)
       .on('broadcast', { event: 'gift_sent' }, (payload) => {
+        console.log('🎁 Gift notification received:', payload);
         const giftData = payload.payload;
         const giftMessage: GiftMessage = {
           id: `gift-${Date.now()}-${Math.random()}`,
@@ -119,11 +122,45 @@ export default function EnhancedChatOverlay({ streamId }: EnhancedChatOverlayPro
     }
   }, [messages]);
 
+  const renderBadge = (badgeType?: string) => {
+    if (!badgeType) return null;
+
+    let badgeIcon = 'star.fill';
+    let badgeColor = '#FFD700';
+
+    if (badgeType === 'moderator') {
+      badgeIcon = 'shield.fill';
+      badgeColor = colors.gradientEnd;
+    } else if (badgeType === 'fan') {
+      badgeIcon = 'heart.fill';
+      badgeColor = '#FF1493';
+    }
+
+    return (
+      <View style={styles.badge}>
+        <IconSymbol
+          ios_icon_name={badgeIcon}
+          android_material_icon_name={badgeType === 'moderator' ? 'shield' : 'star'}
+          size={12}
+          color={badgeColor}
+        />
+      </View>
+    );
+  };
+
   const renderMessage = (msg: Message, index: number) => {
     if (msg.type === 'gift') {
       return (
         <FadingMessage key={msg.id} delay={3000}>
           <View style={styles.giftMessage}>
+            <View style={styles.giftIconContainer}>
+              <IconSymbol
+                ios_icon_name="gift.fill"
+                android_material_icon_name="card_giftcard"
+                size={16}
+                color="#FFD700"
+              />
+            </View>
             <Text style={styles.giftText}>
               <Text style={styles.giftSender}>{msg.sender_username}</Text>
               {' sent '}
@@ -136,10 +173,16 @@ export default function EnhancedChatOverlay({ streamId }: EnhancedChatOverlayPro
       );
     }
 
+    // For chat messages, check if user has a badge
+    const userBadge = msg.users?.badge_type;
+
     return (
       <FadingMessage key={index} delay={5000}>
         <View style={styles.chatMessage}>
-          <Text style={styles.chatUsername}>{msg.users.display_name}:</Text>
+          <View style={styles.chatHeader}>
+            <Text style={styles.chatUsername}>{msg.users.display_name}</Text>
+            {renderBadge(userBadge)}
+          </View>
           <Text style={styles.chatText}>{msg.message}</Text>
         </View>
       </FadingMessage>
@@ -190,9 +233,9 @@ const styles = StyleSheet.create({
   container: {
     position: 'absolute',
     left: 16,
-    bottom: 120,
-    width: '60%',
-    maxHeight: 300,
+    bottom: 140,
+    width: '65%',
+    maxHeight: 350,
   },
   messagesContainer: {
     flex: 1,
@@ -201,33 +244,61 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   chatMessage: {
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
     marginBottom: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.gradientEnd,
+  },
+  chatHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 2,
   },
   chatUsername: {
     fontSize: 12,
     fontWeight: '700',
     color: colors.gradientEnd,
-    marginBottom: 2,
+  },
+  badge: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   chatText: {
     fontSize: 14,
     fontWeight: '400',
     color: colors.text,
+    lineHeight: 18,
   },
   giftMessage: {
-    backgroundColor: 'rgba(227, 0, 82, 0.9)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(227, 0, 82, 0.95)',
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 8,
     marginBottom: 8,
     borderWidth: 2,
     borderColor: '#FFD700',
+    gap: 8,
+  },
+  giftIconContainer: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 215, 0, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   giftText: {
+    flex: 1,
     fontSize: 14,
     fontWeight: '600',
     color: colors.text,

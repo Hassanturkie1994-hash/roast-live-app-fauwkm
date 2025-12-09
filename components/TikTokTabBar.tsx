@@ -58,6 +58,7 @@ export default function TikTokTabBar({ isStreaming = false }: TikTokTabBarProps)
 
   // Hide tab bar when streaming
   if (isStreaming) {
+    console.log('🚫 Tab bar hidden - user is streaming');
     return null;
   }
 
@@ -114,7 +115,7 @@ export default function TikTokTabBar({ isStreaming = false }: TikTokTabBarProps)
                 size={24}
                 color={colors.text}
               />
-              <Text style={styles.centerButtonText}>GO LIVE</Text>
+              <Text style={styles.centerButtonText}>Go Live</Text>
             </LinearGradient>
           </TouchableOpacity>
 
@@ -239,6 +240,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 12,
     fontWeight: '800',
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
 });

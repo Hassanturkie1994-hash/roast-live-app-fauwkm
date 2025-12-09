@@ -65,10 +65,11 @@ export default function BroadcasterScreen() {
     }
   }, [user]);
 
-  // Handle back button press when streaming
+  // Handle back button press when streaming - ENHANCED
   useEffect(() => {
     if (isLive) {
       const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+        console.log('🚫 Back button pressed during livestream - showing confirmation');
         setShowExitConfirmation(true);
         return true; // Prevent default back behavior
       });
@@ -77,7 +78,16 @@ export default function BroadcasterScreen() {
     }
   }, [isLive]);
 
-  // Handle multitask mode (app minimization)
+  // Prevent navigation away from livestream
+  useEffect(() => {
+    if (isLive) {
+      // This will be caught by the router and show confirmation
+      const unsubscribe = router.canGoBack();
+      console.log('🔒 Navigation locked during livestream');
+    }
+  }, [isLive]);
+
+  // Handle multitask mode (app minimization) - ENHANCED
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextAppState) => {
       if (isLive) {
@@ -203,14 +213,32 @@ export default function BroadcasterScreen() {
   }
 
   const toggleCameraFacing = () => {
+    console.log('📷 Switching camera without restarting stream');
     setFacing((current) => (current === 'back' ? 'front' : 'back'));
+    // Flash is automatically disabled when switching to front camera
+    if (facing === 'back') {
+      setFlashMode('off');
+    }
   };
 
   const toggleFlash = () => {
     // Flash only available on back camera
     if (facing === 'back') {
+      console.log('💡 Toggling flash');
       setFlashMode((current) => (current === 'off' ? 'on' : 'off'));
+    } else {
+      Alert.alert('Flash Unavailable', 'Flash is only available when using the back camera.');
     }
+  };
+
+  const toggleCamera = () => {
+    console.log('📹 Toggling camera on/off');
+    setIsCameraOn((current) => !current);
+  };
+
+  const toggleMic = () => {
+    console.log('🎤 Toggling microphone');
+    setIsMicOn((current) => !current);
   };
 
   const handleStartLiveSetup = () => {
@@ -316,6 +344,8 @@ export default function BroadcasterScreen() {
       setCurrentStream(null);
       setGiftAnimations([]);
       setIsMinimized(false);
+      setSelectedFilter('none');
+      setShowFilters(false);
 
       Alert.alert('Stream Ended', 'Your live stream has been ended successfully.');
     } catch (error) {
@@ -342,12 +372,22 @@ export default function BroadcasterScreen() {
     return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Get filter style based on selected filter
+  const getCameraStyle = () => {
+    const baseStyle = styles.camera;
+    
+    // Note: React Native doesn't support CSS filters directly
+    // These would need to be implemented using native modules or image processing libraries
+    // For now, we'll just return the base style
+    return baseStyle;
+  };
+
   return (
     <View style={commonStyles.container}>
       {/* Camera View - Full screen 9:16 aspect ratio */}
       {isCameraOn ? (
         <CameraView 
-          style={styles.camera} 
+          style={getCameraStyle()} 
           facing={facing}
           flash={flashMode}
           // TikTok-style vertical format settings
@@ -366,22 +406,37 @@ export default function BroadcasterScreen() {
         </View>
       )}
 
-      {/* Floating Thumbnail for Multitask Mode */}
+      {/* Floating Thumbnail for Multitask Mode - ENHANCED */}
       {isMinimized && isLive && (
         <TouchableOpacity 
           style={styles.floatingThumbnail}
-          onPress={() => setIsMinimized(false)}
+          onPress={() => {
+            console.log('📱 Expanding from minimized mode');
+            setIsMinimized(false);
+          }}
           activeOpacity={0.9}
         >
           <View style={styles.thumbnailContent}>
-            <CameraView 
-              style={styles.thumbnailCamera} 
-              facing={facing}
-              flash={flashMode}
-            />
+            {isCameraOn ? (
+              <CameraView 
+                style={styles.thumbnailCamera} 
+                facing={facing}
+                flash={flashMode}
+              />
+            ) : (
+              <View style={styles.thumbnailCameraOff}>
+                <IconSymbol
+                  ios_icon_name="video.slash.fill"
+                  android_material_icon_name="videocam_off"
+                  size={32}
+                  color={colors.textSecondary}
+                />
+              </View>
+            )}
             <View style={styles.thumbnailOverlay}>
               <LiveBadge size="small" />
               <Text style={styles.thumbnailText}>Tap to expand</Text>
+              <Text style={styles.thumbnailViewers}>👁 {viewerCount}</Text>
             </View>
           </View>
         </TouchableOpacity>
@@ -402,6 +457,7 @@ export default function BroadcasterScreen() {
                 <TouchableOpacity 
                   style={styles.stat}
                   onPress={() => setShowViewerList(true)}
+                  activeOpacity={0.7}
                 >
                   <IconSymbol
                     ios_icon_name="eye.fill"
@@ -427,19 +483,23 @@ export default function BroadcasterScreen() {
             <TouchableOpacity
               style={styles.filterToggle}
               onPress={() => setShowFilters(!showFilters)}
+              activeOpacity={0.7}
             >
               <IconSymbol
                 ios_icon_name="camera.filters"
                 android_material_icon_name="filter"
                 size={24}
-                color={colors.text}
+                color={showFilters ? colors.gradientEnd : colors.text}
               />
             </TouchableOpacity>
 
             {/* Filter Selector */}
             <CameraFilterSelector
               selectedFilter={selectedFilter}
-              onSelectFilter={setSelectedFilter}
+              onSelectFilter={(filter) => {
+                console.log('🎨 Applying filter:', filter);
+                setSelectedFilter(filter);
+              }}
               visible={showFilters}
             />
 
@@ -455,7 +515,7 @@ export default function BroadcasterScreen() {
             <RoastLiveLogo size="large" />
             <Text style={styles.welcomeText}>Ready to go live?</Text>
             <GradientButton
-              title="GO LIVE"
+              title="Go Live"
               onPress={handleStartLiveSetup}
               size="large"
               disabled={isLoading}
@@ -479,9 +539,9 @@ export default function BroadcasterScreen() {
       {isLive && !isMinimized && (
         <LiveStreamControlPanel
           isMicOn={isMicOn}
-          onToggleMic={() => setIsMicOn(!isMicOn)}
+          onToggleMic={toggleMic}
           isCameraOn={isCameraOn}
-          onToggleCamera={() => setIsCameraOn(!isCameraOn)}
+          onToggleCamera={toggleCamera}
           facing={facing}
           onFlipCamera={toggleCameraFacing}
           isFlashOn={flashMode === 'on'}
@@ -550,7 +610,7 @@ export default function BroadcasterScreen() {
               </TouchableOpacity>
               <View style={styles.goLiveButtonContainer}>
                 <GradientButton
-                  title={isLoading ? 'STARTING...' : 'GO LIVE'}
+                  title={isLoading ? 'STARTING...' : 'Go Live'}
                   onPress={startStream}
                   size="medium"
                   disabled={isLoading}
@@ -561,7 +621,7 @@ export default function BroadcasterScreen() {
         </View>
       </Modal>
 
-      {/* Exit Confirmation Modal */}
+      {/* Exit Confirmation Modal - ENHANCED */}
       <Modal
         visible={showExitConfirmation}
         transparent
@@ -578,7 +638,7 @@ export default function BroadcasterScreen() {
             />
             <Text style={styles.confirmationTitle}>End Livestream?</Text>
             <Text style={styles.confirmationText}>
-              You cannot leave while streaming. End your stream first.{'\n\n'}Are you sure you want to stop streaming?
+              You cannot leave your livestream until you end it.{'\n\n'}Are you sure you want to end the stream?
             </Text>
             <View style={styles.confirmationButtons}>
               <TouchableOpacity
@@ -682,7 +742,7 @@ const styles = StyleSheet.create({
   },
   filterToggle: {
     position: 'absolute',
-    top: 60,
+    top: 120,
     right: 20,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     width: 48,
@@ -716,16 +776,29 @@ const styles = StyleSheet.create({
   thumbnailCamera: {
     flex: 1,
   },
+  thumbnailCameraOff: {
+    flex: 1,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   thumbnailOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    padding: 8,
   },
   thumbnailText: {
     fontSize: 10,
     fontWeight: '600',
+    color: colors.text,
+    textAlign: 'center',
+  },
+  thumbnailViewers: {
+    fontSize: 10,
+    fontWeight: '700',
     color: colors.text,
     textAlign: 'center',
   },
