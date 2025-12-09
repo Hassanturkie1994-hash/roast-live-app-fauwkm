@@ -12,6 +12,7 @@ import { supabase } from '@/app/integrations/supabase/client';
 import { cloudflareService } from '@/app/services/cloudflareService';
 import { router } from 'expo-router';
 import ChatOverlay from '@/components/ChatOverlay';
+import GiftAnimationOverlay from '@/components/GiftAnimationOverlay';
 
 interface StreamData {
   id: string;
@@ -19,6 +20,13 @@ interface StreamData {
   title: string;
   status: string;
   playback_url: string;
+}
+
+interface GiftAnimation {
+  id: string;
+  giftName: string;
+  senderUsername: string;
+  amount: number;
 }
 
 export default function BroadcasterScreen() {
@@ -33,7 +41,9 @@ export default function BroadcasterScreen() {
   const [streamTitle, setStreamTitle] = useState('');
   const [currentStream, setCurrentStream] = useState<StreamData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [giftAnimations, setGiftAnimations] = useState<GiftAnimation[]>([]);
   const realtimeChannelRef = useRef<any>(null);
+  const giftChannelRef = useRef<any>(null);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -75,9 +85,34 @@ export default function BroadcasterScreen() {
     realtimeChannelRef.current = channel;
   }, [currentStream?.id]);
 
+  const subscribeToGifts = useCallback(() => {
+    if (!currentStream?.id) return;
+
+    const channel = supabase
+      .channel(`stream:${currentStream.id}:gifts`)
+      .on('broadcast', { event: 'gift_sent' }, (payload) => {
+        console.log('🎁 Gift received:', payload);
+        const giftData = payload.payload;
+        
+        // Add gift animation to queue
+        const newAnimation: GiftAnimation = {
+          id: `${Date.now()}-${Math.random()}`,
+          giftName: giftData.gift_name,
+          senderUsername: giftData.sender_username,
+          amount: giftData.amount,
+        };
+        
+        setGiftAnimations((prev) => [...prev, newAnimation]);
+      })
+      .subscribe();
+
+    giftChannelRef.current = channel;
+  }, [currentStream?.id]);
+
   useEffect(() => {
     if (isLive && currentStream?.id) {
       subscribeToViewerUpdates();
+      subscribeToGifts();
     }
     
     return () => {
@@ -85,8 +120,16 @@ export default function BroadcasterScreen() {
         supabase.removeChannel(realtimeChannelRef.current);
         realtimeChannelRef.current = null;
       }
+      if (giftChannelRef.current) {
+        supabase.removeChannel(giftChannelRef.current);
+        giftChannelRef.current = null;
+      }
     };
-  }, [isLive, currentStream?.id, subscribeToViewerUpdates]);
+  }, [isLive, currentStream?.id, subscribeToViewerUpdates, subscribeToGifts]);
+
+  const handleAnimationComplete = (animationId: string) => {
+    setGiftAnimations((prev) => prev.filter((anim) => anim.id !== animationId));
+  };
 
   if (!permission) {
     return <View style={commonStyles.container} />;
@@ -146,7 +189,6 @@ export default function BroadcasterScreen() {
     try {
       console.log('🎬 Starting live stream with title:', streamTitle);
       
-      // Call cloudflareService.startLive with correct parameters
       const result = await cloudflareService.startLive({ 
         title: streamTitle, 
         userId: user.id 
@@ -154,7 +196,6 @@ export default function BroadcasterScreen() {
 
       console.log('✅ Stream created successfully:', result);
 
-      // Store the stream data
       setCurrentStream(result.stream);
       setIsLive(true);
       setViewerCount(0);
@@ -207,7 +248,6 @@ export default function BroadcasterScreen() {
         streamId: currentStream.id,
       });
       
-      // Call cloudflareService.stopLive with correct parameters
       await cloudflareService.stopLive({
         liveInputId: currentStream.live_input_id,
         streamId: currentStream.id,
@@ -215,11 +255,11 @@ export default function BroadcasterScreen() {
 
       console.log('✅ Stream ended successfully');
 
-      // Reset all state
       setIsLive(false);
       setViewerCount(0);
       setLiveTime(0);
       setCurrentStream(null);
+      setGiftAnimations([]);
 
       Alert.alert('Stream Ended', 'Your live stream has been ended successfully.');
     } catch (error) {
@@ -326,6 +366,17 @@ export default function BroadcasterScreen() {
           </View>
         </View>
       </View>
+
+      {/* Gift Animations */}
+      {giftAnimations.map((animation) => (
+        <GiftAnimationOverlay
+          key={animation.id}
+          giftName={animation.giftName}
+          senderUsername={animation.senderUsername}
+          amount={animation.amount}
+          onAnimationComplete={() => handleAnimationComplete(animation.id)}
+        />
+      ))}
 
       <Modal
         visible={showSetup}

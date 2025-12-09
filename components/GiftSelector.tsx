@@ -14,18 +14,28 @@ import {
 import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import GradientButton from '@/components/GradientButton';
-import { fetchGifts, purchaseGift, Gift } from '@/app/services/giftService';
+import { fetchGifts, purchaseGift, Gift, getGiftTier } from '@/app/services/giftService';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/app/integrations/supabase/client';
+import { router } from 'expo-router';
 
 interface GiftSelectorProps {
   visible: boolean;
   onClose: () => void;
   receiverId: string;
   receiverName: string;
+  livestreamId?: string;
+  onGiftSent?: (giftEvent: any) => void;
 }
 
-export default function GiftSelector({ visible, onClose, receiverId, receiverName }: GiftSelectorProps) {
+export default function GiftSelector({
+  visible,
+  onClose,
+  receiverId,
+  receiverName,
+  livestreamId,
+  onGiftSent,
+}: GiftSelectorProps) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState(false);
@@ -54,6 +64,10 @@ export default function GiftSelector({ visible, onClose, receiverId, receiverNam
 
       if (walletResult.data) {
         setWalletBalance(parseFloat(walletResult.data.balance));
+      } else {
+        // Create wallet if it doesn't exist
+        await supabase.from('wallet').insert({ user_id: user.id, balance: 0 });
+        setWalletBalance(0);
       }
     } catch (error) {
       console.error('Error loading data:', error);
@@ -68,13 +82,16 @@ export default function GiftSelector({ visible, onClose, receiverId, receiverNam
     if (walletBalance < selectedGift.price_sek) {
       Alert.alert(
         'Insufficient Balance',
-        'You don&apos;t have enough balance to purchase this gift. Would you like to add balance?',
+        'You need to add money to send gifts.',
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Add Balance', onPress: () => {
-            onClose();
-            // Navigate to add balance screen
-          }},
+          {
+            text: 'Add Balance',
+            onPress: () => {
+              onClose();
+              router.push('/screens/AddBalanceScreen');
+            },
+          },
         ]
       );
       return;
@@ -83,17 +100,33 @@ export default function GiftSelector({ visible, onClose, receiverId, receiverNam
     setPurchasing(true);
 
     try {
-      const result = await purchaseGift(selectedGift.id, user.id, receiverId);
+      const result = await purchaseGift(
+        selectedGift.id,
+        user.id,
+        receiverId,
+        livestreamId
+      );
 
-      if (result.success) {
+      if (result.success && result.giftEvent) {
+        // Notify parent component about the gift
+        if (onGiftSent) {
+          onGiftSent(result.giftEvent);
+        }
+
         Alert.alert(
           'Gift Sent! 🎁',
           `You sent ${selectedGift.name} to ${receiverName}!`,
-          [{ text: 'OK', onPress: () => {
-            setSelectedGift(null);
-            onClose();
-          }}]
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                setSelectedGift(null);
+                onClose();
+              },
+            },
+          ]
         );
+
         // Refresh wallet balance
         const { data } = await supabase
           .from('wallet')
@@ -112,6 +145,13 @@ export default function GiftSelector({ visible, onClose, receiverId, receiverNam
     } finally {
       setPurchasing(false);
     }
+  };
+
+  const getTierColor = (price: number) => {
+    const tier = getGiftTier(price);
+    if (tier === 'high') return '#FFD700';
+    if (tier === 'medium') return colors.gradientEnd;
+    return colors.textSecondary;
   };
 
   return (
@@ -151,8 +191,16 @@ export default function GiftSelector({ visible, onClose, receiverId, receiverNam
                 size={20}
                 color={colors.gradientEnd}
               />
-              <Text style={styles.balanceText}>Balance: {walletBalance.toFixed(2)} SEK</Text>
+              <Text style={styles.balanceText}>Balance: {walletBalance.toFixed(2)} kr</Text>
             </View>
+            <TouchableOpacity
+              onPress={() => {
+                onClose();
+                router.push('/screens/AddBalanceScreen');
+              }}
+            >
+              <Text style={styles.addBalanceText}>Add +</Text>
+            </TouchableOpacity>
           </View>
 
           {loading ? (
@@ -166,53 +214,62 @@ export default function GiftSelector({ visible, onClose, receiverId, receiverNam
               showsVerticalScrollIndicator={false}
             >
               <View style={styles.giftsGrid}>
-                {gifts.map((gift, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={[
-                      styles.giftCard,
-                      selectedGift?.id === gift.id && styles.giftCardSelected,
-                      walletBalance < gift.price_sek && styles.giftCardDisabled,
-                    ]}
-                    onPress={() => setSelectedGift(gift)}
-                    disabled={walletBalance < gift.price_sek}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.giftImageContainer}>
-                      {gift.icon_url ? (
-                        <Image source={{ uri: gift.icon_url }} style={styles.giftImage} />
-                      ) : (
-                        <View style={styles.giftPlaceholder}>
+                {gifts.map((gift, index) => {
+                  const isDisabled = walletBalance < gift.price_sek;
+                  const tierColor = getTierColor(gift.price_sek);
+                  
+                  return (
+                    <TouchableOpacity
+                      key={index}
+                      style={[
+                        styles.giftCard,
+                        selectedGift?.id === gift.id && styles.giftCardSelected,
+                        isDisabled && styles.giftCardDisabled,
+                        { borderColor: selectedGift?.id === gift.id ? tierColor : colors.border },
+                      ]}
+                      onPress={() => setSelectedGift(gift)}
+                      disabled={isDisabled}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.giftImageContainer}>
+                        {gift.icon_url ? (
+                          <Image source={{ uri: gift.icon_url }} style={styles.giftImage} />
+                        ) : (
+                          <View style={styles.giftPlaceholder}>
+                            <IconSymbol
+                              ios_icon_name="gift.fill"
+                              android_material_icon_name="card_giftcard"
+                              size={32}
+                              color={tierColor}
+                            />
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.giftName} numberOfLines={2}>
+                        {gift.name}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.giftPrice,
+                          { color: tierColor },
+                          isDisabled && styles.giftPriceDisabled,
+                        ]}
+                      >
+                        {gift.price_sek} kr
+                      </Text>
+                      {selectedGift?.id === gift.id && (
+                        <View style={styles.selectedBadge}>
                           <IconSymbol
-                            ios_icon_name="gift.fill"
-                            android_material_icon_name="card_giftcard"
-                            size={32}
-                            color={colors.gradientEnd}
+                            ios_icon_name="checkmark.circle.fill"
+                            android_material_icon_name="check_circle"
+                            size={20}
+                            color={tierColor}
                           />
                         </View>
                       )}
-                    </View>
-                    <Text style={styles.giftName} numberOfLines={1}>
-                      {gift.name}
-                    </Text>
-                    <Text style={[
-                      styles.giftPrice,
-                      walletBalance < gift.price_sek && styles.giftPriceDisabled,
-                    ]}>
-                      {gift.price_sek} SEK
-                    </Text>
-                    {selectedGift?.id === gift.id && (
-                      <View style={styles.selectedBadge}>
-                        <IconSymbol
-                          ios_icon_name="checkmark.circle.fill"
-                          android_material_icon_name="check_circle"
-                          size={20}
-                          color={colors.gradientEnd}
-                        />
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                ))}
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             </ScrollView>
           )}
@@ -220,8 +277,20 @@ export default function GiftSelector({ visible, onClose, receiverId, receiverNam
           {selectedGift && (
             <View style={styles.footer}>
               <View style={styles.selectedGiftInfo}>
-                <Text style={styles.selectedGiftName}>{selectedGift.name}</Text>
-                <Text style={styles.selectedGiftPrice}>{selectedGift.price_sek} SEK</Text>
+                <View>
+                  <Text style={styles.selectedGiftName}>{selectedGift.name}</Text>
+                  <Text style={styles.selectedGiftDesc} numberOfLines={1}>
+                    {selectedGift.description}
+                  </Text>
+                </View>
+                <Text
+                  style={[
+                    styles.selectedGiftPrice,
+                    { color: getTierColor(selectedGift.price_sek) },
+                  ]}
+                >
+                  {selectedGift.price_sek} kr
+                </Text>
               </View>
               <View style={styles.footerButton}>
                 <GradientButton
@@ -299,6 +368,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text,
   },
+  addBalanceText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.gradientEnd,
+  },
   loadingContainer: {
     padding: 40,
     alignItems: 'center',
@@ -326,7 +400,6 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   giftCardSelected: {
-    borderColor: colors.gradientEnd,
     backgroundColor: colors.backgroundAlt,
   },
   giftCardDisabled: {
@@ -356,11 +429,11 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: 2,
     textAlign: 'center',
+    minHeight: 28,
   },
   giftPrice: {
     fontSize: 13,
     fontWeight: '700',
-    color: colors.gradientEnd,
   },
   giftPriceDisabled: {
     color: colors.textSecondary,
@@ -387,10 +460,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text,
   },
+  selectedGiftDesc: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
   selectedGiftPrice: {
     fontSize: 18,
     fontWeight: '700',
-    color: colors.gradientEnd,
   },
   footerButton: {
     width: '100%',

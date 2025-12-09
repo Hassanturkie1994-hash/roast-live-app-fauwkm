@@ -17,6 +17,7 @@ export interface GiftEvent {
   receiver_user_id: string;
   gift_id: string;
   price_sek: number;
+  livestream_id?: string;
   created_at: string;
 }
 
@@ -38,18 +39,21 @@ export async function fetchGifts(): Promise<{ data: Gift[] | null; error: any }>
 }
 
 /**
- * Purchase a gift for another user
+ * Purchase a gift for another user during a livestream
  * This will:
  * 1. Check if sender has sufficient balance
  * 2. Deduct the cost from sender's wallet
- * 3. Create a transaction record
- * 4. Create a gift event record
+ * 3. Add the amount to receiver's wallet
+ * 4. Create transaction records for both users
+ * 5. Create a gift event record
+ * 6. Broadcast the gift event to all viewers
  */
 export async function purchaseGift(
   giftId: string,
   senderId: string,
-  receiverId: string
-): Promise<{ success: boolean; error?: string }> {
+  receiverId: string,
+  livestreamId?: string
+): Promise<{ success: boolean; error?: string; giftEvent?: any }> {
   try {
     // Fetch gift details
     const { data: gift, error: giftError } = await supabase
@@ -63,40 +67,85 @@ export async function purchaseGift(
     }
 
     // Fetch sender's wallet balance
-    const { data: wallet, error: walletError } = await supabase
+    const { data: senderWallet, error: senderWalletError } = await supabase
       .from('wallet')
       .select('balance')
       .eq('user_id', senderId)
       .single();
 
-    if (walletError || !wallet) {
+    if (senderWalletError || !senderWallet) {
       return { success: false, error: 'Wallet not found' };
     }
 
-    const currentBalance = parseFloat(wallet.balance);
+    const senderBalance = parseFloat(senderWallet.balance);
     const giftPrice = gift.price_sek;
 
     // Check if sender has sufficient balance
-    if (currentBalance < giftPrice) {
+    if (senderBalance < giftPrice) {
       return { success: false, error: 'Insufficient balance' };
     }
 
+    // Fetch receiver's wallet (or create if doesn't exist)
+    let { data: receiverWallet, error: receiverWalletError } = await supabase
+      .from('wallet')
+      .select('balance')
+      .eq('user_id', receiverId)
+      .single();
+
+    if (receiverWalletError || !receiverWallet) {
+      // Create wallet for receiver if it doesn't exist
+      const { data: newWallet, error: createError } = await supabase
+        .from('wallet')
+        .insert({ user_id: receiverId, balance: 0 })
+        .select('balance')
+        .single();
+
+      if (createError || !newWallet) {
+        return { success: false, error: 'Failed to create receiver wallet' };
+      }
+      receiverWallet = newWallet;
+    }
+
+    const receiverBalance = parseFloat(receiverWallet.balance);
+
     // Deduct from sender's wallet
-    const { error: updateWalletError } = await supabase
+    const { error: updateSenderWalletError } = await supabase
       .from('wallet')
       .update({
-        balance: currentBalance - giftPrice,
+        balance: senderBalance - giftPrice,
         last_updated: new Date().toISOString(),
       })
       .eq('user_id', senderId);
 
-    if (updateWalletError) {
-      console.error('Error updating wallet:', updateWalletError);
-      return { success: false, error: 'Failed to update wallet' };
+    if (updateSenderWalletError) {
+      console.error('Error updating sender wallet:', updateSenderWalletError);
+      return { success: false, error: 'Failed to update sender wallet' };
     }
 
-    // Create transaction record
-    const { error: transactionError } = await supabase.from('transactions').insert({
+    // Add to receiver's wallet
+    const { error: updateReceiverWalletError } = await supabase
+      .from('wallet')
+      .update({
+        balance: receiverBalance + giftPrice,
+        last_updated: new Date().toISOString(),
+      })
+      .eq('user_id', receiverId);
+
+    if (updateReceiverWalletError) {
+      console.error('Error updating receiver wallet:', updateReceiverWalletError);
+      // Rollback sender wallet update
+      await supabase
+        .from('wallet')
+        .update({
+          balance: senderBalance,
+          last_updated: new Date().toISOString(),
+        })
+        .eq('user_id', senderId);
+      return { success: false, error: 'Failed to update receiver wallet' };
+    }
+
+    // Create transaction record for sender (deduction)
+    const { error: senderTransactionError } = await supabase.from('transactions').insert({
       user_id: senderId,
       amount: -giftPrice,
       type: 'gift_purchase',
@@ -105,33 +154,57 @@ export async function purchaseGift(
       status: 'completed',
     });
 
-    if (transactionError) {
-      console.error('Error creating transaction:', transactionError);
-      // Attempt to rollback wallet update
-      await supabase
-        .from('wallet')
-        .update({
-          balance: currentBalance,
-          last_updated: new Date().toISOString(),
-        })
-        .eq('user_id', senderId);
-      return { success: false, error: 'Failed to create transaction' };
+    if (senderTransactionError) {
+      console.error('Error creating sender transaction:', senderTransactionError);
     }
 
-    // Create gift event record
-    const { error: giftEventError } = await supabase.from('gift_events').insert({
-      sender_user_id: senderId,
-      receiver_user_id: receiverId,
-      gift_id: giftId,
-      price_sek: giftPrice,
+    // Create transaction record for receiver (addition)
+    const { error: receiverTransactionError } = await supabase.from('transactions').insert({
+      user_id: receiverId,
+      amount: giftPrice,
+      type: 'creator_tip',
+      payment_method: 'wallet',
+      source: 'gift_purchase',
+      status: 'completed',
     });
+
+    if (receiverTransactionError) {
+      console.error('Error creating receiver transaction:', receiverTransactionError);
+    }
+
+    // Fetch sender info for the gift event
+    const { data: senderInfo } = await supabase
+      .from('profiles')
+      .select('username, display_name')
+      .eq('id', senderId)
+      .single();
+
+    // Create gift event record
+    const { data: giftEventData, error: giftEventError } = await supabase
+      .from('gift_events')
+      .insert({
+        sender_user_id: senderId,
+        receiver_user_id: receiverId,
+        gift_id: giftId,
+        price_sek: giftPrice,
+        livestream_id: livestreamId,
+      })
+      .select('*')
+      .single();
 
     if (giftEventError) {
       console.error('Error creating gift event:', giftEventError);
       return { success: false, error: 'Failed to record gift event' };
     }
 
-    return { success: true };
+    // Return gift event with additional info for broadcasting
+    const giftEventWithInfo = {
+      ...giftEventData,
+      gift,
+      sender_username: senderInfo?.display_name || senderInfo?.username || 'Anonymous',
+    };
+
+    return { success: true, giftEvent: giftEventWithInfo };
   } catch (error) {
     console.error('Error in purchaseGift:', error);
     return { success: false, error: 'An unexpected error occurred' };
@@ -164,4 +237,13 @@ export async function fetchGiftEvents(
     console.error('Error fetching gift events:', error);
     return { data: null, error };
   }
+}
+
+/**
+ * Get gift tier based on price
+ */
+export function getGiftTier(price: number): 'cheap' | 'medium' | 'high' {
+  if (price <= 20) return 'cheap';
+  if (price <= 500) return 'medium';
+  return 'high';
 }

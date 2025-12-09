@@ -17,6 +17,8 @@ import LiveBadge from '@/components/LiveBadge';
 import FollowButton from '@/components/FollowButton';
 import RoastLiveLogo from '@/components/RoastLiveLogo';
 import ChatOverlay from '@/components/ChatOverlay';
+import GiftSelector from '@/components/GiftSelector';
+import GiftAnimationOverlay from '@/components/GiftAnimationOverlay';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/app/integrations/supabase/client';
 import { Tables } from '@/app/integrations/supabase/types';
@@ -24,6 +26,13 @@ import { Tables } from '@/app/integrations/supabase/types';
 type Stream = Tables<'streams'> & {
   users: Tables<'users'>;
 };
+
+interface GiftAnimation {
+  id: string;
+  giftName: string;
+  senderUsername: string;
+  amount: number;
+}
 
 export default function ViewerScreen() {
   const { streamId } = useLocalSearchParams<{ streamId: string }>();
@@ -33,7 +42,10 @@ export default function ViewerScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [viewerCount, setViewerCount] = useState(0);
   const [hasJoinedChannel, setHasJoinedChannel] = useState(false);
+  const [showGiftSelector, setShowGiftSelector] = useState(false);
+  const [giftAnimations, setGiftAnimations] = useState<GiftAnimation[]>([]);
   const channelRef = useRef<any>(null);
+  const giftChannelRef = useRef<any>(null);
 
   const player = useVideoPlayer(
     stream?.playback_url
@@ -141,6 +153,30 @@ export default function ViewerScreen() {
     channelRef.current = channel;
   }, [streamId, user]);
 
+  const subscribeToGifts = useCallback(() => {
+    if (!streamId) return;
+
+    const channel = supabase
+      .channel(`stream:${streamId}:gifts`)
+      .on('broadcast', { event: 'gift_sent' }, (payload) => {
+        console.log('Gift received:', payload);
+        const giftData = payload.payload;
+        
+        // Add gift animation to queue
+        const newAnimation: GiftAnimation = {
+          id: `${Date.now()}-${Math.random()}`,
+          giftName: giftData.gift_name,
+          senderUsername: giftData.sender_username,
+          amount: giftData.amount,
+        };
+        
+        setGiftAnimations((prev) => [...prev, newAnimation]);
+      })
+      .subscribe();
+
+    giftChannelRef.current = channel;
+  }, [streamId]);
+
   useEffect(() => {
     if (streamId) {
       fetchStream();
@@ -149,21 +185,30 @@ export default function ViewerScreen() {
     return () => {
       player.pause();
       leaveViewerChannel();
+      leaveGiftChannel();
     };
   }, [streamId, fetchStream, player]);
 
   useEffect(() => {
     if (stream && !hasJoinedChannel) {
       joinViewerChannel();
+      subscribeToGifts();
       setHasJoinedChannel(true);
     }
-  }, [stream, hasJoinedChannel, joinViewerChannel]);
+  }, [stream, hasJoinedChannel, joinViewerChannel, subscribeToGifts]);
 
   const leaveViewerChannel = () => {
     if (channelRef.current) {
       channelRef.current.untrack();
       supabase.removeChannel(channelRef.current);
       channelRef.current = null;
+    }
+  };
+
+  const leaveGiftChannel = () => {
+    if (giftChannelRef.current) {
+      supabase.removeChannel(giftChannelRef.current);
+      giftChannelRef.current = null;
     }
   };
 
@@ -232,6 +277,25 @@ export default function ViewerScreen() {
         { text: 'Cancel', style: 'cancel' },
       ]
     );
+  };
+
+  const handleGiftSent = async (giftEvent: any) => {
+    // Broadcast gift to all viewers
+    if (giftChannelRef.current) {
+      await giftChannelRef.current.send({
+        type: 'broadcast',
+        event: 'gift_sent',
+        payload: {
+          gift_name: giftEvent.gift.name,
+          sender_username: giftEvent.sender_username,
+          amount: giftEvent.price_sek,
+        },
+      });
+    }
+  };
+
+  const handleAnimationComplete = (animationId: string) => {
+    setGiftAnimations((prev) => prev.filter((anim) => anim.id !== animationId));
   };
 
   if (!stream) {
@@ -323,6 +387,19 @@ export default function ViewerScreen() {
             <Text style={styles.actionText}>Like</Text>
           </TouchableOpacity>
 
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => setShowGiftSelector(true)}
+          >
+            <IconSymbol
+              ios_icon_name="gift.fill"
+              android_material_icon_name="card_giftcard"
+              size={28}
+              color={colors.text}
+            />
+            <Text style={styles.actionText}>Send Gift</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity style={styles.actionButton} onPress={handleShare}>
             <IconSymbol
               ios_icon_name="square.and.arrow.up.fill"
@@ -348,6 +425,29 @@ export default function ViewerScreen() {
           )}
         </View>
       </View>
+
+      {/* Gift Animations */}
+      {giftAnimations.map((animation) => (
+        <GiftAnimationOverlay
+          key={animation.id}
+          giftName={animation.giftName}
+          senderUsername={animation.senderUsername}
+          amount={animation.amount}
+          onAnimationComplete={() => handleAnimationComplete(animation.id)}
+        />
+      ))}
+
+      {/* Gift Selector Modal */}
+      {stream && (
+        <GiftSelector
+          visible={showGiftSelector}
+          onClose={() => setShowGiftSelector(false)}
+          receiverId={stream.broadcaster_id}
+          receiverName={stream.users.display_name}
+          livestreamId={streamId}
+          onGiftSent={handleGiftSent}
+        />
+      )}
     </View>
   );
 }
