@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,113 +12,121 @@ import {
 import { useRouter } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
 import LiveBadge from '@/components/LiveBadge';
+import StoriesBar from '@/components/StoriesBar';
 import { IconSymbol } from '@/components/IconSymbol';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/app/integrations/supabase/client';
+import { Tables } from '@/app/integrations/supabase/types';
 
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
-interface StreamData {
+type Stream = Tables<'streams'>;
+
+interface Post {
   id: string;
-  title: string;
-  thumbnail: string;
-  creatorName: string;
-  creatorAvatar: string;
-  viewerCount: number;
-  isLive: boolean;
-  likes: number;
-  comments: number;
+  user_id: string;
+  media_url: string;
+  caption: string;
+  likes_count: number;
+  comments_count: number;
+  created_at: string;
+  profiles: {
+    username: string;
+    display_name: string | null;
+    avatar_url: string | null;
+  };
 }
 
-const mockStreams: StreamData[] = [
-  {
-    id: '1',
-    title: 'Epic Gaming Session - Come Join the Fun!',
-    thumbnail: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800',
-    creatorName: 'GamerPro',
-    creatorAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
-    viewerCount: 12500,
-    isLive: true,
-    likes: 8500,
-    comments: 342,
-  },
-  {
-    id: '2',
-    title: 'Cooking Stream - Making Pizza from Scratch',
-    thumbnail: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800',
-    creatorName: 'ChefMaster',
-    creatorAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200',
-    viewerCount: 8300,
-    isLive: true,
-    likes: 5200,
-    comments: 189,
-  },
-  {
-    id: '3',
-    title: 'Music Production Live - Creating Beats',
-    thumbnail: 'https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=800',
-    creatorName: 'BeatMaker',
-    creatorAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
-    viewerCount: 5600,
-    isLive: true,
-    likes: 3400,
-    comments: 156,
-  },
-  {
-    id: '4',
-    title: 'Art Stream - Digital Painting Tutorial',
-    thumbnail: 'https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?w=800',
-    creatorName: 'ArtistPro',
-    creatorAvatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200',
-    viewerCount: 3200,
-    isLive: true,
-    likes: 2100,
-    comments: 98,
-  },
-  {
-    id: '5',
-    title: 'Fitness Training - Full Body Workout',
-    thumbnail: 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=800',
-    creatorName: 'FitCoach',
-    creatorAvatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200',
-    viewerCount: 2100,
-    isLive: true,
-    likes: 1800,
-    comments: 67,
-  },
-];
-
-type FeedSegment = 'Following' | 'Recommended' | 'Explore';
+type FeedSegment = 'Live' | 'Posts';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const [selectedSegment, setSelectedSegment] = useState<FeedSegment>('Recommended');
-  const [likedStreams, setLikedStreams] = useState<Set<string>>(new Set());
+  const { user } = useAuth();
+  const [selectedSegment, setSelectedSegment] = useState<FeedSegment>('Live');
+  const [streams, setStreams] = useState<Stream[]>([]);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
 
-  const handleStreamPress = (streamId: string) => {
-    console.log('Stream pressed:', streamId);
-    router.push(`/live-player?id=${streamId}`);
+  useEffect(() => {
+    if (selectedSegment === 'Live') {
+      fetchStreams();
+    } else {
+      fetchPosts();
+    }
+  }, [selectedSegment]);
+
+  const fetchStreams = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('streams')
+        .select('*')
+        .eq('status', 'live')
+        .order('started_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching streams:', error);
+        return;
+      }
+
+      if (data) {
+        setStreams(data);
+      }
+    } catch (error) {
+      console.error('Error in fetchStreams:', error);
+    }
   };
 
-  const handleLike = (streamId: string) => {
-    setLikedStreams((prev) => {
+  const fetchPosts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('posts')
+        .select('*, profiles(*)')
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (error) {
+        console.error('Error fetching posts:', error);
+        return;
+      }
+
+      if (data) {
+        setPosts(data as any);
+      }
+    } catch (error) {
+      console.error('Error in fetchPosts:', error);
+    }
+  };
+
+  const handleStreamPress = (streamId: string) => {
+    router.push({
+      pathname: '/live-player',
+      params: { streamId },
+    });
+  };
+
+  const handleLike = (postId: string) => {
+    setLikedPosts((prev) => {
       const newSet = new Set(prev);
-      if (newSet.has(streamId)) {
-        newSet.delete(streamId);
+      if (newSet.has(postId)) {
+        newSet.delete(postId);
       } else {
-        newSet.add(streamId);
+        newSet.add(postId);
       }
       return newSet;
     });
   };
 
-  const renderStream = ({ item, index }: { item: StreamData; index: number }) => (
+  const renderStream = ({ item, index }: { item: Stream; index: number }) => (
     <TouchableOpacity
       key={index}
       style={styles.streamContainer}
       activeOpacity={1}
       onPress={() => handleStreamPress(item.id)}
     >
-      <Image source={{ uri: item.thumbnail }} style={styles.thumbnail} />
+      <View style={styles.streamPlaceholder}>
+        <Text style={styles.streamPlaceholderText}>LIVE STREAM</Text>
+      </View>
       <LinearGradient
         colors={['transparent', 'rgba(0, 0, 0, 0.8)']}
         style={styles.gradient}
@@ -135,12 +143,38 @@ export default function HomeScreen() {
             size={14}
             color={colors.text}
           />
-          <Text style={styles.viewerCount}>{formatCount(item.viewerCount)}</Text>
+          <Text style={styles.viewerCount}>{item.viewer_count || 0}</Text>
         </View>
       </View>
 
       <View style={styles.liveBadgeContainer}>
         <LiveBadge size="small" />
+      </View>
+
+      <View style={styles.bottomInfo}>
+        <Text style={styles.streamTitle} numberOfLines={2}>
+          {item.title}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+
+  const renderPost = ({ item, index }: { item: Post; index: number }) => (
+    <TouchableOpacity
+      key={index}
+      style={styles.streamContainer}
+      activeOpacity={1}
+    >
+      <Image source={{ uri: item.media_url }} style={styles.thumbnail} />
+      <LinearGradient
+        colors={['transparent', 'rgba(0, 0, 0, 0.8)']}
+        style={styles.gradient}
+      />
+
+      <View style={styles.topBar}>
+        <View style={styles.logoContainer}>
+          <Text style={styles.logoText}>ROAST LIVE</Text>
+        </View>
       </View>
 
       <View style={styles.rightActions}>
@@ -149,12 +183,12 @@ export default function HomeScreen() {
           onPress={() => handleLike(item.id)}
         >
           <IconSymbol
-            ios_icon_name={likedStreams.has(item.id) ? 'heart.fill' : 'heart'}
+            ios_icon_name={likedPosts.has(item.id) ? 'heart.fill' : 'heart'}
             android_material_icon_name="favorite"
             size={32}
-            color={likedStreams.has(item.id) ? colors.gradientEnd : colors.text}
+            color={likedPosts.has(item.id) ? colors.gradientEnd : colors.text}
           />
-          <Text style={styles.actionText}>{formatCount(item.likes)}</Text>
+          <Text style={styles.actionText}>{formatCount(item.likes_count)}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.actionButton}>
@@ -164,7 +198,7 @@ export default function HomeScreen() {
             size={32}
             color={colors.text}
           />
-          <Text style={styles.actionText}>{formatCount(item.comments)}</Text>
+          <Text style={styles.actionText}>{formatCount(item.comments_count)}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.actionButton}>
@@ -178,14 +212,21 @@ export default function HomeScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.creatorAvatarButton}>
-          <Image source={{ uri: item.creatorAvatar }} style={styles.creatorAvatar} />
+          <Image
+            source={{
+              uri: item.profiles.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
+            }}
+            style={styles.creatorAvatar}
+          />
         </TouchableOpacity>
       </View>
 
       <View style={styles.bottomInfo}>
-        <Text style={styles.creatorName}>@{item.creatorName}</Text>
+        <Text style={styles.creatorName}>
+          @{item.profiles.username}
+        </Text>
         <Text style={styles.streamTitle} numberOfLines={2}>
-          {item.title}
+          {item.caption}
         </Text>
       </View>
     </TouchableOpacity>
@@ -194,7 +235,7 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.segmentControl}>
-        {(['Following', 'Recommended', 'Explore'] as FeedSegment[]).map((segment, index) => (
+        {(['Live', 'Posts'] as FeedSegment[]).map((segment, index) => (
           <TouchableOpacity
             key={index}
             style={styles.segmentButton}
@@ -215,10 +256,14 @@ export default function HomeScreen() {
         ))}
       </View>
 
+      <View style={styles.storiesContainer}>
+        <StoriesBar />
+      </View>
+
       <FlatList
-        data={mockStreams}
-        renderItem={renderStream}
-        keyExtractor={(item) => item.id}
+        data={selectedSegment === 'Live' ? streams : posts}
+        renderItem={selectedSegment === 'Live' ? renderStream : renderPost}
+        keyExtractor={(item, index) => index.toString()}
         pagingEnabled
         showsVerticalScrollIndicator={false}
         snapToInterval={screenHeight - 100}
@@ -280,18 +325,38 @@ const styles = StyleSheet.create({
     height: 2,
     backgroundColor: colors.text,
   },
+  storiesContainer: {
+    position: 'absolute',
+    top: 110,
+    left: 0,
+    right: 0,
+    zIndex: 9,
+  },
   listContent: {
+    paddingTop: 180,
     paddingBottom: 0,
   },
   streamContainer: {
     width: screenWidth,
-    height: screenHeight - 100,
+    height: screenHeight - 280,
     position: 'relative',
   },
   thumbnail: {
     width: '100%',
     height: '100%',
     backgroundColor: colors.backgroundAlt,
+  },
+  streamPlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: colors.backgroundAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  streamPlaceholderText: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: colors.textSecondary,
   },
   gradient: {
     position: 'absolute',
@@ -302,7 +367,7 @@ const styles = StyleSheet.create({
   },
   topBar: {
     position: 'absolute',
-    top: 60,
+    top: 16,
     left: 0,
     right: 0,
     flexDirection: 'row',
@@ -339,13 +404,13 @@ const styles = StyleSheet.create({
   },
   liveBadgeContainer: {
     position: 'absolute',
-    top: 120,
+    top: 70,
     left: 16,
   },
   rightActions: {
     position: 'absolute',
     right: 12,
-    bottom: 140,
+    bottom: 100,
     alignItems: 'center',
     gap: 24,
   },
@@ -370,7 +435,7 @@ const styles = StyleSheet.create({
   },
   bottomInfo: {
     position: 'absolute',
-    bottom: 100,
+    bottom: 60,
     left: 16,
     right: 80,
   },

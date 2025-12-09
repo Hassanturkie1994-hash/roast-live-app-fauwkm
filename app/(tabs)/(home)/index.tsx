@@ -1,315 +1,360 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  StyleSheet,
+  FlatList,
+  RefreshControl,
+  Text,
+  TouchableOpacity,
+  Image,
+  Dimensions,
+} from 'react-native';
 import { router } from 'expo-router';
 import { colors, commonStyles } from '@/styles/commonStyles';
-import RoastLiveLogo from '@/components/RoastLiveLogo';
 import StreamPreviewCard from '@/components/StreamPreviewCard';
+import StoriesBar from '@/components/StoriesBar';
 import { IconSymbol } from '@/components/IconSymbol';
+import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/app/integrations/supabase/client';
 import { Tables } from '@/app/integrations/supabase/types';
-import { useAuth } from '@/contexts/AuthContext';
 
-type Stream = Tables<'streams'> & {
-  users: Tables<'users'>;
-};
+type Stream = Tables<'streams'>;
+
+interface Post {
+  id: string;
+  user_id: string;
+  media_url: string;
+  caption: string;
+  likes_count: number;
+  comments_count: number;
+  created_at: string;
+  profiles: {
+    username: string;
+    display_name: string | null;
+    avatar_url: string | null;
+  };
+}
+
+const { width: screenWidth } = Dimensions.get('window');
 
 export default function HomeScreen() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'following' | 'recommended'>('recommended');
-  const [liveStreams, setLiveStreams] = useState<Stream[]>([]);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [streams, setStreams] = useState<Stream[]>([]);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState<'live' | 'posts'>('live');
 
-  const fetchLiveStreams = useCallback(async () => {
+  useEffect(() => {
+    fetchData();
+  }, [activeTab]);
+
+  const fetchData = async () => {
+    if (activeTab === 'live') {
+      await fetchStreams();
+    } else {
+      await fetchPosts();
+    }
+  };
+
+  const fetchStreams = async () => {
     try {
-      let query = supabase
+      const { data, error } = await supabase
         .from('streams')
-        .select('*, users(*)')
+        .select('*')
         .eq('status', 'live')
         .order('started_at', { ascending: false });
 
-      // If "Following" tab and user is logged in, filter by followed users
-      if (activeTab === 'following' && user) {
-        const { data: following } = await supabase
-          .from('followers')
-          .select('following_id')
-          .eq('follower_id', user.id);
-
-        if (following && following.length > 0) {
-          const followingIds = following.map((f) => f.following_id);
-          query = query.in('broadcaster_id', followingIds);
-        } else {
-          // No following, show empty
-          setLiveStreams([]);
-          setIsLoading(false);
-          return;
-        }
-      }
-
-      const { data, error } = await query;
-
       if (error) {
-        console.error('Error fetching live streams:', error);
+        console.error('Error fetching streams:', error);
         return;
       }
 
-      setLiveStreams(data as Stream[]);
+      if (data) {
+        setStreams(data);
+      }
     } catch (error) {
-      console.error('Error in fetchLiveStreams:', error);
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
+      console.error('Error in fetchStreams:', error);
     }
-  }, [activeTab, user]);
-
-  useEffect(() => {
-    fetchLiveStreams();
-    
-    // Subscribe to new streams
-    const channel = supabase
-      .channel('live-streams')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'streams',
-          filter: 'status=eq.live',
-        },
-        () => {
-          console.log('New live stream detected');
-          fetchLiveStreams();
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'streams',
-        },
-        () => {
-          console.log('Stream updated');
-          fetchLiveStreams();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [fetchLiveStreams]);
-
-  const handleRefresh = () => {
-    setIsRefreshing(true);
-    fetchLiveStreams();
   };
 
-  const handleStreamPress = (streamId: string) => {
-    router.push(`/live-player?streamId=${streamId}`);
+  const fetchPosts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('posts')
+        .select('*, profiles(*)')
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (error) {
+        console.error('Error fetching posts:', error);
+        return;
+      }
+
+      if (data) {
+        setPosts(data as any);
+      }
+    } catch (error) {
+      console.error('Error in fetchPosts:', error);
+    }
   };
 
-  const renderEmptyState = () => {
-    if (activeTab === 'following' && !user) {
-      return (
-        <View style={styles.emptyState}>
-          <IconSymbol
-            ios_icon_name="person.fill.questionmark"
-            android_material_icon_name="person"
-            size={64}
-            color={colors.textSecondary}
-          />
-          <Text style={styles.emptyTitle}>Login to See Following</Text>
-          <Text style={styles.emptyText}>
-            Login to see live streams from people you follow
-          </Text>
-          <TouchableOpacity
-            style={styles.loginButton}
-            onPress={() => router.push('/auth/login')}
-          >
-            <Text style={styles.loginButtonText}>Login</Text>
-          </TouchableOpacity>
-        </View>
-      );
-    }
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchData();
+    setRefreshing(false);
+  };
 
-    return (
-      <View style={styles.emptyState}>
-        <IconSymbol
-          ios_icon_name="video.slash.fill"
-          android_material_icon_name="videocam_off"
-          size={64}
-          color={colors.textSecondary}
+  const handleStreamPress = (stream: Stream) => {
+    router.push({
+      pathname: '/live-player',
+      params: { streamId: stream.id },
+    });
+  };
+
+  const handlePostPress = (post: Post) => {
+    console.log('Post pressed:', post.id);
+    // Navigate to post detail screen (to be implemented)
+  };
+
+  const renderPost = ({ item }: { item: Post }) => (
+    <TouchableOpacity
+      style={styles.postContainer}
+      onPress={() => handlePostPress(item)}
+      activeOpacity={0.95}
+    >
+      <View style={styles.postHeader}>
+        <Image
+          source={{
+            uri: item.profiles.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
+          }}
+          style={styles.postAvatar}
         />
-        <Text style={styles.emptyTitle}>No Live Streams</Text>
-        <Text style={styles.emptyText}>
-          {activeTab === 'following'
-            ? 'None of the people you follow are live right now'
-            : 'No one is streaming right now. Be the first to go live!'}
-        </Text>
-        {activeTab === 'recommended' && (
-          <TouchableOpacity
-            style={styles.goLiveButton}
-            onPress={() => router.push('/(tabs)/broadcaster')}
-          >
-            <Text style={styles.goLiveButtonText}>Go Live</Text>
-          </TouchableOpacity>
-        )}
+        <View style={styles.postHeaderText}>
+          <Text style={styles.postDisplayName}>
+            {item.profiles.display_name || item.profiles.username}
+          </Text>
+          <Text style={styles.postUsername}>@{item.profiles.username}</Text>
+        </View>
       </View>
-    );
-  };
+
+      <Image source={{ uri: item.media_url }} style={styles.postImage} />
+
+      <View style={styles.postActions}>
+        <TouchableOpacity style={styles.postAction}>
+          <IconSymbol
+            ios_icon_name="heart"
+            android_material_icon_name="favorite_border"
+            size={24}
+            color={colors.text}
+          />
+          <Text style={styles.postActionText}>{item.likes_count}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.postAction}>
+          <IconSymbol
+            ios_icon_name="bubble.left"
+            android_material_icon_name="comment"
+            size={24}
+            color={colors.text}
+          />
+          <Text style={styles.postActionText}>{item.comments_count}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.postAction}>
+          <IconSymbol
+            ios_icon_name="paperplane"
+            android_material_icon_name="send"
+            size={24}
+            color={colors.text}
+          />
+        </TouchableOpacity>
+      </View>
+
+      {item.caption && (
+        <View style={styles.postCaption}>
+          <Text style={styles.postCaptionUsername}>@{item.profiles.username}</Text>
+          <Text style={styles.postCaptionText}> {item.caption}</Text>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
 
   return (
     <View style={commonStyles.container}>
-      <View style={styles.header}>
-        <RoastLiveLogo size="medium" />
-      </View>
-
       <View style={styles.tabBar}>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'following' && styles.tabActive]}
-          onPress={() => setActiveTab('following')}
+          style={[styles.tabButton, activeTab === 'live' && styles.tabButtonActive]}
+          onPress={() => setActiveTab('live')}
         >
-          <Text style={[styles.tabText, activeTab === 'following' && styles.tabTextActive]}>
-            Following
+          <IconSymbol
+            ios_icon_name="video.fill"
+            android_material_icon_name="videocam"
+            size={20}
+            color={activeTab === 'live' ? colors.text : colors.textSecondary}
+          />
+          <Text style={[styles.tabButtonText, activeTab === 'live' && styles.tabButtonTextActive]}>
+            LIVE
           </Text>
         </TouchableOpacity>
+
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'recommended' && styles.tabActive]}
-          onPress={() => setActiveTab('recommended')}
+          style={[styles.tabButton, activeTab === 'posts' && styles.tabButtonActive]}
+          onPress={() => setActiveTab('posts')}
         >
-          <Text style={[styles.tabText, activeTab === 'recommended' && styles.tabTextActive]}>
-            Recommended
+          <IconSymbol
+            ios_icon_name="square.grid.2x2.fill"
+            android_material_icon_name="grid_view"
+            size={20}
+            color={activeTab === 'posts' ? colors.text : colors.textSecondary}
+          />
+          <Text style={[styles.tabButtonText, activeTab === 'posts' && styles.tabButtonTextActive]}>
+            POSTS
           </Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={styles.contentContainer}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={handleRefresh}
-            tintColor={colors.gradientEnd}
-            colors={[colors.gradientEnd]}
-          />
-        }
-      >
-        {isLoading ? (
-          <View style={styles.loadingContainer}>
-            <Text style={styles.loadingText}>Loading live streams...</Text>
-          </View>
-        ) : liveStreams.length === 0 ? (
-          renderEmptyState()
-        ) : (
-          <View style={styles.streamsGrid}>
-            {liveStreams.map((stream, index) => (
-              <StreamPreviewCard
-                key={index}
-                stream={stream}
-                onPress={() => handleStreamPress(stream.id)}
-              />
-            ))}
-          </View>
-        )}
-      </ScrollView>
+      {activeTab === 'live' ? (
+        <FlatList
+          data={streams}
+          keyExtractor={(item, index) => index.toString()}
+          renderItem={({ item }) => (
+            <StreamPreviewCard
+              stream={item}
+              onPress={() => handleStreamPress(item)}
+            />
+          )}
+          ListHeaderComponent={<StoriesBar />}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.gradientEnd}
+            />
+          }
+        />
+      ) : (
+        <FlatList
+          data={posts}
+          keyExtractor={(item, index) => index.toString()}
+          renderItem={renderPost}
+          ListHeaderComponent={<StoriesBar />}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.gradientEnd}
+            />
+          }
+        />
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  header: {
-    paddingTop: 60,
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
   tabBar: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    paddingTop: 60,
   },
-  tab: {
+  tabButton: {
     flex: 1,
-    paddingVertical: 12,
+    flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 12,
-    backgroundColor: colors.backgroundAlt,
+    justifyContent: 'center',
+    paddingVertical: 16,
+    gap: 8,
   },
-  tabActive: {
-    backgroundColor: colors.gradientEnd,
+  tabButtonActive: {
+    borderBottomWidth: 2,
+    borderBottomColor: colors.text,
   },
-  tabText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.textSecondary,
-  },
-  tabTextActive: {
-    color: colors.text,
-  },
-  content: {
-    flex: 1,
-  },
-  contentContainer: {
-    padding: 20,
-  },
-  loadingContainer: {
-    paddingVertical: 40,
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  emptyState: {
-    paddingVertical: 60,
-    alignItems: 'center',
-    gap: 16,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.text,
-    marginTop: 16,
-  },
-  emptyText: {
+  tabButtonText: {
     fontSize: 14,
+    fontWeight: '700',
+    color: colors.textSecondary,
+  },
+  tabButtonTextActive: {
+    color: colors.text,
+  },
+  listContent: {
+    paddingBottom: 100,
+  },
+  postContainer: {
+    backgroundColor: colors.background,
+    marginBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    paddingBottom: 16,
+  },
+  postHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  postAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.backgroundAlt,
+    marginRight: 12,
+  },
+  postHeaderText: {
+    flex: 1,
+  },
+  postDisplayName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  postUsername: {
+    fontSize: 12,
     fontWeight: '400',
     color: colors.textSecondary,
-    textAlign: 'center',
-    paddingHorizontal: 40,
   },
-  loginButton: {
-    marginTop: 16,
-    paddingHorizontal: 32,
-    paddingVertical: 12,
-    backgroundColor: colors.gradientEnd,
-    borderRadius: 25,
+  postImage: {
+    width: screenWidth,
+    aspectRatio: 9 / 16,
+    backgroundColor: colors.backgroundAlt,
   },
-  loginButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  goLiveButton: {
-    marginTop: 16,
-    paddingHorizontal: 32,
-    paddingVertical: 12,
-    backgroundColor: colors.gradientEnd,
-    borderRadius: 25,
-  },
-  goLiveButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  streamsGrid: {
+  postActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 12,
     gap: 16,
+  },
+  postAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  postActionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  postCaption: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
+  postCaptionUsername: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  postCaptionText: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: colors.text,
+    flex: 1,
   },
 });

@@ -6,7 +6,13 @@ import { Session, User } from '@supabase/supabase-js';
 interface Profile {
   id: string;
   username: string;
+  display_name?: string;
+  bio?: string;
   avatar_url: string | null;
+  banner_url?: string | null;
+  unique_profile_link?: string;
+  followers_count?: number;
+  following_count?: number;
   created_at?: string;
   updated_at?: string;
 }
@@ -30,11 +36,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const ensureWalletExists = async (userId: string) => {
+    try {
+      const { data: existingWallet } = await supabase
+        .from('wallet')
+        .select('user_id')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (!existingWallet) {
+        console.log('Creating wallet for user:', userId);
+        const { error } = await supabase.from('wallet').insert({
+          user_id: userId,
+          balance: 0.00,
+          last_updated: new Date().toISOString(),
+        });
+
+        if (error) {
+          console.error('Error creating wallet:', error);
+        } else {
+          console.log('Wallet created successfully');
+        }
+      }
+    } catch (error) {
+      console.error('Error in ensureWalletExists:', error);
+    }
+  };
+
   const fetchProfile = async (userId: string, userEmail?: string) => {
     try {
       console.log('Fetching profile for user:', userId);
       
-      // Use maybeSingle() instead of single() to handle missing profiles
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -46,11 +78,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return null;
       }
 
-      // If profile doesn't exist, auto-create one
       if (!data) {
         console.log('Profile not found, creating new profile for user:', userId);
         
-        // Use email as username if available, otherwise use a default
         const username = userEmail ? userEmail.split('@')[0] : `user_${userId.substring(0, 8)}`;
         
         const { data: newProfile, error: createError } = await supabase
@@ -58,7 +88,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .insert({
             id: userId,
             username: username,
+            display_name: username,
             avatar_url: null,
+            unique_profile_link: `roastlive.com/@${username}`,
+            followers_count: 0,
+            following_count: 0,
           })
           .select()
           .single();
@@ -69,10 +103,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         console.log('Profile created successfully:', newProfile);
+        
+        // Ensure wallet exists for new profile
+        await ensureWalletExists(userId);
+        
         return newProfile;
       }
 
       console.log('Profile fetched successfully:', data);
+      
+      // Ensure wallet exists for existing profile
+      await ensureWalletExists(userId);
+      
       return data;
     } catch (error) {
       console.error('Error in fetchProfile:', error);
@@ -137,19 +179,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (data.user) {
-      // Create profile with username from displayName or email
-      const username = displayName || email.split('@')[0];
+      const username = displayName.toLowerCase().replace(/[^a-z0-9_]/g, '') || email.split('@')[0];
       
       const { error: profileError } = await supabase.from('profiles').insert({
         id: data.user.id,
         username: username,
+        display_name: displayName,
         avatar_url: null,
+        unique_profile_link: `roastlive.com/@${username}`,
+        followers_count: 0,
+        following_count: 0,
       });
 
       if (profileError) {
         console.error('Error creating profile:', profileError);
         return { error: profileError };
       }
+      
+      // Wallet will be created automatically by the trigger
     }
 
     return { error: null };

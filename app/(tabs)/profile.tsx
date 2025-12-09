@@ -9,8 +9,6 @@ import {
   Image,
   Dimensions,
   Alert,
-  TextInput,
-  Modal,
 } from 'react-native';
 import { router } from 'expo-router';
 import { colors, commonStyles } from '@/styles/commonStyles';
@@ -19,45 +17,57 @@ import GradientButton from '@/components/GradientButton';
 import RoastLiveLogo from '@/components/RoastLiveLogo';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/app/integrations/supabase/client';
-import { Tables } from '@/app/integrations/supabase/types';
 
 const { width: screenWidth } = Dimensions.get('window');
 
-type Stream = Tables<'streams'>;
+interface Post {
+  id: string;
+  media_url: string;
+  caption: string;
+  likes_count: number;
+  comments_count: number;
+  created_at: string;
+}
 
 export default function ProfileScreen() {
-  const { user, profile, signOut, refreshProfile } = useAuth();
-  const [streams, setStreams] = useState<Stream[]>([]);
+  const { user, profile, signOut } = useAuth();
+  const [activeTab, setActiveTab] = useState<'posts' | 'liked' | 'stories'>('posts');
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [likedPosts, setLikedPosts] = useState<Post[]>([]);
   const [followersCount, setFollowersCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editDisplayName, setEditDisplayName] = useState('');
-  const [editBio, setEditBio] = useState('');
 
   const fetchUserData = useCallback(async () => {
     if (!user) return;
 
     try {
-      const [streamsData, followersData, followingData] = await Promise.all([
+      const [postsData, likedData, profileData] = await Promise.all([
         supabase
-          .from('streams')
+          .from('posts')
           .select('*')
-          .eq('broadcaster_id', user.id)
-          .order('created_at', { ascending: false })
-          .limit(20),
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false }),
         supabase
-          .from('followers')
-          .select('*', { count: 'exact', head: true })
-          .eq('following_id', user.id),
+          .from('post_likes')
+          .select('post_id, posts(*)')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false }),
         supabase
-          .from('followers')
-          .select('*', { count: 'exact', head: true })
-          .eq('follower_id', user.id),
+          .from('profiles')
+          .select('followers_count, following_count')
+          .eq('id', user.id)
+          .single(),
       ]);
 
-      if (streamsData.data) setStreams(streamsData.data);
-      if (followersData.count !== null) setFollowersCount(followersData.count);
-      if (followingData.count !== null) setFollowingCount(followingData.count);
+      if (postsData.data) setPosts(postsData.data);
+      if (likedData.data) {
+        const liked = likedData.data.map((item: any) => item.posts).filter(Boolean);
+        setLikedPosts(liked);
+      }
+      if (profileData.data) {
+        setFollowersCount(profileData.data.followers_count || 0);
+        setFollowingCount(profileData.data.following_count || 0);
+      }
     } catch (error) {
       console.error('Error fetching user data:', error);
     }
@@ -71,65 +81,86 @@ export default function ProfileScreen() {
     }
   }, [user, fetchUserData]);
 
-  useEffect(() => {
-    if (profile) {
-      setEditDisplayName(profile.display_name);
-      setEditBio(profile.bio || '');
-    }
-  }, [profile]);
-
   const handleEditProfile = () => {
-    setShowEditModal(true);
+    router.push('/screens/EditProfileScreen');
   };
 
-  const handleSaveProfile = async () => {
-    if (!user) return;
+  const handleSettings = () => {
+    router.push('/screens/AccountSettingsScreen');
+  };
 
-    try {
-      const { error } = await supabase
-        .from('users')
-        .update({
-          display_name: editDisplayName,
-          bio: editBio,
-        })
-        .eq('id', user.id);
+  const handleShare = () => {
+    const profileLink = profile?.unique_profile_link || `roastlive.com/@${profile?.username}`;
+    Alert.alert('Share Profile', profileLink);
+  };
 
-      if (error) {
-        console.error('Error updating profile:', error);
-        Alert.alert('Error', 'Failed to update profile');
-        return;
-      }
+  const handleCreatePost = () => {
+    router.push('/screens/CreatePostScreen');
+  };
 
-      await refreshProfile();
-      setShowEditModal(false);
-      Alert.alert('Success', 'Profile updated successfully');
-    } catch (error) {
-      console.error('Error in handleSaveProfile:', error);
-      Alert.alert('Error', 'An unexpected error occurred');
+  const handleCreateStory = () => {
+    router.push('/screens/CreateStoryScreen');
+  };
+
+  const renderPosts = () => {
+    const displayPosts = activeTab === 'posts' ? posts : likedPosts;
+
+    if (displayPosts.length === 0) {
+      return (
+        <View style={styles.emptyState}>
+          <IconSymbol
+            ios_icon_name="photo.on.rectangle"
+            android_material_icon_name="photo_library"
+            size={48}
+            color={colors.textSecondary}
+          />
+          <Text style={styles.emptyText}>
+            {activeTab === 'posts' ? 'No posts yet' : 'No liked posts'}
+          </Text>
+          {activeTab === 'posts' && (
+            <TouchableOpacity style={styles.createButton} onPress={handleCreatePost}>
+              <Text style={styles.createButtonText}>Create your first post</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      );
     }
-  };
 
-  const handleSignOut = async () => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign Out',
-        style: 'destructive',
-        onPress: async () => {
-          await signOut();
-          router.replace('/auth/login');
-        },
-      },
-    ]);
-  };
-
-  const handleStreamPress = (stream: Stream) => {
-    if (stream.status === 'live') {
-      router.push({
-        pathname: '/live-player',
-        params: { streamId: stream.id },
-      });
-    }
+    return (
+      <View style={styles.postsGrid}>
+        {displayPosts.map((post, index) => (
+          <TouchableOpacity
+            key={index}
+            style={styles.postCard}
+            activeOpacity={0.8}
+          >
+            <Image source={{ uri: post.media_url }} style={styles.postImage} />
+            <View style={styles.postOverlay}>
+              <View style={styles.postStats}>
+                <View style={styles.postStat}>
+                  <IconSymbol
+                    ios_icon_name="heart.fill"
+                    android_material_icon_name="favorite"
+                    size={16}
+                    color={colors.text}
+                  />
+                  <Text style={styles.postStatText}>{post.likes_count}</Text>
+                </View>
+                <View style={styles.postStat}>
+                  <IconSymbol
+                    ios_icon_name="bubble.left.fill"
+                    android_material_icon_name="comment"
+                    size={16}
+                    color={colors.text}
+                  />
+                  <Text style={styles.postStatText}>{post.comments_count}</Text>
+                </View>
+              </View>
+            </View>
+          </TouchableOpacity>
+        ))}
+      </View>
+    );
   };
 
   if (!profile) {
@@ -149,25 +180,36 @@ export default function ProfileScreen() {
       >
         <View style={styles.logoHeader}>
           <RoastLiveLogo size="small" />
+          <TouchableOpacity onPress={handleSettings} style={styles.settingsButton}>
+            <IconSymbol
+              ios_icon_name="gearshape.fill"
+              android_material_icon_name="settings"
+              size={24}
+              color={colors.text}
+            />
+          </TouchableOpacity>
         </View>
 
+        {/* Banner */}
+        {profile.banner_url && (
+          <Image source={{ uri: profile.banner_url }} style={styles.banner} />
+        )}
+
+        {/* Profile Header */}
         <View style={styles.header}>
           <Image
             source={{
-              uri: profile.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
+              uri: profile.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
             }}
             style={styles.avatar}
           />
-          <Text style={styles.name}>{profile.display_name}</Text>
-          {profile.verified_status && (
-            <View style={styles.verifiedBadge}>
-              <IconSymbol
-                ios_icon_name="checkmark.seal.fill"
-                android_material_icon_name="verified"
-                size={20}
-                color={colors.gradientEnd}
-              />
-            </View>
+          <Text style={styles.displayName}>{profile.display_name || profile.username}</Text>
+          <Text style={styles.username}>@{profile.username}</Text>
+
+          {profile.bio && <Text style={styles.bio}>{profile.bio}</Text>}
+
+          {profile.unique_profile_link && (
+            <Text style={styles.profileLink}>{profile.unique_profile_link}</Text>
           )}
 
           <View style={styles.statsContainer}>
@@ -182,143 +224,98 @@ export default function ProfileScreen() {
             </View>
             <View style={styles.statDivider} />
             <View style={styles.stat}>
-              <Text style={styles.statValue}>{streams.length}</Text>
-              <Text style={styles.statLabel}>Streams</Text>
+              <Text style={styles.statValue}>{posts.length}</Text>
+              <Text style={styles.statLabel}>Posts</Text>
             </View>
           </View>
-
-          {profile.bio && <Text style={styles.bio}>{profile.bio}</Text>}
 
           <View style={styles.buttonRow}>
             <View style={styles.buttonFlex}>
               <GradientButton title="Edit Profile" onPress={handleEditProfile} size="medium" />
             </View>
-            <TouchableOpacity style={styles.iconButton} onPress={handleSignOut}>
+            <TouchableOpacity style={styles.iconButton} onPress={handleShare}>
               <IconSymbol
-                ios_icon_name="rectangle.portrait.and.arrow.right"
-                android_material_icon_name="logout"
+                ios_icon_name="square.and.arrow.up"
+                android_material_icon_name="share"
                 size={20}
                 color={colors.text}
               />
             </TouchableOpacity>
           </View>
-        </View>
 
-        <View style={styles.tabsContainer}>
-          <View style={[styles.tab, styles.tabActive]}>
-            <IconSymbol
-              ios_icon_name="play.rectangle.fill"
-              android_material_icon_name="play_arrow"
-              size={20}
-              color={colors.text}
-            />
-            <Text style={[styles.tabText, styles.tabTextActive]}>Streams</Text>
-          </View>
-        </View>
-
-        <View style={styles.streamsGrid}>
-          {streams.length === 0 ? (
-            <View style={styles.emptyState}>
+          <View style={styles.actionButtons}>
+            <TouchableOpacity style={styles.actionButton} onPress={handleCreatePost}>
               <IconSymbol
-                ios_icon_name="video.slash"
-                android_material_icon_name="videocam_off"
-                size={48}
-                color={colors.textSecondary}
+                ios_icon_name="plus.square.fill"
+                android_material_icon_name="add_box"
+                size={20}
+                color={colors.text}
               />
-              <Text style={styles.emptyText}>No streams yet</Text>
-              <Text style={styles.emptySubtext}>Start your first live stream!</Text>
-            </View>
-          ) : (
-            streams.map((stream, index) => (
-              <TouchableOpacity
-                key={index}
-                style={styles.streamCard}
-                onPress={() => handleStreamPress(stream)}
-                activeOpacity={0.8}
-              >
-                <View style={styles.streamThumbnail}>
-                  <IconSymbol
-                    ios_icon_name="play.fill"
-                    android_material_icon_name="play_arrow"
-                    size={32}
-                    color={colors.text}
-                  />
-                </View>
-                <View style={styles.streamOverlay}>
-                  {stream.status === 'live' && (
-                    <View style={styles.liveBadgeSmall}>
-                      <Text style={styles.liveBadgeText}>LIVE</Text>
-                    </View>
-                  )}
-                  <View style={styles.streamInfo}>
-                    <Text style={styles.streamTitle} numberOfLines={2}>
-                      {stream.title}
-                    </Text>
-                    <View style={styles.streamStats}>
-                      <IconSymbol
-                        ios_icon_name="eye.fill"
-                        android_material_icon_name="visibility"
-                        size={12}
-                        color={colors.text}
-                      />
-                      <Text style={styles.streamViewers}>{stream.viewer_count || 0}</Text>
-                    </View>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            ))
-          )}
-        </View>
-      </ScrollView>
-
-      <Modal
-        visible={showEditModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowEditModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Edit Profile</Text>
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Display Name</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Your display name"
-                placeholderTextColor={colors.placeholder}
-                value={editDisplayName}
-                onChangeText={setEditDisplayName}
+              <Text style={styles.actionButtonText}>Post</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionButton} onPress={handleCreateStory}>
+              <IconSymbol
+                ios_icon_name="plus.circle.fill"
+                android_material_icon_name="add_circle"
+                size={20}
+                color={colors.text}
               />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Bio</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                placeholder="Tell us about yourself..."
-                placeholderTextColor={colors.placeholder}
-                value={editBio}
-                onChangeText={setEditBio}
-                multiline
-                numberOfLines={4}
-              />
-            </View>
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={() => setShowEditModal(false)}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <View style={styles.saveButtonContainer}>
-                <GradientButton title="SAVE" onPress={handleSaveProfile} size="medium" />
-              </View>
-            </View>
+              <Text style={styles.actionButtonText}>Story</Text>
+            </TouchableOpacity>
           </View>
         </View>
-      </Modal>
+
+        {/* Tabs */}
+        <View style={styles.tabsContainer}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'posts' && styles.tabActive]}
+            onPress={() => setActiveTab('posts')}
+          >
+            <IconSymbol
+              ios_icon_name="square.grid.3x3.fill"
+              android_material_icon_name="grid_on"
+              size={20}
+              color={activeTab === 'posts' ? colors.text : colors.textSecondary}
+            />
+            <Text style={[styles.tabText, activeTab === 'posts' && styles.tabTextActive]}>
+              POSTS
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'liked' && styles.tabActive]}
+            onPress={() => setActiveTab('liked')}
+          >
+            <IconSymbol
+              ios_icon_name="heart.fill"
+              android_material_icon_name="favorite"
+              size={20}
+              color={activeTab === 'liked' ? colors.text : colors.textSecondary}
+            />
+            <Text style={[styles.tabText, activeTab === 'liked' && styles.tabTextActive]}>
+              LIKED
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'stories' && styles.tabActive]}
+            onPress={() => setActiveTab('stories')}
+          >
+            <IconSymbol
+              ios_icon_name="clock.fill"
+              android_material_icon_name="history"
+              size={20}
+              color={activeTab === 'stories' ? colors.text : colors.textSecondary}
+            />
+            <Text style={[styles.tabText, activeTab === 'stories' && styles.tabTextActive]}>
+              STORIES
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Content */}
+        {renderPosts()}
+      </ScrollView>
     </View>
   );
 }
@@ -351,10 +348,24 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   logoHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+  },
+  settingsButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  banner: {
+    width: '100%',
+    height: 150,
+    backgroundColor: colors.backgroundAlt,
   },
   header: {
     alignItems: 'center',
@@ -371,13 +382,30 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: colors.border,
   },
-  name: {
+  displayName: {
     fontSize: 24,
     fontWeight: '800',
     color: colors.text,
     marginBottom: 4,
   },
-  verifiedBadge: {
+  username: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginBottom: 12,
+  },
+  bio: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: colors.text,
+    textAlign: 'center',
+    marginBottom: 8,
+    lineHeight: 20,
+  },
+  profileLink: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.gradientEnd,
     marginBottom: 20,
   },
   statsContainer: {
@@ -405,18 +433,11 @@ const styles = StyleSheet.create({
     height: 30,
     backgroundColor: colors.border,
   },
-  bio: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: colors.text,
-    textAlign: 'center',
-    marginBottom: 20,
-    lineHeight: 20,
-  },
   buttonRow: {
     flexDirection: 'row',
     width: '100%',
     gap: 12,
+    marginBottom: 16,
   },
   buttonFlex: {
     flex: 1,
@@ -431,11 +452,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  actionButtons: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 12,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.backgroundAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingVertical: 12,
+  },
+  actionButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text,
+  },
   tabsContainer: {
     flexDirection: 'row',
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
-    marginBottom: 16,
+    marginBottom: 2,
   },
   tab: {
     flex: 1,
@@ -450,17 +493,17 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.text,
   },
   tabText: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
     color: colors.textSecondary,
   },
   tabTextActive: {
     color: colors.text,
   },
-  streamsGrid: {
+  postsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: 16,
+    paddingHorizontal: 1,
     gap: 2,
   },
   emptyState: {
@@ -474,125 +517,49 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.text,
     marginTop: 16,
+    marginBottom: 16,
   },
-  emptySubtext: {
+  createButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  createButtonText: {
     fontSize: 14,
-    fontWeight: '400',
-    color: colors.textSecondary,
-    marginTop: 8,
+    fontWeight: '600',
+    color: colors.text,
   },
-  streamCard: {
-    width: (screenWidth - 36) / 3,
+  postCard: {
+    width: (screenWidth - 6) / 3,
     aspectRatio: 9 / 16,
     backgroundColor: colors.card,
     position: 'relative',
   },
-  streamThumbnail: {
+  postImage: {
     width: '100%',
     height: '100%',
-    backgroundColor: colors.backgroundAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  streamOverlay: {
+  postOverlay: {
     ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
     padding: 8,
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
   },
-  liveBadgeSmall: {
-    alignSelf: 'flex-start',
-    backgroundColor: colors.gradientEnd,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  liveBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: colors.text,
-  },
-  streamInfo: {
-    gap: 4,
-  },
-  streamTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.text,
-    lineHeight: 16,
-  },
-  streamStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  streamViewers: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  modalContent: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 24,
-    width: '100%',
-    maxWidth: 400,
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: colors.text,
-    marginBottom: 24,
-    textAlign: 'center',
-  },
-  inputContainer: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: colors.backgroundAlt,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    color: colors.text,
-    fontSize: 16,
-  },
-  textArea: {
-    height: 100,
-    textAlignVertical: 'top',
-  },
-  modalButtons: {
+  postStats: {
     flexDirection: 'row',
     gap: 12,
   },
-  cancelButton: {
-    flex: 1,
-    backgroundColor: colors.backgroundAlt,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: 25,
-    paddingVertical: 14,
+  postStat: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
   },
-  cancelButtonText: {
-    fontSize: 16,
+  postStatText: {
+    fontSize: 12,
     fontWeight: '700',
     color: colors.text,
-  },
-  saveButtonContainer: {
-    flex: 1,
   },
 });

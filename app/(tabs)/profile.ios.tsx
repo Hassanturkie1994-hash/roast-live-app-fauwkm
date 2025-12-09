@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   ScrollView,
@@ -8,83 +8,168 @@ import {
   TouchableOpacity,
   Image,
   Dimensions,
+  Alert,
 } from 'react-native';
+import { router } from 'expo-router';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import GradientButton from '@/components/GradientButton';
+import RoastLiveLogo from '@/components/RoastLiveLogo';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/app/integrations/supabase/client';
 
 const { width: screenWidth } = Dimensions.get('window');
 
-interface StreamClip {
+interface Post {
   id: string;
-  thumbnail: string;
-  views: number;
-  duration: string;
+  media_url: string;
+  caption: string;
+  likes_count: number;
+  comments_count: number;
+  created_at: string;
 }
 
-const mockUserProfile = {
-  avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
-  name: 'John Doe',
-  username: 'johndoe',
-  bio: 'Live streamer | Gamer | Content Creator 🎮',
-  link: 'roastlive.com/johndoe',
-  followersCount: 15000,
-  followingCount: 250,
-  likesCount: 125400,
-};
-
-const mockClips: StreamClip[] = [
-  {
-    id: '1',
-    thumbnail: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=400',
-    views: 8500,
-    duration: '12:34',
-  },
-  {
-    id: '2',
-    thumbnail: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=400',
-    views: 6200,
-    duration: '08:15',
-  },
-  {
-    id: '3',
-    thumbnail: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=400',
-    views: 4800,
-    duration: '15:42',
-  },
-  {
-    id: '4',
-    thumbnail: 'https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?w=400',
-    views: 3200,
-    duration: '10:20',
-  },
-  {
-    id: '5',
-    thumbnail: 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=400',
-    views: 2100,
-    duration: '06:45',
-  },
-  {
-    id: '6',
-    thumbnail: 'https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=400',
-    views: 1800,
-    duration: '09:30',
-  },
-];
-
-type TabType = 'streams' | 'likes';
-
 export default function ProfileScreen() {
-  const [isOwnProfile] = useState(true);
-  const [selectedTab, setSelectedTab] = useState<TabType>('streams');
+  const { user, profile, signOut } = useAuth();
+  const [activeTab, setActiveTab] = useState<'posts' | 'liked' | 'stories'>('posts');
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [likedPosts, setLikedPosts] = useState<Post[]>([]);
+  const [followersCount, setFollowersCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
+
+  const fetchUserData = useCallback(async () => {
+    if (!user) return;
+
+    try {
+      const [postsData, likedData, profileData] = await Promise.all([
+        supabase
+          .from('posts')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('post_likes')
+          .select('post_id, posts(*)')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('profiles')
+          .select('followers_count, following_count')
+          .eq('id', user.id)
+          .single(),
+      ]);
+
+      if (postsData.data) setPosts(postsData.data);
+      if (likedData.data) {
+        const liked = likedData.data.map((item: any) => item.posts).filter(Boolean);
+        setLikedPosts(liked);
+      }
+      if (profileData.data) {
+        setFollowersCount(profileData.data.followers_count || 0);
+        setFollowingCount(profileData.data.following_count || 0);
+      }
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) {
+      router.replace('/auth/login');
+    } else {
+      fetchUserData();
+    }
+  }, [user, fetchUserData]);
 
   const handleEditProfile = () => {
-    console.log('Edit profile pressed');
+    router.push('/screens/EditProfileScreen');
   };
 
-  const handleClipPress = (clipId: string) => {
-    console.log('Clip pressed:', clipId);
+  const handleSettings = () => {
+    router.push('/screens/AccountSettingsScreen');
   };
+
+  const handleShare = () => {
+    const profileLink = profile?.unique_profile_link || `roastlive.com/@${profile?.username}`;
+    Alert.alert('Share Profile', profileLink);
+  };
+
+  const handleCreatePost = () => {
+    router.push('/screens/CreatePostScreen');
+  };
+
+  const handleCreateStory = () => {
+    router.push('/screens/CreateStoryScreen');
+  };
+
+  const renderPosts = () => {
+    const displayPosts = activeTab === 'posts' ? posts : likedPosts;
+
+    if (displayPosts.length === 0) {
+      return (
+        <View style={styles.emptyState}>
+          <IconSymbol
+            ios_icon_name="photo.on.rectangle"
+            android_material_icon_name="photo_library"
+            size={48}
+            color={colors.textSecondary}
+          />
+          <Text style={styles.emptyText}>
+            {activeTab === 'posts' ? 'No posts yet' : 'No liked posts'}
+          </Text>
+          {activeTab === 'posts' && (
+            <TouchableOpacity style={styles.createButton} onPress={handleCreatePost}>
+              <Text style={styles.createButtonText}>Create your first post</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.postsGrid}>
+        {displayPosts.map((post, index) => (
+          <TouchableOpacity
+            key={index}
+            style={styles.postCard}
+            activeOpacity={0.8}
+          >
+            <Image source={{ uri: post.media_url }} style={styles.postImage} />
+            <View style={styles.postOverlay}>
+              <View style={styles.postStats}>
+                <View style={styles.postStat}>
+                  <IconSymbol
+                    ios_icon_name="heart.fill"
+                    android_material_icon_name="favorite"
+                    size={16}
+                    color={colors.text}
+                  />
+                  <Text style={styles.postStatText}>{post.likes_count}</Text>
+                </View>
+                <View style={styles.postStat}>
+                  <IconSymbol
+                    ios_icon_name="bubble.left.fill"
+                    android_material_icon_name="comment"
+                    size={16}
+                    color={colors.text}
+                  />
+                  <Text style={styles.postStatText}>{post.comments_count}</Text>
+                </View>
+              </View>
+            </View>
+          </TouchableOpacity>
+        ))}
+      </View>
+    );
+  };
+
+  if (!profile) {
+    return (
+      <View style={[commonStyles.container, styles.centerContent]}>
+        <Text style={styles.loadingText}>Loading profile...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={commonStyles.container}>
@@ -93,147 +178,143 @@ export default function ProfileScreen() {
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
+        <View style={styles.logoHeader}>
+          <RoastLiveLogo size="small" />
+          <TouchableOpacity onPress={handleSettings} style={styles.settingsButton}>
+            <IconSymbol
+              ios_icon_name="gearshape.fill"
+              android_material_icon_name="settings"
+              size={24}
+              color={colors.text}
+            />
+          </TouchableOpacity>
+        </View>
+
+        {/* Banner */}
+        {profile.banner_url && (
+          <Image source={{ uri: profile.banner_url }} style={styles.banner} />
+        )}
+
+        {/* Profile Header */}
         <View style={styles.header}>
-          <Image source={{ uri: mockUserProfile.avatar }} style={styles.avatar} />
-          <Text style={styles.name}>{mockUserProfile.name}</Text>
-          <Text style={styles.username}>@{mockUserProfile.username}</Text>
+          <Image
+            source={{
+              uri: profile.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
+            }}
+            style={styles.avatar}
+          />
+          <Text style={styles.displayName}>{profile.display_name || profile.username}</Text>
+          <Text style={styles.username}>@{profile.username}</Text>
+
+          {profile.bio && <Text style={styles.bio}>{profile.bio}</Text>}
+
+          {profile.unique_profile_link && (
+            <Text style={styles.profileLink}>{profile.unique_profile_link}</Text>
+          )}
 
           <View style={styles.statsContainer}>
             <View style={styles.stat}>
-              <Text style={styles.statValue}>{formatCount(mockUserProfile.followersCount)}</Text>
+              <Text style={styles.statValue}>{formatCount(followersCount)}</Text>
               <Text style={styles.statLabel}>Followers</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.stat}>
-              <Text style={styles.statValue}>{formatCount(mockUserProfile.followingCount)}</Text>
+              <Text style={styles.statValue}>{formatCount(followingCount)}</Text>
               <Text style={styles.statLabel}>Following</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.stat}>
-              <Text style={styles.statValue}>{formatCount(mockUserProfile.likesCount)}</Text>
-              <Text style={styles.statLabel}>Likes</Text>
+              <Text style={styles.statValue}>{posts.length}</Text>
+              <Text style={styles.statLabel}>Posts</Text>
             </View>
           </View>
 
-          {mockUserProfile.bio && (
-            <Text style={styles.bio}>{mockUserProfile.bio}</Text>
-          )}
-
-          {mockUserProfile.link && (
-            <TouchableOpacity style={styles.linkContainer}>
+          <View style={styles.buttonRow}>
+            <View style={styles.buttonFlex}>
+              <GradientButton title="Edit Profile" onPress={handleEditProfile} size="medium" />
+            </View>
+            <TouchableOpacity style={styles.iconButton} onPress={handleShare}>
               <IconSymbol
-                ios_icon_name="link"
-                android_material_icon_name="link"
-                size={16}
-                color={colors.gradientEnd}
+                ios_icon_name="square.and.arrow.up"
+                android_material_icon_name="share"
+                size={20}
+                color={colors.text}
               />
-              <Text style={styles.link}>{mockUserProfile.link}</Text>
             </TouchableOpacity>
-          )}
+          </View>
 
-          {isOwnProfile ? (
-            <View style={styles.buttonRow}>
-              <View style={styles.buttonFlex}>
-                <GradientButton
-                  title="Edit Profile"
-                  onPress={handleEditProfile}
-                  size="medium"
-                />
-              </View>
-              <TouchableOpacity style={styles.iconButton}>
-                <IconSymbol
-                  ios_icon_name="gear"
-                  android_material_icon_name="settings"
-                  size={20}
-                  color={colors.text}
-                />
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={styles.buttonRow}>
-              <View style={styles.buttonFlex}>
-                <GradientButton title="Follow" onPress={() => {}} size="medium" />
-              </View>
-              <TouchableOpacity style={styles.iconButton}>
-                <IconSymbol
-                  ios_icon_name="ellipsis"
-                  android_material_icon_name="more_horiz"
-                  size={20}
-                  color={colors.text}
-                />
-              </TouchableOpacity>
-            </View>
-          )}
+          <View style={styles.actionButtons}>
+            <TouchableOpacity style={styles.actionButton} onPress={handleCreatePost}>
+              <IconSymbol
+                ios_icon_name="plus.square.fill"
+                android_material_icon_name="add_box"
+                size={20}
+                color={colors.text}
+              />
+              <Text style={styles.actionButtonText}>Post</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionButton} onPress={handleCreateStory}>
+              <IconSymbol
+                ios_icon_name="plus.circle.fill"
+                android_material_icon_name="add_circle"
+                size={20}
+                color={colors.text}
+              />
+              <Text style={styles.actionButtonText}>Story</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
+        {/* Tabs */}
         <View style={styles.tabsContainer}>
           <TouchableOpacity
-            style={[styles.tab, selectedTab === 'streams' && styles.tabActive]}
-            onPress={() => setSelectedTab('streams')}
+            style={[styles.tab, activeTab === 'posts' && styles.tabActive]}
+            onPress={() => setActiveTab('posts')}
           >
             <IconSymbol
-              ios_icon_name="play.rectangle.fill"
-              android_material_icon_name="play_arrow"
+              ios_icon_name="square.grid.3x3.fill"
+              android_material_icon_name="grid_on"
               size={20}
-              color={selectedTab === 'streams' ? colors.text : colors.textSecondary}
+              color={activeTab === 'posts' ? colors.text : colors.textSecondary}
             />
-            <Text
-              style={[
-                styles.tabText,
-                selectedTab === 'streams' && styles.tabTextActive,
-              ]}
-            >
-              Streams
+            <Text style={[styles.tabText, activeTab === 'posts' && styles.tabTextActive]}>
+              POSTS
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.tab, selectedTab === 'likes' && styles.tabActive]}
-            onPress={() => setSelectedTab('likes')}
+            style={[styles.tab, activeTab === 'liked' && styles.tabActive]}
+            onPress={() => setActiveTab('liked')}
           >
             <IconSymbol
               ios_icon_name="heart.fill"
               android_material_icon_name="favorite"
               size={20}
-              color={selectedTab === 'likes' ? colors.text : colors.textSecondary}
+              color={activeTab === 'liked' ? colors.text : colors.textSecondary}
             />
-            <Text
-              style={[
-                styles.tabText,
-                selectedTab === 'likes' && styles.tabTextActive,
-              ]}
-            >
-              Likes
+            <Text style={[styles.tabText, activeTab === 'liked' && styles.tabTextActive]}>
+              LIKED
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'stories' && styles.tabActive]}
+            onPress={() => setActiveTab('stories')}
+          >
+            <IconSymbol
+              ios_icon_name="clock.fill"
+              android_material_icon_name="history"
+              size={20}
+              color={activeTab === 'stories' ? colors.text : colors.textSecondary}
+            />
+            <Text style={[styles.tabText, activeTab === 'stories' && styles.tabTextActive]}>
+              STORIES
             </Text>
           </TouchableOpacity>
         </View>
 
-        <View style={styles.clipsGrid}>
-          {mockClips.map((clip, index) => (
-            <TouchableOpacity
-              key={index}
-              style={styles.clipCard}
-              onPress={() => handleClipPress(clip.id)}
-              activeOpacity={0.8}
-            >
-              <Image source={{ uri: clip.thumbnail }} style={styles.clipThumbnail} />
-              <View style={styles.clipOverlay}>
-                <View style={styles.clipDuration}>
-                  <Text style={styles.clipDurationText}>{clip.duration}</Text>
-                </View>
-                <View style={styles.clipViews}>
-                  <IconSymbol
-                    ios_icon_name="eye.fill"
-                    android_material_icon_name="visibility"
-                    size={12}
-                    color={colors.text}
-                  />
-                  <Text style={styles.clipViewsText}>{formatCount(clip.views)}</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {/* Content */}
+        {renderPosts()}
       </ScrollView>
     </View>
   );
@@ -250,16 +331,46 @@ function formatCount(count: number): string {
 }
 
 const styles = StyleSheet.create({
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
   scrollView: {
     flex: 1,
   },
   contentContainer: {
     paddingTop: 60,
-    paddingBottom: 20,
+    paddingBottom: 100,
+  },
+  logoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  settingsButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  banner: {
+    width: '100%',
+    height: 150,
+    backgroundColor: colors.backgroundAlt,
   },
   header: {
     alignItems: 'center',
     paddingHorizontal: 20,
+    paddingTop: 24,
     paddingBottom: 24,
   },
   avatar: {
@@ -271,7 +382,7 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: colors.border,
   },
-  name: {
+  displayName: {
     fontSize: 24,
     fontWeight: '800',
     color: colors.text,
@@ -279,8 +390,22 @@ const styles = StyleSheet.create({
   },
   username: {
     fontSize: 16,
-    fontWeight: '400',
+    fontWeight: '600',
     color: colors.textSecondary,
+    marginBottom: 12,
+  },
+  bio: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: colors.text,
+    textAlign: 'center',
+    marginBottom: 8,
+    lineHeight: 20,
+  },
+  profileLink: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.gradientEnd,
     marginBottom: 20,
   },
   statsContainer: {
@@ -308,29 +433,11 @@ const styles = StyleSheet.create({
     height: 30,
     backgroundColor: colors.border,
   },
-  bio: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: colors.text,
-    textAlign: 'center',
-    marginBottom: 12,
-    lineHeight: 20,
-  },
-  linkContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 20,
-  },
-  link: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.gradientEnd,
-  },
   buttonRow: {
     flexDirection: 'row',
     width: '100%',
     gap: 12,
+    marginBottom: 16,
   },
   buttonFlex: {
     flex: 1,
@@ -345,11 +452,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  actionButtons: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 12,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.backgroundAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingVertical: 12,
+  },
+  actionButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text,
+  },
   tabsContainer: {
     flexDirection: 'row',
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
-    marginBottom: 16,
+    marginBottom: 2,
   },
   tab: {
     flex: 1,
@@ -364,59 +493,73 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.text,
   },
   tabText: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
     color: colors.textSecondary,
   },
   tabTextActive: {
     color: colors.text,
   },
-  clipsGrid: {
+  postsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: 16,
+    paddingHorizontal: 1,
     gap: 2,
   },
-  clipCard: {
-    width: (screenWidth - 36) / 3,
+  emptyState: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+    marginTop: 16,
+    marginBottom: 16,
+  },
+  createButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  createButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  postCard: {
+    width: (screenWidth - 6) / 3,
     aspectRatio: 9 / 16,
     backgroundColor: colors.card,
     position: 'relative',
   },
-  clipThumbnail: {
+  postImage: {
     width: '100%',
     height: '100%',
   },
-  clipOverlay: {
+  postOverlay: {
     ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
     padding: 8,
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
   },
-  clipDuration: {
-    alignSelf: 'flex-end',
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+  postStats: {
+    flexDirection: 'row',
+    gap: 12,
   },
-  clipDurationText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  clipViews: {
+  postStat: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
     gap: 4,
   },
-  clipViewsText: {
-    fontSize: 10,
-    fontWeight: '600',
+  postStatText: {
+    fontSize: 12,
+    fontWeight: '700',
     color: colors.text,
   },
 });
