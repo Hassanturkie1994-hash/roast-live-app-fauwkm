@@ -36,6 +36,23 @@ export async function createSystemMessage(params: {
 }
 
 /**
+ * Send a message to a user (alias for createSystemMessage for backwards compatibility)
+ */
+export async function sendMessage(
+  senderId: string,
+  receiverId: string,
+  message: string,
+  category?: 'social' | 'gifts' | 'safety' | 'wallet' | 'admin'
+): Promise<{ success: boolean; error?: string }> {
+  return createSystemMessage({
+    receiver_id: receiverId,
+    title: 'System Message',
+    message,
+    category,
+  });
+}
+
+/**
  * Mark all messages in a conversation as read
  */
 export async function markConversationAsRead(
@@ -127,6 +144,7 @@ export async function markAllNotificationsAsRead(
 
 export const inboxService = {
   createSystemMessage,
+  sendMessage,
   markConversationAsRead,
   getUnreadMessageCount,
   markAllNotificationsAsRead,

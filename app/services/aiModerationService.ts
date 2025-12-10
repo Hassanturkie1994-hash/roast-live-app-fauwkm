@@ -1,6 +1,7 @@
 
 import { supabase } from '@/app/integrations/supabase/client';
 import { inboxService } from './inboxService';
+import { escalationService } from './escalationService';
 
 export interface ClassificationScores {
   toxicity: number;
@@ -135,13 +136,31 @@ class AIModerationService {
   }
 
   /**
-   * PROMPT 1: Real-Time Chat Moderation
+   * Determine category based on scores
+   */
+  private determineCategory(scores: ClassificationScores): string {
+    const categories = [
+      { name: 'hate_speech', score: scores.hateSpeech },
+      { name: 'harassment', score: scores.harassment },
+      { name: 'threat', score: scores.threat },
+      { name: 'sexual_content', score: scores.sexualContent },
+      { name: 'toxicity', score: scores.toxicity },
+      { name: 'spam', score: scores.spam },
+    ];
+
+    categories.sort((a, b) => b.score - a.score);
+    return categories[0].name;
+  }
+
+  /**
+   * PROMPT 1: Real-Time Chat Moderation with Escalation
    * Moderate a message and take appropriate action based on score
    * 
    * Threshold actions:
    * - Score < 0.30 → allow message
    * - Score ≥ 0.30 → flag silently
    * - Score ≥ 0.50 → hide message from everyone except sender
+   * - Score ≥ 0.60 but < 0.85 → ESCALATE TO MODERATOR
    * - Score ≥ 0.70 → auto timeout user for 2 minutes
    * - Score ≥ 0.85 → block user from current stream
    */
@@ -154,14 +173,14 @@ class AIModerationService {
     messageId?: string
   ): Promise<{
     allowed: boolean;
-    action: 'allow' | 'flag' | 'hide' | 'timeout' | 'block';
+    action: 'allow' | 'flag' | 'hide' | 'timeout' | 'block' | 'escalate';
     scores: ClassificationScores;
     hiddenFromOthers?: boolean;
   }> {
     try {
       const scores = await this.classifyMessage(message);
 
-      let action: 'allow' | 'flag' | 'hide' | 'timeout' | 'block' = 'allow';
+      let action: 'allow' | 'flag' | 'hide' | 'timeout' | 'block' | 'escalate' = 'allow';
       let actionTaken: 'flagged' | 'hidden' | 'timeout' | 'blocked' | null = null;
       let hiddenFromOthers = false;
 
@@ -175,16 +194,63 @@ class AIModerationService {
         actionTaken = 'flagged';
       }
       // Score ≥ 0.50 → hide message from everyone except sender
-      else if (scores.overall >= 0.50 && scores.overall < 0.70) {
+      else if (scores.overall >= 0.50 && scores.overall < 0.60) {
         action = 'hide';
         actionTaken = 'hidden';
         hiddenFromOthers = true;
         
-        // Send notification to user
         await inboxService.sendMessage(
           userId,
           userId,
           'Your message violated the community rules and was hidden.',
+          'safety'
+        );
+      }
+      // Score ≥ 0.60 but < 0.85 → ESCALATE TO MODERATOR
+      else if (scores.overall >= 0.60 && scores.overall < 0.85) {
+        action = 'escalate';
+        actionTaken = 'hidden';
+        hiddenFromOthers = true;
+
+        // Record violation first
+        const { data: violation } = await supabase.from('user_violations').insert({
+          user_id: userId,
+          flagged_text: message,
+          toxicity_score: scores.toxicity,
+          harassment_score: scores.harassment,
+          hate_speech_score: scores.hateSpeech,
+          sexual_content_score: scores.sexualContent,
+          threat_score: scores.threat,
+          spam_score: scores.spam,
+          overall_score: scores.overall,
+          action_taken: actionTaken,
+          stream_id: streamId || null,
+          post_id: postId || null,
+          story_id: storyId || null,
+          message_id: messageId || null,
+          hidden_from_others: hiddenFromOthers,
+        }).select().single();
+
+        if (violation) {
+          // Escalate to moderator
+          const sourceType = streamId ? 'live' : (postId ? 'comment' : 'inboxMessage');
+          const category = this.determineCategory(scores);
+          
+          await escalationService.escalateToModerator(
+            violation.id,
+            userId,
+            sourceType,
+            message.substring(0, 200), // Preview
+            scores.overall,
+            category,
+            streamId
+          );
+        }
+
+        await inboxService.sendMessage(
+          userId,
+          userId,
+          'Your message has been flagged for moderator review.',
           'safety'
         );
       }
@@ -226,7 +292,7 @@ class AIModerationService {
       }
 
       // Record violation if action was taken
-      if (actionTaken) {
+      if (actionTaken && action !== 'escalate') {
         await supabase.from('user_violations').insert({
           user_id: userId,
           flagged_text: message,

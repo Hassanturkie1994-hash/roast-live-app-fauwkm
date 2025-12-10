@@ -2,118 +2,357 @@
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  ScrollView,
-  StyleSheet,
   Text,
+  ScrollView,
   TouchableOpacity,
+  StyleSheet,
+  RefreshControl,
   Alert,
   TextInput,
-  Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
-import { IconSymbol } from '@/components/IconSymbol';
-import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { appealsService, Strike, Violation, Appeal } from '@/app/services/appealsService';
-import GradientButton from '@/components/GradientButton';
+import { useAuth } from '@/contexts/AuthContext';
+import { IconSymbol } from '@/components/IconSymbol';
+import { appealsService, Appeal, AdminPenalty } from '@/app/services/appealsService';
+import { LinearGradient } from 'expo-linear-gradient';
+
+type TabType = 'active' | 'historical' | 'appeals';
 
 export default function AppealsViolationsScreen() {
-  const { user } = useAuth();
   const { colors } = useTheme();
-  const [strikes, setStrikes] = useState<Strike[]>([]);
-  const [violations, setViolations] = useState<Violation[]>([]);
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState<TabType>('active');
+  const [activePenalties, setActivePenalties] = useState<AdminPenalty[]>([]);
+  const [historicalPenalties, setHistoricalPenalties] = useState<AdminPenalty[]>([]);
   const [appeals, setAppeals] = useState<Appeal[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showAppealModal, setShowAppealModal] = useState(false);
-  const [selectedViolation, setSelectedViolation] = useState<Violation | null>(null);
-  const [selectedStrike, setSelectedStrike] = useState<Strike | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [showAppealForm, setShowAppealForm] = useState(false);
+  const [selectedPenalty, setSelectedPenalty] = useState<AdminPenalty | null>(null);
   const [appealReason, setAppealReason] = useState('');
-  const [evidenceUrl, setEvidenceUrl] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    loadData();
-  }, [user]);
+    if (user) {
+      loadData();
+    }
+  }, [user, activeTab]);
 
   const loadData = async () => {
     if (!user) return;
 
     setLoading(true);
-    const [strikesData, violationsData, appealsData] = await Promise.all([
-      appealsService.getUserStrikes(user.id),
-      appealsService.getUserViolations(user.id),
-      appealsService.getUserAppeals(user.id),
-    ]);
+    try {
+      const penalties = await appealsService.getUserPenalties(user.id);
+      const userAppeals = await appealsService.getUserAppeals(user.id);
 
-    setStrikes(strikesData);
-    setViolations(violationsData);
-    setAppeals(appealsData);
-    setLoading(false);
+      // Separate active and historical penalties
+      const now = new Date();
+      const active = penalties.filter(p => 
+        p.is_active && (!p.expires_at || new Date(p.expires_at) > now)
+      );
+      const historical = penalties.filter(p => 
+        !p.is_active || (p.expires_at && new Date(p.expires_at) <= now)
+      );
+
+      setActivePenalties(active);
+      setHistoricalPenalties(historical);
+      setAppeals(userAppeals);
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  };
+
+  const handleAppealClick = (penalty: AdminPenalty) => {
+    setSelectedPenalty(penalty);
+    setAppealReason('');
+    setShowAppealForm(true);
   };
 
   const handleSubmitAppeal = async () => {
-    if (!user) return;
-    if (!appealReason.trim()) {
-      Alert.alert('Error', 'Please provide a reason for your appeal.');
+    if (!user || !selectedPenalty) return;
+
+    if (appealReason.length < 10) {
+      Alert.alert('Error', 'Appeal reason must be at least 10 characters');
       return;
     }
 
-    const result = await appealsService.submitAppeal(
-      user.id,
-      selectedViolation?.id,
-      selectedStrike?.id,
-      appealReason,
-      evidenceUrl || undefined
+    setSubmitting(true);
+    try {
+      const result = await appealsService.submitAppeal(
+        user.id,
+        selectedPenalty.id,
+        appealReason
+      );
+
+      if (result.success) {
+        Alert.alert('Success', 'Your appeal has been submitted and is under review.');
+        setShowAppealForm(false);
+        setSelectedPenalty(null);
+        setAppealReason('');
+        await loadData();
+      } else {
+        Alert.alert('Error', result.error || 'Failed to submit appeal');
+      }
+    } catch (error) {
+      console.error('Error submitting appeal:', error);
+      Alert.alert('Error', 'Failed to submit appeal');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const renderPenaltyCard = (penalty: AdminPenalty, isActive: boolean) => {
+    const hasAppeal = appeals.some(a => a.penalty_id === penalty.id);
+    const pendingAppeal = appeals.find(a => a.penalty_id === penalty.id && a.status === 'pending');
+
+    return (
+      <View
+        key={penalty.id}
+        style={[
+          styles.penaltyCard,
+          { backgroundColor: colors.card, borderColor: colors.border },
+          isActive && { borderLeftWidth: 4, borderLeftColor: colors.gradientEnd },
+        ]}
+      >
+        <View style={styles.penaltyHeader}>
+          <View style={styles.penaltyTitleRow}>
+            <IconSymbol
+              ios_icon_name={penalty.severity === 'permanent' ? 'hand.raised.fill' : 'exclamationmark.triangle.fill'}
+              android_material_icon_name={penalty.severity === 'permanent' ? 'block' : 'warning'}
+              size={24}
+              color={penalty.severity === 'permanent' ? '#DC143C' : '#FFA500'}
+            />
+            <Text style={[styles.penaltySeverity, { color: colors.text }]}>
+              {penalty.severity === 'permanent' ? 'Permanent Ban' : 'Temporary Suspension'}
+            </Text>
+          </View>
+          {isActive && (
+            <View style={[styles.activeBadge, { backgroundColor: colors.gradientEnd }]}>
+              <Text style={styles.activeBadgeText}>ACTIVE</Text>
+            </View>
+          )}
+        </View>
+
+        <Text style={[styles.penaltyReason, { color: colors.textSecondary }]}>
+          {penalty.reason}
+        </Text>
+
+        <View style={styles.penaltyDetails}>
+          <View style={styles.penaltyDetailRow}>
+            <IconSymbol
+              ios_icon_name="calendar"
+              android_material_icon_name="calendar_today"
+              size={16}
+              color={colors.textSecondary}
+            />
+            <Text style={[styles.penaltyDetailText, { color: colors.textSecondary }]}>
+              Issued: {new Date(penalty.issued_at).toLocaleDateString()}
+            </Text>
+          </View>
+
+          {penalty.expires_at && (
+            <View style={styles.penaltyDetailRow}>
+              <IconSymbol
+                ios_icon_name="clock"
+                android_material_icon_name="schedule"
+                size={16}
+                color={colors.textSecondary}
+              />
+              <Text style={[styles.penaltyDetailText, { color: colors.textSecondary }]}>
+                Expires: {new Date(penalty.expires_at).toLocaleDateString()}
+              </Text>
+            </View>
+          )}
+
+          {penalty.duration_hours && (
+            <View style={styles.penaltyDetailRow}>
+              <IconSymbol
+                ios_icon_name="hourglass"
+                android_material_icon_name="hourglass_empty"
+                size={16}
+                color={colors.textSecondary}
+              />
+              <Text style={[styles.penaltyDetailText, { color: colors.textSecondary }]}>
+                Duration: {penalty.duration_hours} hours
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {penalty.policy_reference && (
+          <Text style={[styles.policyReference, { color: colors.textSecondary }]}>
+            Policy: {penalty.policy_reference}
+          </Text>
+        )}
+
+        {isActive && !hasAppeal && (
+          <TouchableOpacity
+            style={[styles.appealButton, { backgroundColor: colors.primary }]}
+            onPress={() => handleAppealClick(penalty)}
+          >
+            <Text style={styles.appealButtonText}>Appeal Decision</Text>
+          </TouchableOpacity>
+        )}
+
+        {pendingAppeal && (
+          <View style={[styles.appealStatusBadge, { backgroundColor: '#FFA500' }]}>
+            <IconSymbol
+              ios_icon_name="clock"
+              android_material_icon_name="schedule"
+              size={16}
+              color="#FFFFFF"
+            />
+            <Text style={styles.appealStatusText}>Appeal Pending Review</Text>
+          </View>
+        )}
+      </View>
     );
-
-    if (result.success) {
-      Alert.alert('Success', 'Your appeal has been submitted and is under review.');
-      setShowAppealModal(false);
-      setAppealReason('');
-      setEvidenceUrl('');
-      setSelectedViolation(null);
-      setSelectedStrike(null);
-      await loadData();
-    } else {
-      Alert.alert('Error', result.error || 'Failed to submit appeal.');
-    }
   };
 
-  const openAppealModal = (violation?: Violation, strike?: Strike) => {
-    setSelectedViolation(violation || null);
-    setSelectedStrike(strike || null);
-    setShowAppealModal(true);
+  const renderAppealCard = (appeal: Appeal) => {
+    const statusColor = 
+      appeal.status === 'pending' ? '#FFA500' :
+      appeal.status === 'approved' ? '#34C759' :
+      '#DC143C';
+
+    return (
+      <View
+        key={appeal.id}
+        style={[
+          styles.appealCard,
+          { backgroundColor: colors.card, borderColor: colors.border },
+        ]}
+      >
+        <View style={styles.appealHeader}>
+          <Text style={[styles.appealTitle, { color: colors.text }]}>
+            Appeal #{appeal.id.substring(0, 8)}
+          </Text>
+          <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+            <Text style={styles.statusBadgeText}>
+              {appeal.status.toUpperCase()}
+            </Text>
+          </View>
+        </View>
+
+        <Text style={[styles.appealReason, { color: colors.textSecondary }]}>
+          {appeal.appeal_reason}
+        </Text>
+
+        <View style={styles.appealFooter}>
+          <Text style={[styles.appealDate, { color: colors.textSecondary }]}>
+            Submitted: {new Date(appeal.created_at).toLocaleDateString()}
+          </Text>
+          {appeal.reviewed_at && (
+            <Text style={[styles.appealDate, { color: colors.textSecondary }]}>
+              Reviewed: {new Date(appeal.reviewed_at).toLocaleDateString()}
+            </Text>
+          )}
+        </View>
+
+        {appeal.resolution_message && (
+          <View style={[styles.resolutionBox, { backgroundColor: colors.background }]}>
+            <Text style={[styles.resolutionLabel, { color: colors.text }]}>
+              Admin Response:
+            </Text>
+            <Text style={[styles.resolutionMessage, { color: colors.textSecondary }]}>
+              {appeal.resolution_message}
+            </Text>
+          </View>
+        )}
+      </View>
+    );
   };
 
-  const getTimeRemaining = (expiresAt: string) => {
-    const now = new Date();
-    const expires = new Date(expiresAt);
-    const diff = expires.getTime() - now.getTime();
+  const renderAppealForm = () => {
+    if (!showAppealForm || !selectedPenalty) return null;
 
-    if (diff <= 0) return 'Expired';
+    return (
+      <View style={[styles.appealFormOverlay, { backgroundColor: 'rgba(0,0,0,0.8)' }]}>
+        <View style={[styles.appealFormContainer, { backgroundColor: colors.card }]}>
+          <View style={styles.appealFormHeader}>
+            <Text style={[styles.appealFormTitle, { color: colors.text }]}>
+              Submit Appeal
+            </Text>
+            <TouchableOpacity onPress={() => setShowAppealForm(false)}>
+              <IconSymbol
+                ios_icon_name="xmark"
+                android_material_icon_name="close"
+                size={24}
+                color={colors.text}
+              />
+            </TouchableOpacity>
+          </View>
 
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+          <Text style={[styles.appealFormLabel, { color: colors.textSecondary }]}>
+            Explain why you believe this decision should be reversed (minimum 10 characters):
+          </Text>
 
-    if (days > 0) return `${days} day${days > 1 ? 's' : ''} remaining`;
-    return `${hours} hour${hours > 1 ? 's' : ''} remaining`;
+          <TextInput
+            style={[
+              styles.appealFormInput,
+              { backgroundColor: colors.background, color: colors.text, borderColor: colors.border },
+            ]}
+            placeholder="Enter your appeal reason..."
+            placeholderTextColor={colors.textSecondary}
+            value={appealReason}
+            onChangeText={setAppealReason}
+            multiline
+            numberOfLines={6}
+            textAlignVertical="top"
+          />
+
+          <Text style={[styles.appealFormNote, { color: colors.textSecondary }]}>
+            Note: Appeals for permanent bans involving sexual content with minors, terror-related content, or fraud cannot be reversed.
+          </Text>
+
+          <View style={styles.appealFormButtons}>
+            <TouchableOpacity
+              style={[styles.cancelButton, { borderColor: colors.border }]}
+              onPress={() => setShowAppealForm(false)}
+            >
+              <Text style={[styles.cancelButtonText, { color: colors.text }]}>Cancel</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.submitButton, { backgroundColor: colors.primary }]}
+              onPress={handleSubmitAppeal}
+              disabled={submitting || appealReason.length < 10}
+            >
+              {submitting ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.submitButtonText}>Submit Appeal</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    );
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return '#FFA500';
-      case 'approved':
-        return '#00C853';
-      case 'denied':
-        return colors.brandPrimary;
-      default:
-        return colors.textSecondary;
-    }
-  };
+  if (loading) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
+      {/* Header */}
+      <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <IconSymbol
             ios_icon_name="chevron.left"
@@ -122,203 +361,138 @@ export default function AppealsViolationsScreen() {
             color={colors.text}
           />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Appeals & Violations</Text>
-        <View style={styles.placeholder} />
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Appeals Center</Text>
+        <View style={{ width: 40 }} />
       </View>
 
+      {/* Tabs */}
+      <View style={styles.tabs}>
+        <TouchableOpacity
+          style={[
+            styles.tab,
+            { backgroundColor: colors.card },
+            activeTab === 'active' && { backgroundColor: colors.primary },
+          ]}
+          onPress={() => setActiveTab('active')}
+        >
+          <Text
+            style={[
+              styles.tabText,
+              { color: activeTab === 'active' ? '#FFFFFF' : colors.text },
+            ]}
+          >
+            Active ({activePenalties.length})
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.tab,
+            { backgroundColor: colors.card },
+            activeTab === 'historical' && { backgroundColor: colors.primary },
+          ]}
+          onPress={() => setActiveTab('historical')}
+        >
+          <Text
+            style={[
+              styles.tabText,
+              { color: activeTab === 'historical' ? '#FFFFFF' : colors.text },
+            ]}
+          >
+            Historical ({historicalPenalties.length})
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.tab,
+            { backgroundColor: colors.card },
+            activeTab === 'appeals' && { backgroundColor: colors.primary },
+          ]}
+          onPress={() => setActiveTab('appeals')}
+        >
+          <Text
+            style={[
+              styles.tabText,
+              { color: activeTab === 'appeals' ? '#FFFFFF' : colors.text },
+            ]}
+          >
+            Appeals ({appeals.length})
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Content */}
       <ScrollView
-        style={styles.scrollView}
+        style={styles.content}
         contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
-        {/* Strikes Section */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>📌 Strike History</Text>
-          {strikes.length === 0 ? (
-            <View style={[styles.emptyCard, { backgroundColor: colors.backgroundAlt, borderColor: colors.border }]}>
-              <IconSymbol
-                ios_icon_name="checkmark.circle.fill"
-                android_material_icon_name="check_circle"
-                size={32}
-                color={colors.textSecondary}
-              />
-              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No strikes on your account</Text>
-            </View>
-          ) : (
-            strikes.map((strike) => (
-              <View key={strike.id} style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <View style={styles.cardHeader}>
-                  <View style={[styles.levelBadge, { backgroundColor: colors.brandPrimary }]}>
-                    <Text style={styles.levelBadgeText}>Level {strike.strike_level}</Text>
-                  </View>
-                  {strike.active && (
-                    <Text style={[styles.timeRemaining, { color: colors.brandPrimary }]}>
-                      {getTimeRemaining(strike.expires_at)}
-                    </Text>
-                  )}
-                </View>
-                <Text style={[styles.cardTitle, { color: colors.text }]}>{strike.strike_type}</Text>
-                <Text style={[styles.cardText, { color: colors.textSecondary }]}>{strike.strike_message}</Text>
-                <Text style={[styles.cardDate, { color: colors.textSecondary }]}>
-                  {new Date(strike.created_at).toLocaleDateString()}
+        {activeTab === 'active' && (
+          <View style={styles.section}>
+            {activePenalties.length === 0 ? (
+              <View style={styles.emptyState}>
+                <IconSymbol
+                  ios_icon_name="checkmark.circle"
+                  android_material_icon_name="check_circle"
+                  size={64}
+                  color={colors.textSecondary}
+                />
+                <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>
+                  No active penalties
                 </Text>
-                {strike.active && (
-                  <TouchableOpacity
-                    style={[styles.appealButton, { backgroundColor: colors.backgroundAlt, borderColor: colors.border }]}
-                    onPress={() => openAppealModal(undefined, strike)}
-                  >
-                    <Text style={[styles.appealButtonText, { color: colors.text }]}>Submit Appeal</Text>
-                  </TouchableOpacity>
-                )}
               </View>
-            ))
-          )}
-        </View>
+            ) : (
+              activePenalties.map(penalty => renderPenaltyCard(penalty, true))
+            )}
+          </View>
+        )}
 
-        {/* Violations Section */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>⚠️ Violations</Text>
-          {violations.length === 0 ? (
-            <View style={[styles.emptyCard, { backgroundColor: colors.backgroundAlt, borderColor: colors.border }]}>
-              <IconSymbol
-                ios_icon_name="checkmark.circle.fill"
-                android_material_icon_name="check_circle"
-                size={32}
-                color={colors.textSecondary}
-              />
-              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No violations reported</Text>
-            </View>
-          ) : (
-            violations.map((violation) => (
-              <View key={violation.id} style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <View style={styles.cardHeader}>
-                  <View style={[styles.severityBadge, { backgroundColor: colors.brandPrimary }]}>
-                    <Text style={styles.severityBadgeText}>Severity {violation.severity_level}</Text>
-                  </View>
-                </View>
-                <Text style={[styles.cardTitle, { color: colors.text }]}>
-                  {violation.violation_reason.replace(/_/g, ' ').toUpperCase()}
+        {activeTab === 'historical' && (
+          <View style={styles.section}>
+            {historicalPenalties.length === 0 ? (
+              <View style={styles.emptyState}>
+                <IconSymbol
+                  ios_icon_name="clock"
+                  android_material_icon_name="history"
+                  size={64}
+                  color={colors.textSecondary}
+                />
+                <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>
+                  No historical penalties
                 </Text>
-                {violation.notes && (
-                  <Text style={[styles.cardText, { color: colors.textSecondary }]}>{violation.notes}</Text>
-                )}
-                <Text style={[styles.cardDate, { color: colors.textSecondary }]}>
-                  {new Date(violation.created_at).toLocaleDateString()}
-                </Text>
-                {!violation.resolved && (
-                  <TouchableOpacity
-                    style={[styles.appealButton, { backgroundColor: colors.backgroundAlt, borderColor: colors.border }]}
-                    onPress={() => openAppealModal(violation, undefined)}
-                  >
-                    <Text style={[styles.appealButtonText, { color: colors.text }]}>Submit Appeal</Text>
-                  </TouchableOpacity>
-                )}
               </View>
-            ))
-          )}
-        </View>
+            ) : (
+              historicalPenalties.map(penalty => renderPenaltyCard(penalty, false))
+            )}
+          </View>
+        )}
 
-        {/* Appeals Section */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>📋 Your Appeals</Text>
-          {appeals.length === 0 ? (
-            <View style={[styles.emptyCard, { backgroundColor: colors.backgroundAlt, borderColor: colors.border }]}>
-              <IconSymbol
-                ios_icon_name="doc.text.fill"
-                android_material_icon_name="description"
-                size={32}
-                color={colors.textSecondary}
-              />
-              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No appeals submitted</Text>
-            </View>
-          ) : (
-            appeals.map((appeal) => (
-              <View key={appeal.id} style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <View style={styles.cardHeader}>
-                  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(appeal.status) }]}>
-                    <Text style={styles.statusBadgeText}>{appeal.status.toUpperCase()}</Text>
-                  </View>
-                </View>
-                <Text style={[styles.cardText, { color: colors.text }]}>{appeal.appeal_reason}</Text>
-                {appeal.admin_decision && (
-                  <View style={[styles.decisionBox, { backgroundColor: colors.backgroundAlt, borderColor: colors.border }]}>
-                    <Text style={[styles.decisionLabel, { color: colors.textSecondary }]}>Admin Decision:</Text>
-                    <Text style={[styles.decisionText, { color: colors.text }]}>{appeal.admin_decision}</Text>
-                  </View>
-                )}
-                <Text style={[styles.cardDate, { color: colors.textSecondary }]}>
-                  Submitted: {new Date(appeal.created_at).toLocaleDateString()}
+        {activeTab === 'appeals' && (
+          <View style={styles.section}>
+            {appeals.length === 0 ? (
+              <View style={styles.emptyState}>
+                <IconSymbol
+                  ios_icon_name="doc.text"
+                  android_material_icon_name="description"
+                  size={64}
+                  color={colors.textSecondary}
+                />
+                <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>
+                  No appeals submitted
                 </Text>
-                {appeal.reviewed_at && (
-                  <Text style={[styles.cardDate, { color: colors.textSecondary }]}>
-                    Reviewed: {new Date(appeal.reviewed_at).toLocaleDateString()}
-                  </Text>
-                )}
               </View>
-            ))
-          )}
-        </View>
+            ) : (
+              appeals.map(renderAppealCard)
+            )}
+          </View>
+        )}
       </ScrollView>
 
-      {/* Appeal Modal */}
-      <Modal
-        visible={showAppealModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowAppealModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
-            <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>Submit Appeal</Text>
-              <TouchableOpacity onPress={() => setShowAppealModal(false)}>
-                <IconSymbol
-                  ios_icon_name="xmark"
-                  android_material_icon_name="close"
-                  size={24}
-                  color={colors.text}
-                />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-              <Text style={[styles.label, { color: colors.text }]}>Explanation *</Text>
-              <TextInput
-                style={[styles.textArea, { backgroundColor: colors.backgroundAlt, borderColor: colors.border, color: colors.text }]}
-                placeholder="Explain why you believe this decision should be reconsidered..."
-                placeholderTextColor={colors.textSecondary}
-                value={appealReason}
-                onChangeText={setAppealReason}
-                multiline
-                numberOfLines={6}
-                textAlignVertical="top"
-              />
-
-              <Text style={[styles.label, { color: colors.text }]}>Evidence URL (Optional)</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: colors.backgroundAlt, borderColor: colors.border, color: colors.text }]}
-                placeholder="https://..."
-                placeholderTextColor={colors.textSecondary}
-                value={evidenceUrl}
-                onChangeText={setEvidenceUrl}
-                autoCapitalize="none"
-              />
-
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={[styles.cancelButton, { backgroundColor: colors.backgroundAlt, borderColor: colors.border }]}
-                  onPress={() => setShowAppealModal(false)}
-                >
-                  <Text style={[styles.cancelButtonText, { color: colors.text }]}>Cancel</Text>
-                </TouchableOpacity>
-                <View style={styles.submitButtonContainer}>
-                  <GradientButton title="Submit Appeal" onPress={handleSubmitAppeal} />
-                </View>
-              </View>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+      {/* Appeal Form Modal */}
+      {renderAppealForm()}
     </View>
   );
 }
@@ -334,198 +508,237 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 60,
     paddingBottom: 16,
-    borderBottomWidth: 1,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 8,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
   },
-  placeholder: {
-    width: 40,
+  tabs: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 8,
   },
-  scrollView: {
+  tab: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  tabText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  content: {
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 24,
-    paddingBottom: 120,
+    padding: 16,
   },
   section: {
-    marginBottom: 32,
+    gap: 16,
   },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 16,
-  },
-  card: {
-    padding: 16,
+  penaltyCard: {
     borderRadius: 12,
+    padding: 16,
     borderWidth: 1,
-    marginBottom: 12,
+    gap: 12,
   },
-  cardHeader: {
+  penaltyHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
   },
-  levelBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+  penaltyTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  levelBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  severityBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  severityBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  statusBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  timeRemaining: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  cardTitle: {
+  penaltySeverity: {
     fontSize: 16,
     fontWeight: '700',
-    marginBottom: 8,
   },
-  cardText: {
+  activeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  activeBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  penaltyReason: {
     fontSize: 14,
-    fontWeight: '400',
     lineHeight: 20,
-    marginBottom: 8,
   },
-  cardDate: {
+  penaltyDetails: {
+    gap: 8,
+  },
+  penaltyDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  penaltyDetailText: {
+    fontSize: 13,
+  },
+  policyReference: {
     fontSize: 12,
-    fontWeight: '400',
+    fontStyle: 'italic',
   },
   appealButton: {
-    marginTop: 12,
-    padding: 12,
+    paddingVertical: 12,
     borderRadius: 8,
-    borderWidth: 1,
     alignItems: 'center',
   },
   appealButtonText: {
     fontSize: 14,
     fontWeight: '600',
+    color: '#FFFFFF',
   },
-  decisionBox: {
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    marginTop: 12,
-    marginBottom: 8,
-  },
-  decisionLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  decisionText: {
-    fontSize: 14,
-    fontWeight: '400',
-    lineHeight: 20,
-  },
-  emptyCard: {
-    padding: 32,
-    borderRadius: 12,
-    borderWidth: 1,
+  appealStatusBadge: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  appealStatusText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  appealCard: {
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
     gap: 12,
   },
-  emptyText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: '80%',
-  },
-  modalHeader: {
+  appealHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
   },
-  modalTitle: {
+  appealTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  appealReason: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  appealFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  appealDate: {
+    fontSize: 12,
+  },
+  resolutionBox: {
+    padding: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+  resolutionLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  resolutionMessage: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    gap: 16,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  appealFormOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  appealFormContainer: {
+    width: '100%',
+    maxWidth: 500,
+    borderRadius: 16,
+    padding: 20,
+    gap: 16,
+  },
+  appealFormHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  appealFormTitle: {
     fontSize: 20,
     fontWeight: '700',
   },
-  modalBody: {
-    padding: 20,
-  },
-  label: {
+  appealFormLabel: {
     fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
+    lineHeight: 20,
   },
-  input: {
+  appealFormInput: {
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    marginBottom: 16,
-  },
-  textArea: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    marginBottom: 16,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
     minHeight: 120,
   },
-  modalButtons: {
+  appealFormNote: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontStyle: 'italic',
+  },
+  appealFormButtons: {
     flexDirection: 'row',
     gap: 12,
-    marginTop: 8,
   },
   cancelButton: {
     flex: 1,
-    padding: 16,
-    borderRadius: 12,
+    paddingVertical: 12,
+    borderRadius: 8,
     borderWidth: 1,
     alignItems: 'center',
   },
   cancelButtonText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
   },
-  submitButtonContainer: {
+  submitButton: {
     flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  submitButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });

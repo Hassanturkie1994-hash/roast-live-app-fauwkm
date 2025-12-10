@@ -1,15 +1,19 @@
 
 import { supabase } from '@/app/integrations/supabase/client';
+import { inboxService } from './inboxService';
 
 export interface Appeal {
   id: string;
   user_id: string;
   violation_id?: string;
   strike_id?: string;
+  penalty_id?: string;
   appeal_reason: string;
   evidence_url?: string;
+  appeal_screenshot_url?: string;
   status: 'pending' | 'approved' | 'denied';
   admin_decision?: string;
+  resolution_message?: string;
   reviewed_by?: string;
   reviewed_at?: string;
   created_at: string;
@@ -38,8 +42,24 @@ export interface Violation {
   resolved: boolean;
 }
 
-export const appealsService = {
-  // Get user's strikes
+export interface AdminPenalty {
+  id: string;
+  user_id: string;
+  admin_id: string;
+  severity: 'temporary' | 'permanent';
+  reason: string;
+  duration_hours?: number;
+  evidence_link?: string;
+  policy_reference?: string;
+  issued_at: string;
+  expires_at?: string;
+  is_active: boolean;
+}
+
+class AppealsService {
+  /**
+   * Get user's strikes
+   */
   async getUserStrikes(userId: string): Promise<Strike[]> {
     try {
       const { data, error } = await supabase
@@ -58,9 +78,11 @@ export const appealsService = {
       console.error('Error fetching strikes:', error);
       return [];
     }
-  },
+  }
 
-  // Get user's violations
+  /**
+   * Get user's violations
+   */
   async getUserViolations(userId: string): Promise<Violation[]> {
     try {
       const { data, error } = await supabase
@@ -79,9 +101,34 @@ export const appealsService = {
       console.error('Error fetching violations:', error);
       return [];
     }
-  },
+  }
 
-  // Get user's appeals
+  /**
+   * Get user's admin penalties
+   */
+  async getUserPenalties(userId: string): Promise<AdminPenalty[]> {
+    try {
+      const { data, error } = await supabase
+        .from('admin_penalties')
+        .select('*')
+        .eq('user_id', userId)
+        .order('issued_at', { ascending: false});
+
+      if (error) {
+        console.error('Error fetching penalties:', error);
+        return [];
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching penalties:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get user's appeals
+   */
   async getUserAppeals(userId: string): Promise<Appeal[]> {
     try {
       const { data, error } = await supabase
@@ -100,25 +147,73 @@ export const appealsService = {
       console.error('Error fetching appeals:', error);
       return [];
     }
-  },
+  }
 
-  // Submit an appeal
+  /**
+   * PROMPT 3: Submit an appeal
+   * Appeal reason (text field min 10 chars)
+   * Optional screenshot upload
+   */
   async submitAppeal(
     userId: string,
-    violationId: string | undefined,
-    strikeId: string | undefined,
+    linkedPenaltyId: string,
     appealReason: string,
-    evidenceUrl?: string
+    screenshotUrl?: string
   ): Promise<{ success: boolean; error?: string }> {
     try {
+      if (appealReason.length < 10) {
+        return { success: false, error: 'Appeal reason must be at least 10 characters' };
+      }
+
+      // Check if penalty can be appealed
+      const { data: penalty } = await supabase
+        .from('admin_penalties')
+        .select('*')
+        .eq('id', linkedPenaltyId)
+        .single();
+
+      if (!penalty) {
+        return { success: false, error: 'Penalty not found' };
+      }
+
+      // Check if penalty is for extreme cases that cannot be appealed
+      const unappeableReasons = [
+        'sexual content involving minors',
+        'terror-related content',
+        'fraud attempt',
+      ];
+
+      const isUnappeallable = unappeableReasons.some(reason => 
+        penalty.reason.toLowerCase().includes(reason)
+      );
+
+      if (penalty.severity === 'permanent' && isUnappeallable) {
+        return { 
+          success: false, 
+          error: 'This permanent ban cannot be appealed due to the severity of the violation.' 
+        };
+      }
+
+      // Check if user already has a pending appeal for this penalty
+      const { data: existingAppeal } = await supabase
+        .from('appeals')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('penalty_id', linkedPenaltyId)
+        .eq('status', 'pending')
+        .single();
+
+      if (existingAppeal) {
+        return { success: false, error: 'You already have a pending appeal for this penalty' };
+      }
+
       const { error } = await supabase
         .from('appeals')
         .insert({
           user_id: userId,
-          violation_id: violationId,
-          strike_id: strikeId,
+          penalty_id: linkedPenaltyId,
           appeal_reason: appealReason,
-          evidence_url: evidenceUrl,
+          appeal_screenshot_url: screenshotUrl || null,
           status: 'pending',
         });
 
@@ -128,20 +223,24 @@ export const appealsService = {
       }
 
       // Send notification to user
-      await supabase.from('notifications').insert({
-        type: 'message',
-        receiver_id: userId,
-        message: 'Your appeal has been submitted and is under review.',
-      });
+      await inboxService.sendMessage(
+        userId,
+        userId,
+        'Your appeal has been submitted and is under review by administrators.',
+        'safety'
+      );
 
+      console.log(`📝 Appeal submitted by user ${userId}`);
       return { success: true };
     } catch (error: any) {
       console.error('Error submitting appeal:', error);
       return { success: false, error: error.message };
     }
-  },
+  }
 
-  // Get appeal by ID
+  /**
+   * Get appeal by ID
+   */
   async getAppeal(appealId: string): Promise<Appeal | null> {
     try {
       const { data, error } = await supabase
@@ -160,5 +259,228 @@ export const appealsService = {
       console.error('Error fetching appeal:', error);
       return null;
     }
-  },
-};
+  }
+
+  /**
+   * Get all pending appeals for admin review
+   */
+  async getPendingAppeals(): Promise<any[]> {
+    try {
+      const { data, error } = await supabase
+        .from('appeals')
+        .select(`
+          *,
+          user:user_id(id, username, display_name, avatar_url),
+          penalty:penalty_id(
+            id,
+            severity,
+            reason,
+            duration_hours,
+            evidence_link,
+            policy_reference,
+            issued_at
+          ),
+          violation:violation_id(
+            id,
+            violation_reason,
+            severity_level,
+            created_at
+          ),
+          strike:strike_id(
+            id,
+            strike_type,
+            strike_message,
+            strike_level,
+            created_at
+          )
+        `)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching pending appeals:', error);
+        return [];
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Error in getPendingAppeals:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Admin review appeal: ACCEPT
+   * Remove violation, remove strike, notify user
+   */
+  async acceptAppeal(
+    appealId: string,
+    adminId: string,
+    resolutionMessage: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const { data: appeal } = await supabase
+        .from('appeals')
+        .select('*, penalty:penalty_id(*)')
+        .eq('id', appealId)
+        .single();
+
+      if (!appeal) {
+        return { success: false, error: 'Appeal not found' };
+      }
+
+      // Update appeal status
+      await supabase
+        .from('appeals')
+        .update({
+          status: 'approved',
+          reviewed_by: adminId,
+          reviewed_at: new Date().toISOString(),
+          resolution_message: resolutionMessage,
+        })
+        .eq('id', appealId);
+
+      // Deactivate penalty if exists
+      if (appeal.penalty_id) {
+        await supabase
+          .from('admin_penalties')
+          .update({ is_active: false })
+          .eq('id', appeal.penalty_id);
+      }
+
+      // Remove strike if exists
+      if (appeal.strike_id) {
+        await supabase
+          .from('content_safety_strikes')
+          .update({ active: false })
+          .eq('id', appeal.strike_id);
+      }
+
+      // Mark violation as resolved if exists
+      if (appeal.violation_id) {
+        await supabase
+          .from('content_safety_violations')
+          .update({ resolved: true })
+          .eq('id', appeal.violation_id);
+      }
+
+      // Send inbox notification
+      await inboxService.sendMessage(
+        appeal.user_id,
+        appeal.user_id,
+        `Your appeal was reviewed and accepted. Reason: ${resolutionMessage}`,
+        'safety'
+      );
+
+      console.log(`✅ Appeal accepted: ${appealId}`);
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error accepting appeal:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Admin review appeal: DENY
+   * Notify user
+   */
+  async denyAppeal(
+    appealId: string,
+    adminId: string,
+    resolutionMessage: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const { data: appeal } = await supabase
+        .from('appeals')
+        .select('user_id')
+        .eq('id', appealId)
+        .single();
+
+      if (!appeal) {
+        return { success: false, error: 'Appeal not found' };
+      }
+
+      // Update appeal status
+      await supabase
+        .from('appeals')
+        .update({
+          status: 'denied',
+          reviewed_by: adminId,
+          reviewed_at: new Date().toISOString(),
+          resolution_message: resolutionMessage,
+        })
+        .eq('id', appealId);
+
+      // Send inbox notification
+      await inboxService.sendMessage(
+        appeal.user_id,
+        appeal.user_id,
+        `Your appeal was reviewed and denied. Reason: ${resolutionMessage}`,
+        'safety'
+      );
+
+      console.log(`❌ Appeal denied: ${appealId}`);
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error denying appeal:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Get appeal with full context for admin review
+   */
+  async getAppealWithContext(appealId: string): Promise<any> {
+    try {
+      const { data: appeal } = await supabase
+        .from('appeals')
+        .select(`
+          *,
+          user:user_id(id, username, display_name, avatar_url),
+          penalty:penalty_id(*),
+          violation:violation_id(*),
+          strike:strike_id(*)
+        `)
+        .eq('id', appealId)
+        .single();
+
+      if (!appeal) {
+        return null;
+      }
+
+      // Get user history
+      const { data: violations } = await supabase
+        .from('user_violations')
+        .select('*')
+        .eq('user_id', appeal.user_id)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      const { data: strikes } = await supabase
+        .from('content_safety_strikes')
+        .select('*')
+        .eq('user_id', appeal.user_id)
+        .order('created_at', { ascending: false });
+
+      const { data: penalties } = await supabase
+        .from('admin_penalties')
+        .select('*')
+        .eq('user_id', appeal.user_id)
+        .order('issued_at', { ascending: false });
+
+      return {
+        ...appeal,
+        user_history: {
+          violations: violations || [],
+          strikes: strikes || [],
+          penalties: penalties || [],
+        },
+      };
+    } catch (error) {
+      console.error('Error in getAppealWithContext:', error);
+      return null;
+    }
+  }
+}
+
+export const appealsService = new AppealsService();
