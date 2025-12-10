@@ -1,254 +1,277 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Image,
   RefreshControl,
   Dimensions,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
 } from 'react-native';
-import { router } from 'expo-router';
-import { useTheme } from '@/contexts/ThemeContext';
-import { IconSymbol } from '@/components/IconSymbol';
-import LiveBadge from '@/components/LiveBadge';
-import { recommendationService } from '@/app/services/recommendationService';
+import { useRouter } from 'expo-router';
+import { supabase } from '@/app/integrations/supabase/client';
+import { colors } from '@/styles/commonStyles';
+import { CDNImage } from '@/components/CDNImage';
+import { useExplorePrefetch } from '@/hooks/useExplorePrefetch';
+import { cdnService } from '@/app/services/cdnService';
 
-const { width: screenWidth } = Dimensions.get('window');
-const cardWidth = (screenWidth - 6) / 2;
+const { width } = Dimensions.get('window');
+const ITEM_WIDTH = (width - 48) / 2; // 2 columns with padding
+
+interface ExploreItem {
+  id: string;
+  type: 'post' | 'story';
+  mediaUrl: string;
+  username: string;
+  userId: string;
+  avatarUrl?: string;
+  caption?: string;
+  createdAt: string;
+}
 
 export default function ExploreScreen() {
-  const { colors } = useTheme();
-  const [trendingCreators, setTrendingCreators] = useState<any[]>([]);
-  const [growingFast, setGrowingFast] = useState<any[]>([]);
-  const [mostSupported, setMostSupported] = useState<any[]>([]);
-  const [mostGifted, setMostGifted] = useState<any[]>([]);
-  const [liveStreams, setLiveStreams] = useState<any[]>([]);
+  const router = useRouter();
+  const [items, setItems] = useState<ExploreItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [page, setPage] = useState(0);
+  const scrollViewRef = useRef<ScrollView>(null);
 
-  const fetchExploreContent = useCallback(async () => {
+  // Use prefetch hook for instant scrolling
+  const {
+    prefetchNextPage,
+    handleScroll: handlePrefetchScroll,
+    setCurrentPage,
+    clearCache,
+  } = useExplorePrefetch({
+    enabled: true,
+    itemsPerPage: 20,
+    prefetchThreshold: 0.5, // Prefetch when scrolled past 50%
+  });
+
+  useEffect(() => {
+    loadExploreContent();
+
+    return () => {
+      // Cleanup prefetch cache on unmount
+      clearCache();
+    };
+  }, []);
+
+  const loadExploreContent = async (pageNum: number = 0) => {
     try {
-      const [trending, growing, supported, gifted, live] = await Promise.all([
-        recommendationService.getTrendingCreators(10),
-        recommendationService.getGrowingFastCreators(10),
-        recommendationService.getMostSupportedCreators(10),
-        recommendationService.getMostGiftedStreams(10),
-        recommendationService.getRecommendedLiveStreams(20),
-      ]);
+      setLoading(pageNum === 0);
 
-      setTrendingCreators(trending);
-      setGrowingFast(growing);
-      setMostSupported(supported);
-      setMostGifted(gifted);
-      setLiveStreams(live);
+      const itemsPerPage = 20;
+      const start = pageNum * itemsPerPage;
+      const end = start + itemsPerPage - 1;
+
+      // Fetch posts
+      const { data: posts } = await supabase
+        .from('posts')
+        .select(`
+          id,
+          media_url,
+          caption,
+          created_at,
+          profiles:user_id (
+            id,
+            username,
+            avatar_url
+          )
+        `)
+        .order('created_at', { ascending: false })
+        .range(start, end);
+
+      // Fetch stories
+      const { data: stories } = await supabase
+        .from('stories')
+        .select(`
+          id,
+          media_url,
+          created_at,
+          profiles:user_id (
+            id,
+            username,
+            avatar_url
+          )
+        `)
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false })
+        .range(start, end);
+
+      // Combine and format items
+      const postItems: ExploreItem[] = (posts || []).map(post => ({
+        id: post.id,
+        type: 'post' as const,
+        mediaUrl: post.media_url,
+        username: (post.profiles as any)?.username || 'Unknown',
+        userId: (post.profiles as any)?.id || '',
+        avatarUrl: (post.profiles as any)?.avatar_url,
+        caption: post.caption,
+        createdAt: post.created_at,
+      }));
+
+      const storyItems: ExploreItem[] = (stories || []).map(story => ({
+        id: story.id,
+        type: 'story' as const,
+        mediaUrl: story.media_url,
+        username: (story.profiles as any)?.username || 'Unknown',
+        userId: (story.profiles as any)?.id || '',
+        avatarUrl: (story.profiles as any)?.avatar_url,
+        createdAt: story.created_at,
+      }));
+
+      // Combine and shuffle
+      const allItems = [...postItems, ...storyItems].sort(
+        () => Math.random() - 0.5
+      );
+
+      if (pageNum === 0) {
+        setItems(allItems);
+      } else {
+        setItems(prev => [...prev, ...allItems]);
+      }
+
+      setPage(pageNum);
+      setCurrentPage(pageNum);
+
+      // Prefetch next page
+      if (allItems.length > 0) {
+        await prefetchNextPage(pageNum);
+      }
     } catch (error) {
-      console.error('Error fetching explore content:', error);
+      console.error('Error loading explore content:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
+  };
+
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true);
+    clearCache();
+    loadExploreContent(0);
   }, []);
 
-  useEffect(() => {
-    fetchExploreContent();
-  }, [fetchExploreContent]);
+  const handleLoadMore = useCallback(() => {
+    if (!loading) {
+      loadExploreContent(page + 1);
+    }
+  }, [loading, page]);
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchExploreContent();
+  const handleScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+
+      // Handle prefetch scroll
+      handlePrefetchScroll(
+        contentOffset.y,
+        contentSize.height,
+        layoutMeasurement.height
+      );
+
+      // Load more when near bottom
+      const isNearBottom =
+        contentOffset.y + layoutMeasurement.height >= contentSize.height - 500;
+
+      if (isNearBottom && !loading) {
+        handleLoadMore();
+      }
+    },
+    [handlePrefetchScroll, loading, handleLoadMore]
+  );
+
+  const handleItemPress = (item: ExploreItem) => {
+    if (item.type === 'post') {
+      // Navigate to post detail
+      router.push(`/post/${item.id}`);
+    } else {
+      // Navigate to story viewer
+      router.push(`/story/${item.userId}`);
+    }
   };
 
-  const handleSearchPress = () => {
-    router.push('/screens/SearchScreen');
-  };
-
-  const handleStreamPress = (streamId: string) => {
-    router.push({
-      pathname: '/live-player',
-      params: { streamId },
-    });
-  };
-
-  const handleCreatorPress = (userId: string) => {
-    router.push(`/screens/PublicProfileScreen?userId=${userId}`);
-  };
-
-  const renderCreatorRow = (title: string, emoji: string, creators: any[]) => {
-    if (creators.length === 0) return null;
-
-    return (
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>
-          {emoji} {title}
-        </Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.horizontalScroll}
-        >
-          {creators.map((creator) => (
-            <TouchableOpacity
-              key={creator.id}
-              style={[styles.creatorCard, { backgroundColor: colors.card }]}
-              onPress={() => handleCreatorPress(creator.id)}
-              activeOpacity={0.7}
-            >
-              <Image
-                source={{
-                  uri: creator.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
-                }}
-                style={styles.creatorAvatar}
-              />
-              <Text style={[styles.creatorName, { color: colors.text }]} numberOfLines={1}>
-                {creator.display_name || creator.username}
-              </Text>
-              <Text style={[styles.creatorStats, { color: colors.textSecondary }]}>
-                {creator.followers_count || 0} followers
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+  const renderItem = (item: ExploreItem) => (
+    <TouchableOpacity
+      key={item.id}
+      style={styles.item}
+      onPress={() => handleItemPress(item)}
+      activeOpacity={0.8}
+    >
+      <CDNImage
+        source={item.mediaUrl}
+        type="explore"
+        style={styles.itemImage}
+        showLoader={true}
+      />
+      
+      <View style={styles.itemOverlay}>
+        <View style={styles.itemInfo}>
+          {item.avatarUrl && (
+            <CDNImage
+              source={item.avatarUrl}
+              type="profile"
+              style={styles.avatar}
+            />
+          )}
+          <Text style={styles.username} numberOfLines={1}>
+            {item.username}
+          </Text>
+        </View>
+        
+        {item.type === 'story' && (
+          <View style={styles.storyBadge}>
+            <Text style={styles.storyBadgeText}>STORY</Text>
+          </View>
+        )}
       </View>
-    );
-  };
+    </TouchableOpacity>
+  );
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Explore</Text>
-        <TouchableOpacity 
-          style={[styles.searchContainer, { backgroundColor: colors.backgroundAlt }]} 
-          onPress={handleSearchPress} 
-          activeOpacity={0.7}
-        >
-          <IconSymbol
-            ios_icon_name="magnifyingglass"
-            android_material_icon_name="search"
-            size={20}
-            color={colors.textSecondary}
-          />
-          <Text style={[styles.searchPlaceholder, { color: colors.placeholder }]}>Search...</Text>
-        </TouchableOpacity>
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Explore</Text>
+        <Text style={styles.headerSubtitle}>
+          Discover trending content
+        </Text>
       </View>
 
       <ScrollView
+        ref={scrollViewRef}
         style={styles.scrollView}
-        contentContainerStyle={styles.contentContainer}
+        contentContainerStyle={styles.grid}
+        showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl 
-            refreshing={refreshing} 
-            onRefresh={onRefresh} 
-            tintColor={colors.brandPrimary} 
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
           />
         }
-        showsVerticalScrollIndicator={false}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
       >
-        {loading ? (
-          <View style={styles.centerContent}>
-            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading content...</Text>
+        {items.map(renderItem)}
+
+        {loading && page === 0 && (
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingText}>Loading...</Text>
           </View>
-        ) : (
-          <>
-            {/* Live Streams Grid */}
-            {liveStreams.length > 0 && (
-              <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: colors.text }]}>🔴 Live Now</Text>
-                <View style={styles.grid}>
-                  {liveStreams.slice(0, 6).map((stream) => (
-                    <TouchableOpacity
-                      key={stream.id}
-                      style={[styles.card, { backgroundColor: colors.card }]}
-                      onPress={() => handleStreamPress(stream.id)}
-                      activeOpacity={0.9}
-                    >
-                      <Image
-                        source={{
-                          uri: stream.users?.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400',
-                        }}
-                        style={styles.cardImage}
-                      />
-                      <View style={styles.cardOverlay}>
-                        <View style={styles.cardTopBar}>
-                          <LiveBadge size="small" />
-                          <View style={styles.viewerBadge}>
-                            <IconSymbol
-                              ios_icon_name="eye.fill"
-                              android_material_icon_name="visibility"
-                              size={12}
-                              color="#FFFFFF"
-                            />
-                            <Text style={styles.viewerCount}>{stream.viewer_count || 0}</Text>
-                          </View>
-                        </View>
-
-                        <View style={styles.cardInfo}>
-                          <Text style={styles.cardTitle} numberOfLines={2}>
-                            {stream.title}
-                          </Text>
-                          <Text style={styles.cardSubtitle} numberOfLines={1}>
-                            {stream.users?.display_name}
-                          </Text>
-                        </View>
-                      </View>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {/* Trending Creators */}
-            {renderCreatorRow('Trending Creators', '🔥', trendingCreators)}
-
-            {/* Growing Fast */}
-            {renderCreatorRow('Growing Fast', '✨', growingFast)}
-
-            {/* Most Supported */}
-            {renderCreatorRow('Most Supported', '🎁', mostSupported)}
-
-            {/* Most Gifted Streams */}
-            {mostGifted.length > 0 && (
-              <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: colors.text }]}>📈 Most Gifted Streams</Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.horizontalScroll}
-                >
-                  {mostGifted.map((stream) => (
-                    <TouchableOpacity
-                      key={stream.id}
-                      style={[styles.streamCard, { backgroundColor: colors.card }]}
-                      onPress={() => handleStreamPress(stream.id)}
-                      activeOpacity={0.7}
-                    >
-                      <Image
-                        source={{
-                          uri: stream.users?.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400',
-                        }}
-                        style={styles.streamCardImage}
-                      />
-                      <View style={styles.streamCardOverlay}>
-                        <LiveBadge size="small" />
-                      </View>
-                      <View style={styles.streamCardInfo}>
-                        <Text style={[styles.streamCardTitle, { color: colors.text }]} numberOfLines={1}>
-                          {stream.title}
-                        </Text>
-                        <Text style={[styles.streamCardSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-                          {stream.users?.display_name}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            )}
-          </>
         )}
       </ScrollView>
+
+      {/* Device tier indicator (for debugging) */}
+      <View style={styles.deviceTierIndicator}>
+        <Text style={styles.deviceTierText}>
+          Device: {cdnService.getDeviceTier().toUpperCase()}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -256,159 +279,102 @@ export default function ExploreScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   header: {
-    paddingTop: 60,
     paddingHorizontal: 20,
-    paddingBottom: 16,
+    paddingTop: 60,
+    paddingBottom: 20,
+    backgroundColor: colors.background,
     borderBottomWidth: 1,
-    gap: 12,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
   },
   headerTitle: {
-    fontSize: 28,
-    fontWeight: '800',
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 4,
   },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 12,
-  },
-  searchPlaceholder: {
-    flex: 1,
-    fontSize: 16,
+  headerSubtitle: {
+    fontSize: 14,
+    color: colors.textSecondary,
   },
   scrollView: {
     flex: 1,
   },
-  contentContainer: {
-    paddingBottom: 100,
-  },
-  centerContent: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 80,
-  },
-  loadingText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  section: {
-    marginTop: 24,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    paddingHorizontal: 20,
-    marginBottom: 12,
-  },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: 1,
-    gap: 2,
+    padding: 16,
+    paddingBottom: 100,
   },
-  card: {
-    width: cardWidth,
-    aspectRatio: 9 / 16,
+  item: {
+    width: ITEM_WIDTH,
+    height: ITEM_WIDTH * 1.5,
+    margin: 8,
+    borderRadius: 12,
     overflow: 'hidden',
-    position: 'relative',
+    backgroundColor: '#1A1A1A',
   },
-  cardImage: {
+  itemImage: {
     width: '100%',
     height: '100%',
   },
-  cardOverlay: {
+  itemOverlay: {
     ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
     justifyContent: 'space-between',
     padding: 12,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
-  cardTopBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  viewerBadge: {
+  itemInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+  },
+  avatar: {
+    width: 24,
+    height: 24,
     borderRadius: 12,
-    gap: 4,
+    marginRight: 8,
   },
-  viewerCount: {
+  username: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: colors.text,
+    flex: 1,
   },
-  cardInfo: {
-    gap: 4,
+  storyBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.primary,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
   },
-  cardTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    lineHeight: 18,
+  storyBadgeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: colors.text,
   },
-  cardSubtitle: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: '#FFFFFF',
-  },
-  horizontalScroll: {
-    paddingHorizontal: 20,
-    gap: 12,
-  },
-  creatorCard: {
-    width: 120,
-    padding: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-    gap: 8,
-  },
-  creatorAvatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-  },
-  creatorName: {
-    fontSize: 14,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  creatorStats: {
-    fontSize: 12,
-    fontWeight: '400',
-    textAlign: 'center',
-  },
-  streamCard: {
-    width: 200,
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  streamCardImage: {
+  loadingContainer: {
     width: '100%',
-    height: 120,
+    padding: 20,
+    alignItems: 'center',
   },
-  streamCardOverlay: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-  },
-  streamCardInfo: {
-    padding: 12,
-    gap: 4,
-  },
-  streamCardTitle: {
+  loadingText: {
     fontSize: 14,
-    fontWeight: '700',
+    color: colors.textSecondary,
   },
-  streamCardSubtitle: {
-    fontSize: 12,
-    fontWeight: '400',
+  deviceTierIndicator: {
+    position: 'absolute',
+    bottom: 100,
+    right: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  deviceTierText: {
+    fontSize: 10,
+    color: colors.textSecondary,
+    fontWeight: '600',
   },
 });

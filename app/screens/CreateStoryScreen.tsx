@@ -19,6 +19,7 @@ import GradientButton from '@/components/GradientButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/app/integrations/supabase/client';
 import { storyService } from '@/app/services/storyService';
+import { cdnService } from '@/app/services/cdnService';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -84,48 +85,6 @@ export default function CreateStoryScreen() {
     }
   };
 
-  const uploadMedia = async (uri: string, type: 'story' | 'post'): Promise<string | null> => {
-    try {
-      console.log('Starting upload for:', type);
-      const response = await fetch(uri);
-      const blob = await response.blob();
-      
-      const fileExt = uri.split('.').pop() || 'jpg';
-      const timestamp = Date.now();
-      const fileName = `${user?.id}_${timestamp}.${fileExt}`;
-      const bucket = type === 'story' ? 'stories' : 'posts';
-      const filePath = `${fileName}`;
-
-      console.log('Uploading to bucket:', bucket, 'path:', filePath);
-
-      const { data, error: uploadError } = await supabase.storage
-        .from(bucket)
-        .upload(filePath, blob, {
-          contentType: blob.type || 'image/jpeg',
-          upsert: false,
-        });
-
-      if (uploadError) {
-        console.error('Upload error:', uploadError);
-        Alert.alert('Upload Error', uploadError.message || 'Failed to upload media');
-        return null;
-      }
-
-      console.log('Upload successful:', data);
-
-      const { data: urlData } = supabase.storage
-        .from(bucket)
-        .getPublicUrl(filePath);
-
-      console.log('Public URL:', urlData.publicUrl);
-      return urlData.publicUrl;
-    } catch (error) {
-      console.error('Error uploading media:', error);
-      Alert.alert('Error', 'An unexpected error occurred during upload');
-      return null;
-    }
-  };
-
   const handlePostToStory = async () => {
     if (!user || !mediaUri) {
       Alert.alert('Error', 'Please capture or select media first');
@@ -136,13 +95,20 @@ export default function CreateStoryScreen() {
     setPostType('story');
 
     try {
-      const mediaUrl = await uploadMedia(mediaUri, 'story');
-      if (!mediaUrl) {
+      // Upload media using CDN service
+      const response = await fetch(mediaUri);
+      const blob = await response.blob();
+
+      const uploadResult = await cdnService.uploadStoryMedia(user.id, blob, false);
+
+      if (!uploadResult.success || !uploadResult.cdnUrl) {
+        Alert.alert('Error', uploadResult.error || 'Failed to upload media');
         setLoading(false);
         return;
       }
 
-      const result = await storyService.createStory(user.id, mediaUrl);
+      // Create story with CDN URL
+      const result = await storyService.createStory(user.id, uploadResult.cdnUrl);
 
       if (!result.success) {
         Alert.alert('Error', 'Failed to create story');
@@ -171,15 +137,22 @@ export default function CreateStoryScreen() {
     setPostType('post');
 
     try {
-      const mediaUrl = await uploadMedia(mediaUri, 'post');
-      if (!mediaUrl) {
+      // Upload media using CDN service
+      const response = await fetch(mediaUri);
+      const blob = await response.blob();
+
+      const uploadResult = await cdnService.uploadPostMedia(user.id, blob);
+
+      if (!uploadResult.success || !uploadResult.cdnUrl) {
+        Alert.alert('Error', uploadResult.error || 'Failed to upload media');
         setLoading(false);
         return;
       }
 
+      // Create post with CDN URL
       const { error } = await supabase.from('posts').insert({
         user_id: user.id,
-        media_url: mediaUrl,
+        media_url: uploadResult.cdnUrl,
         caption: '',
         likes_count: 0,
         comments_count: 0,
@@ -325,7 +298,7 @@ export default function CreateStoryScreen() {
                 onPress={handlePostToStory}
                 disabled={loading}
               />
-              <Text style={styles.actionHint}>Disappears in 24 hours</Text>
+              <Text style={styles.actionHint}>Disappears in 24 hours • CDN optimized</Text>
             </View>
 
             <View style={styles.actionButtonContainer}>
@@ -339,7 +312,7 @@ export default function CreateStoryScreen() {
                   {loading && postType === 'post' ? 'POSTING...' : 'POST TO FEED'}
                 </Text>
               </TouchableOpacity>
-              <Text style={styles.actionHint}>Permanent post</Text>
+              <Text style={styles.actionHint}>Permanent post • CDN optimized</Text>
             </View>
           </View>
         </View>
@@ -348,7 +321,12 @@ export default function CreateStoryScreen() {
       {loading && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color={colors.gradientEnd} />
-          <Text style={styles.loadingText}>Uploading...</Text>
+          <Text style={styles.loadingText}>
+            Uploading with device-optimized CDN...
+          </Text>
+          <Text style={styles.loadingSubtext}>
+            Device tier: {cdnService.getDeviceTier().toUpperCase()}
+          </Text>
         </View>
       )}
     </View>
@@ -513,11 +491,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.8)',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 16,
+    gap: 12,
   },
   loadingText: {
     fontSize: 16,
     fontWeight: '600',
     color: colors.text,
+  },
+  loadingSubtext: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: colors.textSecondary,
   },
 });

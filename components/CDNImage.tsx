@@ -1,136 +1,152 @@
 
-import React, { useState } from 'react';
-import { Image, ImageProps, View, StyleSheet, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { Image, ImageProps, View, ActivityIndicator, StyleSheet } from 'react-native';
 import { cdnService } from '@/app/services/cdnService';
-import { colors } from '@/styles/commonStyles';
 
 interface CDNImageProps extends Omit<ImageProps, 'source'> {
-  source: { uri: string } | number;
+  source: string | { uri: string };
   type?: 'profile' | 'story' | 'feed' | 'thumbnail' | 'explore';
+  fallbackSource?: string;
   showLoader?: boolean;
-  fallbackColor?: string;
+  onLoadStart?: () => void;
+  onLoadEnd?: () => void;
+  onError?: (error: any) => void;
 }
 
 /**
- * CDN Image Component with automatic fallback to Supabase URLs
+ * CDN-optimized Image component
  * 
  * Features:
- * - Automatic CDN URL optimization
- * - Error fallback to Supabase public URLs
+ * - Auto device-optimized delivery (Tier 1/2/3)
+ * - Automatic fallback to Supabase URLs
  * - Loading states
- * - Image transformation based on type
- * 
- * Usage:
- * <CDNImage
- *   source={{ uri: imageUrl }}
- *   type="profile"
- *   style={styles.image}
- * />
+ * - Error handling
+ * - Prefetching support
  */
-export default function CDNImage({
+export function CDNImage({
   source,
-  type,
+  type = 'feed',
+  fallbackSource,
   showLoader = true,
-  fallbackColor = colors.backgroundAlt,
+  onLoadStart,
+  onLoadEnd,
+  onError,
   style,
   ...props
 }: CDNImageProps) {
-  const [isLoading, setIsLoading] = useState(true);
-  const [hasError, setHasError] = useState(false);
-  const [currentUri, setCurrentUri] = useState<string>('');
+  const [imageUrl, setImageUrl] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [useFallback, setUseFallback] = useState(false);
 
-  // Handle static images (require statements)
-  if (typeof source === 'number') {
-    return <Image source={source} style={style} {...props} />;
-  }
+  useEffect(() => {
+    loadImage();
+  }, [source, type]);
 
-  // Get optimized CDN URL
-  React.useEffect(() => {
-    if (source.uri) {
-      const optimizedUrl = type
-        ? cdnService.getOptimizedImageUrl(source.uri, type)
-        : cdnService.getCDNUrl(source.uri);
-      setCurrentUri(optimizedUrl);
+  const loadImage = async () => {
+    try {
+      setLoading(true);
+      setError(false);
+
+      // Extract URL from source
+      const sourceUrl = typeof source === 'string' ? source : source.uri;
+
+      if (!sourceUrl) {
+        setError(true);
+        setLoading(false);
+        return;
+      }
+
+      // Get device-optimized CDN URL
+      const optimizedUrl = cdnService.getOptimizedImageUrl(sourceUrl, type);
+      setImageUrl(optimizedUrl);
+
+      // Track media access
+      await cdnService.trackMediaAccess(optimizedUrl, type, false, 0);
+    } catch (err) {
+      console.error('Error loading CDN image:', err);
+      setError(true);
+      handleImageError(err);
+    } finally {
+      setLoading(false);
     }
-  }, [source.uri, type]);
+  };
+
+  const handleImageError = (err: any) => {
+    console.warn('CDN image failed, trying fallback:', err);
+    
+    if (!useFallback) {
+      // Try fallback URL
+      const sourceUrl = typeof source === 'string' ? source : source.uri;
+      const fallback = fallbackSource || cdnService.getFallbackUrl(sourceUrl);
+      setImageUrl(fallback);
+      setUseFallback(true);
+      setError(false);
+    } else {
+      setError(true);
+      onError?.(err);
+    }
+  };
 
   const handleLoadStart = () => {
-    setIsLoading(true);
-    setHasError(false);
+    setLoading(true);
+    onLoadStart?.();
   };
 
   const handleLoadEnd = () => {
-    setIsLoading(false);
+    setLoading(false);
+    onLoadEnd?.();
   };
 
-  const handleError = () => {
-    console.log('CDN Image failed to load, falling back to Supabase URL:', currentUri);
-    
-    // If we're already using the fallback URL, mark as error
-    if (hasError) {
-      setIsLoading(false);
-      return;
-    }
-
-    // Try fallback to Supabase URL
-    const fallbackUrl = cdnService.getFallbackUrl(currentUri);
-    console.log('Attempting fallback URL:', fallbackUrl);
-    
-    setHasError(true);
-    setCurrentUri(fallbackUrl);
-    setIsLoading(true);
-  };
-
-  if (!currentUri) {
+  if (error && !useFallback) {
     return (
-      <View style={[styles.placeholder, style, { backgroundColor: fallbackColor }]}>
-        {showLoader && <ActivityIndicator size="small" color={colors.textSecondary} />}
+      <View style={[styles.container, style]}>
+        <View style={styles.errorContainer}>
+          {/* Empty placeholder for error state */}
+        </View>
       </View>
     );
   }
 
   return (
-    <View style={style}>
-      <Image
-        {...props}
-        source={{ uri: currentUri }}
-        style={style}
-        onLoadStart={handleLoadStart}
-        onLoadEnd={handleLoadEnd}
-        onError={handleError}
-      />
-      {isLoading && showLoader && (
-        <View style={[styles.loaderContainer, style]}>
-          <ActivityIndicator size="small" color={colors.textSecondary} />
-        </View>
+    <View style={[styles.container, style]}>
+      {imageUrl && (
+        <Image
+          {...props}
+          source={{ uri: imageUrl }}
+          style={[styles.image, style]}
+          onLoadStart={handleLoadStart}
+          onLoadEnd={handleLoadEnd}
+          onError={handleImageError}
+        />
       )}
-      {hasError && !isLoading && (
-        <View style={[styles.errorContainer, style, { backgroundColor: fallbackColor }]} />
+      
+      {loading && showLoader && (
+        <View style={styles.loaderContainer}>
+          <ActivityIndicator size="small" color="#E30052" />
+        </View>
       )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  placeholder: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  container: {
+    position: 'relative',
+    backgroundColor: '#0A0A0A',
+  },
+  image: {
+    width: '100%',
+    height: '100%',
   },
   loaderContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: 'center',
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
-    backgroundColor: colors.backgroundAlt,
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
   errorContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#1A1A1A',
   },
 });

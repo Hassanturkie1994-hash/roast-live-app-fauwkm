@@ -18,6 +18,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import GradientButton from '@/components/GradientButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/app/integrations/supabase/client';
+import { cdnService } from '@/app/services/cdnService';
 
 export default function EditProfileScreen() {
   const { user, profile, refreshProfile } = useAuth();
@@ -53,31 +54,6 @@ export default function EditProfileScreen() {
     }
 
     return !data;
-  };
-
-  const uploadImage = async (uri: string, type: 'avatar' | 'banner'): Promise<string | null> => {
-    try {
-      const response = await fetch(uri);
-      const blob = await response.blob();
-      const fileExt = uri.split('.').pop();
-      const fileName = `${user?.id}_${type}_${Date.now()}.${fileExt}`;
-      const filePath = `${type}s/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('profiles')
-        .upload(filePath, blob);
-
-      if (uploadError) {
-        console.error('Upload error:', uploadError);
-        return null;
-      }
-
-      const { data } = supabase.storage.from('profiles').getPublicUrl(filePath);
-      return data.publicUrl;
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      return null;
-    }
   };
 
   const pickImage = async (type: 'avatar' | 'banner') => {
@@ -122,18 +98,37 @@ export default function EditProfileScreen() {
         return;
       }
 
-      // Upload images if changed
+      // Upload images using CDN service if changed
       let finalAvatarUrl = avatarUrl;
       let finalBannerUrl = bannerUrl;
 
       if (avatarUrl && avatarUrl.startsWith('file://')) {
-        const uploadedUrl = await uploadImage(avatarUrl, 'avatar');
-        if (uploadedUrl) finalAvatarUrl = uploadedUrl;
+        const response = await fetch(avatarUrl);
+        const blob = await response.blob();
+        const uploadResult = await cdnService.uploadProfileImage(user.id, blob);
+        
+        if (uploadResult.success && uploadResult.cdnUrl) {
+          finalAvatarUrl = uploadResult.cdnUrl;
+        }
       }
 
       if (bannerUrl && bannerUrl.startsWith('file://')) {
-        const uploadedUrl = await uploadImage(bannerUrl, 'banner');
-        if (uploadedUrl) finalBannerUrl = uploadedUrl;
+        const response = await fetch(bannerUrl);
+        const blob = await response.blob();
+        
+        // Upload banner using generic media upload
+        const uploadResult = await cdnService.uploadMedia({
+          bucket: 'media',
+          path: `banners/${user.id}/${Date.now()}.jpg`,
+          file: blob,
+          contentType: 'image/jpeg',
+          tier: 'A',
+          mediaType: 'profile',
+        });
+        
+        if (uploadResult.success && uploadResult.cdnUrl) {
+          finalBannerUrl = uploadResult.cdnUrl;
+        }
       }
 
       // Update profile
@@ -158,7 +153,7 @@ export default function EditProfileScreen() {
       }
 
       await refreshProfile();
-      Alert.alert('Success', 'Profile updated successfully');
+      Alert.alert('Success', 'Profile updated successfully with CDN optimization');
       router.back();
     } catch (error) {
       console.error('Error in handleSave:', error);
@@ -296,6 +291,7 @@ export default function EditProfileScreen() {
       {loading && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color={colors.gradientEnd} />
+          <Text style={styles.loadingText}>Uploading with CDN optimization...</Text>
         </View>
       )}
     </View>
@@ -432,5 +428,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
   },
 });

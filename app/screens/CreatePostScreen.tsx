@@ -17,6 +17,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import GradientButton from '@/components/GradientButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/app/integrations/supabase/client';
+import { cdnService } from '@/app/services/cdnService';
 
 export default function CreatePostScreen() {
   const { user } = useAuth();
@@ -40,31 +41,6 @@ export default function CreatePostScreen() {
     }
   };
 
-  const uploadMedia = async (uri: string): Promise<string | null> => {
-    try {
-      const response = await fetch(uri);
-      const blob = await response.blob();
-      const fileExt = uri.split('.').pop();
-      const fileName = `${user?.id}_post_${Date.now()}.${fileExt}`;
-      const filePath = `posts/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('posts')
-        .upload(filePath, blob);
-
-      if (uploadError) {
-        console.error('Upload error:', uploadError);
-        return null;
-      }
-
-      const { data } = supabase.storage.from('posts').getPublicUrl(filePath);
-      return data.publicUrl;
-    } catch (error) {
-      console.error('Error uploading media:', error);
-      return null;
-    }
-  };
-
   const handlePost = async () => {
     if (!user || !mediaUri) {
       Alert.alert('Error', 'Please select media to post');
@@ -74,18 +50,22 @@ export default function CreatePostScreen() {
     setLoading(true);
 
     try {
-      // Upload media
-      const mediaUrl = await uploadMedia(mediaUri);
-      if (!mediaUrl) {
-        Alert.alert('Error', 'Failed to upload media');
+      // Upload media using CDN service
+      const response = await fetch(mediaUri);
+      const blob = await response.blob();
+
+      const uploadResult = await cdnService.uploadPostMedia(user.id, blob);
+
+      if (!uploadResult.success || !uploadResult.cdnUrl) {
+        Alert.alert('Error', uploadResult.error || 'Failed to upload media');
         setLoading(false);
         return;
       }
 
-      // Create post
+      // Create post with CDN URL
       const { error } = await supabase.from('posts').insert({
         user_id: user.id,
-        media_url: mediaUrl,
+        media_url: uploadResult.cdnUrl,
         caption: caption,
         likes_count: 0,
         comments_count: 0,
@@ -175,6 +155,7 @@ export default function CreatePostScreen() {
       {loading && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color={colors.gradientEnd} />
+          <Text style={styles.loadingText}>Uploading with CDN optimization...</Text>
         </View>
       )}
     </View>
@@ -293,5 +274,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
   },
 });
