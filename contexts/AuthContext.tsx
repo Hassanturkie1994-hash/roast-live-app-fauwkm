@@ -3,6 +3,8 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { supabase } from '@/app/integrations/supabase/client';
 import { Session, User } from '@supabase/supabase-js';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
+import { deviceBanService } from '@/app/services/deviceBanService';
+import { useRouter } from 'expo-router';
 
 interface Profile {
   id: string;
@@ -27,6 +29,7 @@ interface AuthContextType {
   signUp: (email: string, password: string, displayName: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  checkDeviceBan: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -66,6 +69,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('Error in ensureWalletExists:', error);
     }
+  };
+
+  const checkDeviceBan = async (): Promise<boolean> => {
+    const { banned } = await deviceBanService.isDeviceBanned();
+    return banned;
   };
 
   const fetchProfile = useCallback(async (userId: string, userEmail?: string) => {
@@ -112,6 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log('Profile created successfully:', newProfile);
         
         await ensureWalletExists(userId);
+        await deviceBanService.storeDeviceFingerprint(userId);
         setProfileFetched(true);
         
         return newProfile;
@@ -120,6 +129,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('Profile fetched successfully:', data);
       
       await ensureWalletExists(userId);
+      await deviceBanService.storeDeviceFingerprint(userId);
       setProfileFetched(true);
       
       return data;
@@ -142,6 +152,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const initAuth = async () => {
       try {
+        // Check device ban first
+        const isBanned = await checkDeviceBan();
+        if (isBanned) {
+          if (mounted) {
+            setLoading(false);
+          }
+          return;
+        }
+
         const { data: { session } } = await supabase.auth.getSession();
         
         if (!mounted) return;
@@ -174,6 +193,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (!mounted) return;
       
+      // Check device ban on auth state change
+      const isBanned = await checkDeviceBan();
+      if (isBanned) {
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+        return;
+      }
+
       setSession(session);
       setUser(session?.user ?? null);
       
@@ -196,6 +224,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
+    // Check device ban before sign in
+    const isBanned = await checkDeviceBan();
+    if (isBanned) {
+      return { error: { message: 'This device is banned from accessing Roast Live' } };
+    }
+
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -204,6 +238,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, displayName: string) => {
+    // Check device ban before sign up
+    const isBanned = await checkDeviceBan();
+    if (isBanned) {
+      return { error: { message: 'This device is banned from accessing Roast Live' } };
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -236,6 +276,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('Error creating profile:', profileError);
         return { error: profileError };
       }
+
+      // Store device fingerprint
+      await deviceBanService.storeDeviceFingerprint(data.user.id);
     }
 
     return { error: null };
@@ -256,6 +299,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signUp,
         signOut,
         refreshProfile,
+        checkDeviceBan,
       }}
     >
       {children}

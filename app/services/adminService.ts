@@ -1,8 +1,9 @@
 
 import { supabase } from '@/app/integrations/supabase/client';
+import { deviceBanService } from './deviceBanService';
 
 export type AdminRole = 'HEAD_ADMIN' | 'ADMIN' | 'SUPPORT' | 'MODERATOR';
-export type ActionType = 'BAN' | 'SUSPEND' | 'WARN' | 'TIMEOUT' | 'DELETE_CONTENT' | 'RESET_BALANCE' | 'FORCE_STOP_STREAM' | 'EDIT_PROFILE' | 'MANAGE_BADGE';
+export type ActionType = 'BAN' | 'SUSPEND' | 'WARN' | 'TIMEOUT' | 'DELETE_CONTENT' | 'RESET_BALANCE' | 'FORCE_STOP_STREAM' | 'EDIT_PROFILE' | 'MANAGE_BADGE' | 'DEVICE_BAN';
 export type ReportType = 'profile' | 'comment' | 'message' | 'post' | 'stream';
 export type ReportStatus = 'open' | 'closed' | 'in_review';
 export type MessageType = 'warning' | 'notice' | 'verification';
@@ -353,6 +354,47 @@ class AdminService {
     }
   }
 
+  // Ban device (new function)
+  async banDevice(
+    adminUserId: string,
+    targetUserId: string,
+    reason: string,
+    expiresAt?: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      // Ban all devices for this user
+      const result = await deviceBanService.banDeviceByUserId(
+        targetUserId,
+        adminUserId,
+        reason,
+        expiresAt
+      );
+
+      if (!result.success) {
+        return result;
+      }
+
+      // Log the action
+      await this.logAction(adminUserId, targetUserId, 'DEVICE_BAN', reason, expiresAt || null, {
+        device_ban: true,
+      });
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error banning device:', error);
+      return { success: false, error: 'Failed to ban device' };
+    }
+  }
+
+  // Get user devices (admin function)
+  async getUserDevices(userId: string): Promise<{
+    success: boolean;
+    devices?: any[];
+    error?: string;
+  }> {
+    return await deviceBanService.getUserDevices(userId);
+  }
+
   // Suspend user
   async suspendUser(
     adminUserId: string,
@@ -547,7 +589,7 @@ class AdminService {
       const { data, error } = await supabase
         .from('admin_actions_log')
         .select('*, profiles!admin_actions_log_target_user_id_fkey(*)')
-        .in('action_type', ['BAN', 'SUSPEND', 'TIMEOUT'])
+        .in('action_type', ['BAN', 'SUSPEND', 'TIMEOUT', 'DEVICE_BAN'])
         .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString())
         .order('created_at', { ascending: false });
 

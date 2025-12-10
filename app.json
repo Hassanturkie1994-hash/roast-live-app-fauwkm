@@ -1,8 +1,7 @@
-
 {
   "expo": {
     "name": "Roast Live",
-    "slug": "roast-live-app-fauwkm",
+    "slug": "Roast Live",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/natively-dark.png",
@@ -22,7 +21,10 @@
         "NSMicrophoneUsageDescription": "Allow Roast Live to access your microphone to broadcast live streams with audio.",
         "NSPhotoLibraryUsageDescription": "Allow Roast Live to access your photo library to share images and videos.",
         "NSPhotoLibraryAddUsageDescription": "Allow Roast Live to save photos and videos to your library.",
-        "UIBackgroundModes": ["audio", "voip"]
+        "UIBackgroundModes": [
+          "audio",
+          "voip"
+        ]
       },
       "bitcode": false
     },
@@ -99,5 +101,6 @@
         "react-native-nodemediaclient"
       ]
     }
-  }
+  },
+  "scheme": "Roast Live"
 }
