@@ -14,34 +14,22 @@ import { router } from 'expo-router';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useAuth } from '@/contexts/AuthContext';
-import { savedStreamService } from '@/app/services/savedStreamService';
-
-interface SavedStream {
-  id: string;
-  title: string;
-  recording_url: string | null;
-  thumbnail_url: string | null;
-  duration: number | null;
-  views_count: number;
-  created_at: string;
-}
+import { replayService, StreamReplay } from '@/app/services/replayService';
 
 export default function SavedStreamsScreen() {
   const { user } = useAuth();
-  const [savedStreams, setSavedStreams] = useState<SavedStream[]>([]);
+  const [replays, setReplays] = useState<StreamReplay[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchSavedStreams = useCallback(async () => {
+  const fetchReplays = useCallback(async () => {
     if (!user) return;
 
     try {
-      const result = await savedStreamService.getSavedStreams(user.id);
-      if (result.success) {
-        setSavedStreams(result.data);
-      }
+      const data = await replayService.getCreatorReplays(user.id);
+      setReplays(data);
     } catch (error) {
-      console.error('Error fetching saved streams:', error);
+      console.error('Error fetching replays:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -52,49 +40,44 @@ export default function SavedStreamsScreen() {
     if (!user) {
       router.replace('/auth/login');
     } else {
-      fetchSavedStreams();
+      fetchReplays();
     }
-  }, [user, fetchSavedStreams]);
+  }, [user, fetchReplays]);
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchSavedStreams();
+    fetchReplays();
   };
 
-  const handleStreamPress = (stream: SavedStream) => {
-    if (stream.recording_url) {
-      router.push({
-        pathname: '/screens/StreamReplayScreen',
-        params: { streamId: stream.id, recordingUrl: stream.recording_url },
-      });
-    } else {
-      Alert.alert('Not Available', 'Recording is not available for this stream');
-    }
+  const handleReplayPress = (replay: StreamReplay) => {
+    router.push({
+      pathname: '/screens/ReplayPlayerScreen',
+      params: { replayId: replay.id },
+    });
   };
 
-  const handleDeleteStream = async (streamId: string) => {
+  const handleDeleteReplay = async (replayId: string) => {
     if (!user) return;
 
-    Alert.alert('Delete Stream', 'Are you sure you want to delete this saved stream?', [
+    Alert.alert('Delete Replay', 'Are you sure you want to delete this replay?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
         style: 'destructive',
         onPress: async () => {
-          const result = await savedStreamService.deleteSavedStream(user.id, streamId);
+          const result = await replayService.deleteReplay(replayId, user.id);
           if (result.success) {
-            setSavedStreams((prev) => prev.filter((s) => s.id !== streamId));
-            Alert.alert('Success', 'Stream deleted successfully');
+            setReplays((prev) => prev.filter((r) => r.id !== replayId));
+            Alert.alert('Success', 'Replay deleted successfully');
           } else {
-            Alert.alert('Error', 'Failed to delete stream');
+            Alert.alert('Error', result.error || 'Failed to delete replay');
           }
         },
       },
     ]);
   };
 
-  const formatDuration = (seconds: number | null) => {
-    if (!seconds) return 'N/A';
+  const formatDuration = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     if (hours > 0) {
@@ -133,7 +116,7 @@ export default function SavedStreamsScreen() {
           <View style={styles.centerContent}>
             <Text style={styles.loadingText}>Loading saved streams...</Text>
           </View>
-        ) : savedStreams.length === 0 ? (
+        ) : replays.length === 0 ? (
           <View style={styles.emptyState}>
             <IconSymbol
               ios_icon_name="video.slash"
@@ -147,22 +130,22 @@ export default function SavedStreamsScreen() {
             </Text>
           </View>
         ) : (
-          savedStreams.map((stream, index) => (
+          replays.map((replay, index) => (
             <View key={index} style={styles.streamCard}>
               <TouchableOpacity
                 style={styles.streamContent}
-                onPress={() => handleStreamPress(stream)}
+                onPress={() => handleReplayPress(replay)}
                 activeOpacity={0.7}
               >
                 <Image
                   source={{
-                    uri: stream.thumbnail_url || 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=400',
+                    uri: replay.thumbnail_url || 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=400',
                   }}
                   style={styles.thumbnail}
                 />
                 <View style={styles.streamInfo}>
                   <Text style={styles.streamTitle} numberOfLines={2}>
-                    {stream.title}
+                    {replay.title}
                   </Text>
                   <View style={styles.streamMeta}>
                     <View style={styles.metaItem}>
@@ -172,7 +155,7 @@ export default function SavedStreamsScreen() {
                         size={14}
                         color={colors.textSecondary}
                       />
-                      <Text style={styles.metaText}>{formatDuration(stream.duration)}</Text>
+                      <Text style={styles.metaText}>{formatDuration(replay.total_duration_seconds)}</Text>
                     </View>
                     <View style={styles.metaItem}>
                       <IconSymbol
@@ -181,16 +164,25 @@ export default function SavedStreamsScreen() {
                         size={14}
                         color={colors.textSecondary}
                       />
-                      <Text style={styles.metaText}>{stream.views_count} views</Text>
+                      <Text style={styles.metaText}>{replay.views_count} views</Text>
+                    </View>
+                    <View style={styles.metaItem}>
+                      <IconSymbol
+                        ios_icon_name="heart.fill"
+                        android_material_icon_name="favorite"
+                        size={14}
+                        color={colors.textSecondary}
+                      />
+                      <Text style={styles.metaText}>{replay.likes_count} likes</Text>
                     </View>
                   </View>
-                  <Text style={styles.streamDate}>{formatDate(stream.created_at)}</Text>
+                  <Text style={styles.streamDate}>{formatDate(replay.created_at)}</Text>
                 </View>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.deleteButton}
-                onPress={() => handleDeleteStream(stream.id)}
+                onPress={() => handleDeleteReplay(replay.id)}
                 activeOpacity={0.7}
               >
                 <IconSymbol
@@ -301,7 +293,7 @@ const styles = StyleSheet.create({
   },
   streamMeta: {
     flexDirection: 'row',
-    gap: 16,
+    gap: 12,
   },
   metaItem: {
     flexDirection: 'row',
