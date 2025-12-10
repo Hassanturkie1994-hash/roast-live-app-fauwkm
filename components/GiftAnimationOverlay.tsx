@@ -361,6 +361,10 @@ export default function GiftAnimationOverlay({
     }
   };
 
+  const getShadowOpacity = () => {
+    return tier === 'B' || tier === 'C' ? 0.6 : 0.3;
+  };
+
   return (
     <View style={styles.container} pointerEvents="none">
       {renderFullScreenEffect()}
@@ -378,23 +382,14 @@ export default function GiftAnimationOverlay({
               { translateX: tier === 'B' || tier === 'C' ? shakeAnim : 0 },
             ],
             borderColor: getBorderColor(),
+            shadowColor: getGlowColor(),
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: getShadowOpacity(),
+            shadowRadius: 24,
+            elevation: 12,
           },
         ]}
       >
-        {/* Shadow wrapper - separate from main animated view to avoid opacity issues */}
-        <View
-          style={[
-            styles.shadowWrapper,
-            {
-              shadowColor: getGlowColor(),
-              shadowOffset: { width: 0, height: 8 },
-              shadowOpacity: tier === 'B' || tier === 'C' ? 0.6 : 0.3,
-              shadowRadius: 24,
-              elevation: 12,
-            },
-          ]}
-        />
-
         {tier === 'C' && (
           <Animated.View
             style={[
@@ -533,10 +528,6 @@ const styles = StyleSheet.create({
   },
   particleEmojiLarge: {
     fontSize: 28,
-  },
-  shadowWrapper: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 20,
   },
   giftNotification: {
     flexDirection: 'row',
