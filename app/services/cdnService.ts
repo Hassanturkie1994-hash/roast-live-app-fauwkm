@@ -1,7 +1,7 @@
 
 import { supabase } from '@/app/integrations/supabase/client';
 import * as Crypto from 'expo-crypto';
-import { Platform } from 'react-native';
+import { Platform, Image } from 'react-native';
 import * as Device from 'expo-device';
 
 /**
@@ -500,13 +500,12 @@ class CDNService {
     const prefetchPromise = new Promise<void>((resolve) => {
       if (Platform.OS === 'web') {
         // Web: Use Image preload
-        const img = new Image();
+        const img = new window.Image();
         img.onload = () => resolve();
         img.onerror = () => resolve(); // Resolve even on error
         img.src = this.getOptimizedImageUrl(url, 'thumbnail');
       } else {
-        // React Native: Use Image.prefetch
-        const { Image } = await import('react-native');
+        // React Native: Use Image.prefetch with promise handling
         Image.prefetch(this.getOptimizedImageUrl(url, 'thumbnail'))
           .then(() => resolve())
           .catch(() => resolve());
