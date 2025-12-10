@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   ScrollView,
@@ -26,12 +26,7 @@ export default function AccountSettingsScreen() {
   const [isLoadingRole, setIsLoadingRole] = useState(true);
   const [isLive, setIsLive] = useState(false);
 
-  useEffect(() => {
-    checkUserRole();
-    checkIfLive();
-  }, [user]);
-
-  const checkUserRole = async () => {
+  const checkUserRole = useCallback(async () => {
     if (!user) {
       setIsLoadingRole(false);
       return;
@@ -42,9 +37,9 @@ export default function AccountSettingsScreen() {
     console.log('Admin role result:', result);
     setUserRole(result.role);
     setIsLoadingRole(false);
-  };
+  }, [user]);
 
-  const checkIfLive = async () => {
+  const checkIfLive = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -59,7 +54,12 @@ export default function AccountSettingsScreen() {
     } catch (error) {
       console.error('Error checking live status:', error);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    checkUserRole();
+    checkIfLive();
+  }, [checkUserRole, checkIfLive]);
 
   const handleSignOut = async () => {
     if (isLive) {

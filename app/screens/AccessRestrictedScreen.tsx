@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { deviceBanService } from '@/app/services/deviceBanService';
@@ -13,11 +13,7 @@ export default function AccessRestrictedScreen() {
     expiresAt?: string;
   }>({});
 
-  useEffect(() => {
-    checkBanStatus();
-  }, []);
-
-  const checkBanStatus = async () => {
+  const checkBanStatus = useCallback(async () => {
     const { banned, reason, expiresAt } = await deviceBanService.isDeviceBanned();
     if (banned) {
       setBanInfo({ reason, expiresAt });
@@ -25,7 +21,11 @@ export default function AccessRestrictedScreen() {
       // If not banned, redirect to home
       router.replace('/(tabs)/(home)');
     }
-  };
+  }, [router]);
+
+  useEffect(() => {
+    checkBanStatus();
+  }, [checkBanStatus]);
 
   const formatExpiryDate = (dateString?: string) => {
     if (!dateString) return 'Permanent';

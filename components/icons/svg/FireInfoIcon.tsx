@@ -1,6 +1,6 @@
 
 import React from 'react';
-import Svg, { Path, Circle, Rect, Defs, LinearGradient, Stop, Filter, FeGaussianBlur, FeMerge, FeMergeNode } from 'react-native-svg';
+import { Svg, Path, Circle, Rect, Defs, LinearGradient, Stop, Filter, FeGaussianBlur, FeMerge, FeMergeNode } from 'react-native-svg';
 
 interface IconProps {
   size: number;

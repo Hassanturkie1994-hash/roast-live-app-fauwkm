@@ -98,7 +98,7 @@ export default function ProfileScreen() {
     return () => {
       mounted = false;
     };
-  }, [user]);
+  }, [user, fetchUserData]);
 
   const handleEditProfile = () => {
     router.push('/screens/EditProfileScreen');

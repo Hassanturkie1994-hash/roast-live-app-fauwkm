@@ -52,16 +52,7 @@ export default function ExploreScreen() {
     prefetchThreshold: 0.5, // Prefetch when scrolled past 50%
   });
 
-  useEffect(() => {
-    loadExploreContent();
-
-    return () => {
-      // Cleanup prefetch cache on unmount
-      clearCache();
-    };
-  }, []);
-
-  const loadExploreContent = async (pageNum: number = 0) => {
+  const loadExploreContent = useCallback(async (pageNum: number = 0) => {
     try {
       setLoading(pageNum === 0);
 
@@ -149,19 +140,29 @@ export default function ExploreScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [prefetchNextPage, setCurrentPage]);
+
+  useEffect(() => {
+    loadExploreContent();
+
+    return () => {
+      // Cleanup prefetch cache on unmount
+      clearCache();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
     clearCache();
     loadExploreContent(0);
-  }, []);
+  }, [clearCache, loadExploreContent]);
 
   const handleLoadMore = useCallback(() => {
     if (!loading) {
       loadExploreContent(page + 1);
     }
-  }, [loading, page]);
+  }, [loading, page, loadExploreContent]);
 
   const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
