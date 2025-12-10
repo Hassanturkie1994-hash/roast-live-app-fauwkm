@@ -37,7 +37,9 @@ export default function AccountSettingsScreen() {
       return;
     }
 
+    console.log('Checking admin role for user:', user.id);
     const result = await adminService.checkAdminRole(user.id);
+    console.log('Admin role result:', result);
     setUserRole(result.role);
     setIsLoadingRole(false);
   };
@@ -87,6 +89,7 @@ export default function AccountSettingsScreen() {
   };
 
   const handleDashboard = () => {
+    console.log('Opening dashboard for role:', userRole);
     if (userRole === 'HEAD_ADMIN') {
       router.push('/screens/HeadAdminDashboardScreen' as any);
     } else if (userRole === 'ADMIN') {
@@ -114,6 +117,36 @@ export default function AccountSettingsScreen() {
     router.push('/screens/TransactionHistoryScreen');
   };
 
+  const getRoleName = (role: AdminRole) => {
+    switch (role) {
+      case 'HEAD_ADMIN':
+        return 'Head Admin Dashboard';
+      case 'ADMIN':
+        return 'Admin Dashboard';
+      case 'SUPPORT':
+        return 'Support Dashboard';
+      case 'MODERATOR':
+        return 'Moderator Dashboard';
+      default:
+        return 'Dashboard';
+    }
+  };
+
+  const getRoleDescription = (role: AdminRole) => {
+    switch (role) {
+      case 'HEAD_ADMIN':
+        return 'Full platform control';
+      case 'ADMIN':
+        return 'Manage reports & users';
+      case 'SUPPORT':
+        return 'Review appeals & tickets';
+      case 'MODERATOR':
+        return 'Stream moderation tools';
+      default:
+        return '';
+    }
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
@@ -135,7 +168,11 @@ export default function AccountSettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Dashboard & Tools Section - Role-Based */}
-        {!isLoadingRole && userRole && (
+        {isLoadingRole ? (
+          <View style={[styles.section, { borderBottomColor: colors.border }]}>
+            <ActivityIndicator size="small" color={colors.brandPrimary} />
+          </View>
+        ) : userRole ? (
           <View style={[styles.section, { borderBottomColor: colors.border }]}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>🎛️ Dashboard & Tools</Text>
 
@@ -152,16 +189,10 @@ export default function AccountSettingsScreen() {
                 />
                 <View>
                   <Text style={[styles.settingText, { color: colors.text }]}>
-                    {userRole === 'HEAD_ADMIN' && 'Head Admin Dashboard'}
-                    {userRole === 'ADMIN' && 'Admin Dashboard'}
-                    {userRole === 'SUPPORT' && 'Support Dashboard'}
-                    {userRole === 'MODERATOR' && 'Moderator Dashboard'}
+                    {getRoleName(userRole)}
                   </Text>
                   <Text style={[styles.settingSubtext, { color: colors.textSecondary }]}>
-                    {userRole === 'HEAD_ADMIN' && 'Full platform control'}
-                    {userRole === 'ADMIN' && 'Manage reports & users'}
-                    {userRole === 'SUPPORT' && 'Review appeals & tickets'}
-                    {userRole === 'MODERATOR' && 'Stream moderation tools'}
+                    {getRoleDescription(userRole)}
                   </Text>
                 </View>
               </View>
@@ -173,7 +204,7 @@ export default function AccountSettingsScreen() {
               />
             </TouchableOpacity>
           </View>
-        )}
+        ) : null}
 
         {/* ALLMÄNT Section */}
         <View style={[styles.section, { borderBottomColor: colors.border }]}>
