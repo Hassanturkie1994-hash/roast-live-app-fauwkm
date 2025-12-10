@@ -10,7 +10,18 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 serve(async (req) => {
   try {
-    const { userId, clubId, creatorId, monthlyPriceCents, currency } = await req.json();
+    const { 
+      userId, 
+      clubId, 
+      creatorId, 
+      monthlyPriceCents, 
+      currency,
+      subscription_type, // 'vip_club' or 'premium'
+      price_id,
+      success_url,
+      cancel_url,
+      provider = 'stripe'
+    } = await req.json();
 
     console.log('Creating subscription:', {
       userId,
@@ -18,13 +29,25 @@ serve(async (req) => {
       creatorId,
       monthlyPriceCents,
       currency,
+      subscription_type,
+      provider,
     });
 
-    if (!userId || !clubId || !creatorId || !monthlyPriceCents) {
-      return new Response(JSON.stringify({ error: 'Missing required fields' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
+    // Validate based on subscription type
+    if (subscription_type === 'premium') {
+      if (!userId) {
+        return new Response(JSON.stringify({ error: 'Missing userId for premium subscription' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+    } else {
+      if (!userId || !clubId || !creatorId || !monthlyPriceCents) {
+        return new Response(JSON.stringify({ error: 'Missing required fields for VIP club subscription' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     // Get user email
@@ -93,52 +116,102 @@ serve(async (req) => {
       console.log('✅ Customer created:', customerId);
     }
 
-    // Create price for this subscription
-    const priceResponse = await fetch('https://api.stripe.com/v1/prices', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${STRIPE_SECRET_KEY}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        'currency': currency.toLowerCase(),
-        'unit_amount': monthlyPriceCents.toString(),
-        'recurring[interval]': 'month',
-        'product_data[name]': 'Creator Club Membership',
-        'metadata[club_id]': clubId,
-        'metadata[creator_id]': creatorId,
-      }),
-    });
+    // Determine price ID and metadata based on subscription type
+    let priceId: string;
+    let metadata: Record<string, string> = { user_id: userId };
 
-    if (!priceResponse.ok) {
-      const error = await priceResponse.text();
-      console.error('Stripe price creation error:', error);
-      return new Response(JSON.stringify({ error: 'Failed to create price' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
+    if (subscription_type === 'premium') {
+      // For premium, use a fixed price or create one
+      if (price_id) {
+        priceId = price_id;
+      } else {
+        // Create price for premium subscription (89 SEK)
+        const priceResponse = await fetch('https://api.stripe.com/v1/prices', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${STRIPE_SECRET_KEY}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({
+            'currency': 'sek',
+            'unit_amount': '8900', // 89 SEK
+            'recurring[interval]': 'month',
+            'product_data[name]': 'PREMIUM Membership',
+            'metadata[subscription_type]': 'premium',
+          }),
+        });
+
+        if (!priceResponse.ok) {
+          const error = await priceResponse.text();
+          console.error('Stripe price creation error:', error);
+          return new Response(JSON.stringify({ error: 'Failed to create price' }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+
+        const price = await priceResponse.json();
+        priceId = price.id;
+        console.log('✅ Premium price created:', priceId);
+      }
+      metadata.subscription_type = 'premium';
+    } else {
+      // Create price for VIP club subscription
+      const priceResponse = await fetch('https://api.stripe.com/v1/prices', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${STRIPE_SECRET_KEY}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          'currency': currency.toLowerCase(),
+          'unit_amount': monthlyPriceCents.toString(),
+          'recurring[interval]': 'month',
+          'product_data[name]': 'Creator Club Membership',
+          'metadata[club_id]': clubId,
+          'metadata[creator_id]': creatorId,
+        }),
       });
+
+      if (!priceResponse.ok) {
+        const error = await priceResponse.text();
+        console.error('Stripe price creation error:', error);
+        return new Response(JSON.stringify({ error: 'Failed to create price' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      const price = await priceResponse.json();
+      priceId = price.id;
+      console.log('✅ VIP club price created:', priceId);
+      
+      metadata.club_id = clubId;
+      metadata.creator_id = creatorId;
+      metadata.subscription_type = 'vip_club';
     }
 
-    const price = await priceResponse.json();
-    console.log('✅ Price created:', price.id);
+    // Create subscription with metadata
+    const subscriptionParams = new URLSearchParams({
+      customer: customerId,
+      'items[0][price]': priceId,
+      'payment_behavior': 'default_incomplete',
+      'payment_settings[save_default_payment_method]': 'on_subscription',
+      'expand[0]': 'latest_invoice.payment_intent',
+    });
 
-    // Create subscription
+    // Add metadata
+    Object.entries(metadata).forEach(([key, value]) => {
+      subscriptionParams.append(`metadata[${key}]`, value);
+    });
+
     const subscriptionResponse = await fetch('https://api.stripe.com/v1/subscriptions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${STRIPE_SECRET_KEY}`,
         'Content-Type': 'application/x-www-form-urlencoded',
       },
-      body: new URLSearchParams({
-        customer: customerId,
-        'items[0][price]': price.id,
-        'metadata[club_id]': clubId,
-        'metadata[creator_id]': creatorId,
-        'metadata[user_id]': userId,
-        'payment_behavior': 'default_incomplete',
-        'payment_settings[save_default_payment_method]': 'on_subscription',
-        'expand[0]': 'latest_invoice.payment_intent',
-      }),
+      body: subscriptionParams,
     });
 
     if (!subscriptionResponse.ok) {
@@ -153,20 +226,48 @@ serve(async (req) => {
     const subscription = await subscriptionResponse.json();
     console.log('✅ Subscription created:', subscription.id);
 
-    // Update membership with Stripe IDs
+    // Update database based on subscription type
     const renewsAt = new Date();
     renewsAt.setMonth(renewsAt.getMonth() + 1);
 
-    await supabase
-      .from('creator_club_memberships')
-      .update({
-        stripe_customer_id: customerId,
-        stripe_subscription_id: subscription.id,
-        renews_at: renewsAt.toISOString(),
-        is_active: true,
-      })
-      .eq('club_id', clubId)
-      .eq('member_id', userId);
+    if (subscription_type === 'premium') {
+      // Create premium subscription record
+      await supabase.from('premium_subscriptions').insert({
+        user_id: userId,
+        subscription_provider: provider,
+        subscription_id: subscription.id,
+        customer_id: customerId,
+        price_sek: 89.00,
+        status: 'active',
+        started_at: new Date().toISOString(),
+        renewed_at: renewsAt.toISOString(),
+      });
+
+      // Update profile
+      await supabase.from('profiles').update({
+        premium_active: true,
+        premium_since: new Date().toISOString(),
+        premium_expiring: renewsAt.toISOString(),
+        premium_subscription_provider: provider,
+        premium_subscription_id: subscription.id,
+      }).eq('id', userId);
+
+      console.log('✅ Premium subscription created in database');
+    } else {
+      // Update VIP club membership with Stripe IDs
+      await supabase
+        .from('creator_club_memberships')
+        .update({
+          stripe_customer_id: customerId,
+          stripe_subscription_id: subscription.id,
+          renews_at: renewsAt.toISOString(),
+          is_active: true,
+        })
+        .eq('club_id', clubId)
+        .eq('member_id', userId);
+
+      console.log('✅ VIP club membership updated in database');
+    }
 
     return new Response(
       JSON.stringify({
