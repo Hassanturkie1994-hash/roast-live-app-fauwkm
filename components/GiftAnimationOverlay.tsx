@@ -378,14 +378,23 @@ export default function GiftAnimationOverlay({
               { translateX: tier === 'B' || tier === 'C' ? shakeAnim : 0 },
             ],
             borderColor: getBorderColor(),
-            shadowColor: getGlowColor(),
-            shadowOpacity: tier === 'B' || tier === 'C' ? glowAnim.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0.3, 0.8],
-            }) : 0.3,
           },
         ]}
       >
+        {/* Shadow wrapper - separate from main animated view to avoid opacity issues */}
+        <View
+          style={[
+            styles.shadowWrapper,
+            {
+              shadowColor: getGlowColor(),
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: tier === 'B' || tier === 'C' ? 0.6 : 0.3,
+              shadowRadius: 24,
+              elevation: 12,
+            },
+          ]}
+        />
+
         {tier === 'C' && (
           <Animated.View
             style={[
@@ -525,6 +534,10 @@ const styles = StyleSheet.create({
   particleEmojiLarge: {
     fontSize: 28,
   },
+  shadowWrapper: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 20,
+  },
   giftNotification: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -534,17 +547,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     maxWidth: width * 0.85,
     borderWidth: 3,
-    shadowOffset: { width: 0, height: 8 },
-    shadowRadius: 24,
-    elevation: 12,
   },
   giftNotificationPremium: {
     padding: 20,
     paddingHorizontal: 28,
     borderRadius: 24,
     borderWidth: 4,
-    shadowRadius: 32,
-    elevation: 16,
   },
   glowRing: {
     ...StyleSheet.absoluteFillObject,
