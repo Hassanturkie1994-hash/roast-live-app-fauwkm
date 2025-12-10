@@ -1,5 +1,7 @@
+
 module.exports = ({ config }) => {
-config._internalSkipAppJson = true;
+  config._internalSkipAppJson = true;
+  
   return {
     ...config,
     name: "Roast Live",
@@ -57,7 +59,6 @@ config._internalSkipAppJson = true;
       bundler: "metro"
     },
 
-    // ALLA PLUGINS HÄR
     plugins: [
       "expo-font",
       "expo-router",
@@ -99,15 +100,12 @@ config._internalSkipAppJson = true;
       ]
     ],
 
-    // DEEPLINK SCHEME
     scheme: "roastlive",
 
-    // ROUTER EXPERIMENT
     experiments: {
       typedRoutes: true
     },
 
-    // 🔥 EXTRA VARIABLER + EAS PROJECT ID
     extra: {
       eas: {
         projectId: "b1994843-ea99-4a51-8db1-d1049a44b5b7"
