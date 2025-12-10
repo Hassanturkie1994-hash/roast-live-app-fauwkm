@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   FlatList,
@@ -10,7 +10,7 @@ import {
   Dimensions,
   Modal,
   ScrollView,
-} from 'react';
+} from 'react-native';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -20,32 +20,37 @@ import { fetchGifts, Gift, GiftTier } from '@/app/services/giftService';
 const { width: screenWidth } = Dimensions.get('window');
 const cardWidth = (screenWidth - 60) / 2;
 
+// Memoized tier info component
+const TierInfoCard = React.memo(({ tier, color, label, priceRange, description }: {
+  tier: string;
+  color: string;
+  label: string;
+  priceRange: string;
+  description: string;
+}) => {
+  const { colors } = useTheme();
+  
+  return (
+    <View style={[styles.tierInfoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={[styles.tierInfoBadge, { backgroundColor: color }]}>
+        <Text style={styles.tierInfoBadgeText}>{label}</Text>
+      </View>
+      <Text style={[styles.tierInfoPrice, { color: colors.text }]}>{priceRange}</Text>
+      <Text style={[styles.tierInfoDesc, { color: colors.textSecondary }]}>{description}</Text>
+    </View>
+  );
+});
+
+TierInfoCard.displayName = 'TierInfoCard';
+
 export default function GiftInformationScreen() {
   const { colors } = useTheme();
   const [loading, setLoading] = useState(true);
   const [gifts, setGifts] = useState<Gift[]>([]);
   const [selectedGift, setSelectedGift] = useState<Gift | null>(null);
 
-  useEffect(() => {
-    loadGifts();
-  }, []);
-
-  const loadGifts = async () => {
-    try {
-      const { data, error } = await fetchGifts();
-      if (error) {
-        console.error('Error loading gifts:', error);
-      } else if (data) {
-        setGifts(data);
-      }
-    } catch (error) {
-      console.error('Error in loadGifts:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getTierColor = (tier: GiftTier) => {
+  // Memoize tier color function
+  const getTierColor = useCallback((tier: GiftTier) => {
     switch (tier) {
       case 'C':
         return '#FFD700';
@@ -56,9 +61,10 @@ export default function GiftInformationScreen() {
       default:
         return colors.textSecondary;
     }
-  };
+  }, [colors.brandPrimary, colors.textSecondary]);
 
-  const getTierLabel = (tier: GiftTier) => {
+  // Memoize tier label function
+  const getTierLabel = useCallback((tier: GiftTier) => {
     switch (tier) {
       case 'C':
         return 'PREMIUM';
@@ -69,9 +75,10 @@ export default function GiftInformationScreen() {
       default:
         return '';
     }
-  };
+  }, []);
 
-  const getTierDescription = (tier: GiftTier) => {
+  // Memoize tier description function
+  const getTierDescription = useCallback((tier: GiftTier) => {
     switch (tier) {
       case 'C':
         return 'Full-screen effect with neon flames, particle bursts, and gold gradient text. 2-second duration.';
@@ -82,9 +89,32 @@ export default function GiftInformationScreen() {
       default:
         return '';
     }
-  };
+  }, []);
 
-  const renderGiftCard = ({ item }: { item: Gift }) => (
+  // Memoize load gifts function
+  const loadGifts = useCallback(async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await fetchGifts();
+      
+      if (error) {
+        console.error('Error loading gifts:', error);
+      } else if (data) {
+        setGifts(data);
+      }
+    } catch (error) {
+      console.error('Error in loadGifts:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadGifts();
+  }, [loadGifts]);
+
+  // Memoize gift card render function
+  const renderGiftCard = useCallback(({ item }: { item: Gift }) => (
     <TouchableOpacity
       style={[styles.giftCard, { backgroundColor: colors.card, borderColor: colors.border }]}
       onPress={() => setSelectedGift(item)}
@@ -106,9 +136,13 @@ export default function GiftInformationScreen() {
         {item.price_sek} kr
       </Text>
     </TouchableOpacity>
-  );
+  ), [colors.card, colors.border, colors.text, getTierColor, getTierLabel]);
 
-  const renderHeader = () => (
+  // Memoize key extractor
+  const keyExtractor = useCallback((item: Gift) => item.id, []);
+
+  // Memoize header component
+  const renderHeader = useMemo(() => (
     <View style={[styles.introSection, { backgroundColor: colors.backgroundAlt, borderBottomColor: colors.border }]}>
       <Text style={[styles.introTitle, { color: colors.text }]}>🔥 Roast Live Gifts</Text>
       <Text style={[styles.introText, { color: colors.textSecondary }]}>
@@ -116,37 +150,45 @@ export default function GiftInformationScreen() {
       </Text>
 
       <View style={styles.tierInfoContainer}>
-        <View style={[styles.tierInfoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={[styles.tierInfoBadge, { backgroundColor: colors.textSecondary }]}>
-            <Text style={styles.tierInfoBadgeText}>CHEAP</Text>
-          </View>
-          <Text style={[styles.tierInfoPrice, { color: colors.text }]}>1-19 kr</Text>
-          <Text style={[styles.tierInfoDesc, { color: colors.textSecondary }]}>Quick roasts</Text>
-        </View>
-
-        <View style={[styles.tierInfoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={[styles.tierInfoBadge, { backgroundColor: colors.brandPrimary }]}>
-            <Text style={styles.tierInfoBadgeText}>MEDIUM</Text>
-          </View>
-          <Text style={[styles.tierInfoPrice, { color: colors.text }]}>20-600 kr</Text>
-          <Text style={[styles.tierInfoDesc, { color: colors.textSecondary }]}>Solid burns</Text>
-        </View>
-
-        <View style={[styles.tierInfoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={[styles.tierInfoBadge, { backgroundColor: '#FFD700' }]}>
-            <Text style={styles.tierInfoBadgeText}>PREMIUM</Text>
-          </View>
-          <Text style={[styles.tierInfoPrice, { color: colors.text }]}>600-3000 kr</Text>
-          <Text style={[styles.tierInfoDesc, { color: colors.textSecondary }]}>Epic roasts</Text>
-        </View>
+        <TierInfoCard
+          tier="A"
+          color={colors.textSecondary}
+          label="CHEAP"
+          priceRange="1-19 kr"
+          description="Quick roasts"
+        />
+        <TierInfoCard
+          tier="B"
+          color={colors.brandPrimary}
+          label="MEDIUM"
+          priceRange="20-600 kr"
+          description="Solid burns"
+        />
+        <TierInfoCard
+          tier="C"
+          color="#FFD700"
+          label="PREMIUM"
+          priceRange="600-3000 kr"
+          description="Epic roasts"
+        />
       </View>
     </View>
-  );
+  ), [colors.backgroundAlt, colors.border, colors.text, colors.textSecondary, colors.brandPrimary]);
+
+  // Memoize close modal handler
+  const handleCloseModal = useCallback(() => {
+    setSelectedGift(null);
+  }, []);
+
+  // Memoize back handler
+  const handleBack = useCallback(() => {
+    router.back();
+  }, []);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity onPress={handleBack} style={styles.backButton}>
           <RoastIcon
             name="chevron-left"
             size={24}
@@ -165,12 +207,17 @@ export default function GiftInformationScreen() {
         <FlatList
           data={gifts}
           renderItem={renderGiftCard}
-          keyExtractor={(item) => item.id}
+          keyExtractor={keyExtractor}
           numColumns={2}
           ListHeaderComponent={renderHeader}
           contentContainerStyle={styles.contentContainer}
           columnWrapperStyle={styles.columnWrapper}
           showsVerticalScrollIndicator={false}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={10}
+          updateCellsBatchingPeriod={50}
+          initialNumToRender={10}
+          windowSize={5}
         />
       )}
 
@@ -180,18 +227,18 @@ export default function GiftInformationScreen() {
           visible={!!selectedGift}
           animationType="slide"
           transparent={true}
-          onRequestClose={() => setSelectedGift(null)}
+          onRequestClose={handleCloseModal}
         >
           <View style={styles.modalOverlay}>
             <TouchableOpacity
               style={styles.modalBackdrop}
               activeOpacity={1}
-              onPress={() => setSelectedGift(null)}
+              onPress={handleCloseModal}
             />
             <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
               <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
                 <Text style={[styles.modalTitle, { color: colors.text }]}>Gift Details</Text>
-                <TouchableOpacity onPress={() => setSelectedGift(null)}>
+                <TouchableOpacity onPress={handleCloseModal}>
                   <RoastIcon
                     name="close"
                     size={28}

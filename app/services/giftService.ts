@@ -31,21 +31,66 @@ export interface GiftEvent {
   created_at: string;
 }
 
+// Cache for gifts data
+let giftsCache: { data: Gift[] | null; timestamp: number } | null = null;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+// Pending request to prevent duplicate queries
+let pendingGiftsRequest: Promise<{ data: Gift[] | null; error: any }> | null = null;
+
 /**
- * Fetch all available gifts
+ * Fetch all available gifts with caching
  */
 export async function fetchGifts(): Promise<{ data: Gift[] | null; error: any }> {
   try {
-    const { data, error } = await supabase
-      .from('gifts')
-      .select('*')
-      .order('price_sek', { ascending: true });
+    // Check cache first
+    if (giftsCache && Date.now() - giftsCache.timestamp < CACHE_DURATION) {
+      console.log('✅ Returning cached gifts data');
+      return { data: giftsCache.data, error: null };
+    }
 
-    return { data, error };
+    // If there's already a pending request, return it
+    if (pendingGiftsRequest) {
+      console.log('⏳ Returning pending gifts request');
+      return pendingGiftsRequest;
+    }
+
+    // Create new request
+    console.log('🔄 Fetching gifts from database');
+    pendingGiftsRequest = (async () => {
+      const { data, error } = await supabase
+        .from('gifts')
+        .select('*')
+        .order('price_sek', { ascending: true });
+
+      // Update cache
+      if (!error && data) {
+        giftsCache = {
+          data,
+          timestamp: Date.now(),
+        };
+      }
+
+      // Clear pending request
+      pendingGiftsRequest = null;
+
+      return { data, error };
+    })();
+
+    return pendingGiftsRequest;
   } catch (error) {
     console.error('Error fetching gifts:', error);
+    pendingGiftsRequest = null;
     return { data: null, error };
   }
+}
+
+/**
+ * Clear gifts cache (call this when gifts are updated)
+ */
+export function clearGiftsCache(): void {
+  giftsCache = null;
+  console.log('🗑️ Gifts cache cleared');
 }
 
 /**
@@ -225,7 +270,7 @@ export async function purchaseGift(
       console.error('Error incrementing gift usage:', usageError);
     }
 
-    // PROMPT 2: Send push notification to receiver for high-value gifts (50 kr+)
+    // Send push notification to receiver for high-value gifts (50 kr+)
     const senderName = senderInfo?.display_name || senderInfo?.username || 'Someone';
     await pushNotificationService.sendGiftReceivedNotification(
       receiverId,
@@ -255,13 +300,24 @@ export async function purchaseGift(
 }
 
 /**
- * Fetch gift events for a user (sent or received)
+ * Fetch gift events for a user (sent or received) with caching
  */
+const giftEventsCache: Map<string, { data: any[] | null; timestamp: number }> = new Map();
+
 export async function fetchGiftEvents(
   userId: string,
   type: 'sent' | 'received'
 ): Promise<{ data: any[] | null; error: any }> {
   try {
+    const cacheKey = `${userId}_${type}`;
+    
+    // Check cache first
+    const cached = giftEventsCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+      console.log('✅ Returning cached gift events data');
+      return { data: cached.data, error: null };
+    }
+
     const column = type === 'sent' ? 'sender_user_id' : 'receiver_user_id';
     
     const { data, error } = await supabase
@@ -273,13 +329,31 @@ export async function fetchGiftEvents(
         receiver:receiver_user_id(username, display_name, avatar_url)
       `)
       .eq(column, userId)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(50); // Limit to 50 most recent events
+
+    // Update cache
+    if (!error && data) {
+      giftEventsCache.set(cacheKey, {
+        data,
+        timestamp: Date.now(),
+      });
+    }
 
     return { data, error };
   } catch (error) {
     console.error('Error fetching gift events:', error);
     return { data: null, error };
   }
+}
+
+/**
+ * Clear gift events cache for a user
+ */
+export function clearGiftEventsCache(userId: string): void {
+  giftEventsCache.delete(`${userId}_sent`);
+  giftEventsCache.delete(`${userId}_received`);
+  console.log('🗑️ Gift events cache cleared for user:', userId);
 }
 
 /**

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -19,6 +19,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/app/integrations/supabase/client';
 import { Tables } from '@/app/integrations/supabase/types';
+import { queryCache } from '@/app/services/queryCache';
 
 type Stream = Tables<'streams'>;
 
@@ -39,107 +40,42 @@ interface Post {
 
 const { width: screenWidth } = Dimensions.get('window');
 
-export default function HomeScreen() {
-  const { user } = useAuth();
-  const { colors } = useTheme();
-  const [streams, setStreams] = useState<Stream[]>([]);
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'live' | 'posts'>('live');
+// Memoized post component
+const PostItem = React.memo(({ 
+  post, 
+  onPress,
+  colors 
+}: { 
+  post: Post; 
+  onPress: (post: Post) => void;
+  colors: any;
+}) => {
+  const handlePress = useCallback(() => {
+    onPress(post);
+  }, [post, onPress]);
 
-  const fetchStreams = useCallback(async () => {
-    try {
-      const { data, error } = await supabase
-        .from('streams')
-        .select('*')
-        .eq('status', 'live')
-        .order('started_at', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching streams:', error);
-        return;
-      }
-
-      if (data) {
-        setStreams(data);
-      }
-    } catch (error) {
-      console.error('Error in fetchStreams:', error);
-    }
-  }, []);
-
-  const fetchPosts = useCallback(async () => {
-    try {
-      const { data, error } = await supabase
-        .from('posts')
-        .select('*, profiles(*)')
-        .order('created_at', { ascending: false })
-        .limit(20);
-
-      if (error) {
-        console.error('Error fetching posts:', error);
-        return;
-      }
-
-      if (data) {
-        setPosts(data as any);
-      }
-    } catch (error) {
-      console.error('Error in fetchPosts:', error);
-    }
-  }, []);
-
-  const fetchData = useCallback(async () => {
-    if (activeTab === 'live') {
-      await fetchStreams();
-    } else {
-      await fetchPosts();
-    }
-  }, [activeTab, fetchStreams, fetchPosts]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchData();
-    setRefreshing(false);
-  };
-
-  const handleStreamPress = (stream: Stream) => {
-    router.push({
-      pathname: '/live-player',
-      params: { streamId: stream.id },
-    });
-  };
-
-  const handlePostPress = (post: Post) => {
-    console.log('Post pressed:', post.id);
-  };
-
-  const renderPost = ({ item }: { item: Post }) => (
+  return (
     <TouchableOpacity
       style={[styles.postContainer, { backgroundColor: colors.background, borderBottomColor: colors.border }]}
-      onPress={() => handlePostPress(item)}
+      onPress={handlePress}
       activeOpacity={0.95}
     >
       <View style={styles.postHeader}>
         <Image
           source={{
-            uri: item.profiles.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
+            uri: post.profiles.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
           }}
           style={[styles.postAvatar, { backgroundColor: colors.backgroundAlt }]}
         />
         <View style={styles.postHeaderText}>
           <Text style={[styles.postDisplayName, { color: colors.text }]}>
-            {item.profiles.display_name || item.profiles.username}
+            {post.profiles.display_name || post.profiles.username}
           </Text>
-          <Text style={[styles.postUsername, { color: colors.textSecondary }]}>@{item.profiles.username}</Text>
+          <Text style={[styles.postUsername, { color: colors.textSecondary }]}>@{post.profiles.username}</Text>
         </View>
       </View>
 
-      <Image source={{ uri: item.media_url }} style={[styles.postImage, { backgroundColor: colors.backgroundAlt }]} />
+      <Image source={{ uri: post.media_url }} style={[styles.postImage, { backgroundColor: colors.backgroundAlt }]} />
 
       <View style={styles.postActions}>
         <TouchableOpacity style={styles.postAction}>
@@ -149,7 +85,7 @@ export default function HomeScreen() {
             size={24}
             color={colors.text}
           />
-          <Text style={[styles.postActionText, { color: colors.text }]}>{item.likes_count}</Text>
+          <Text style={[styles.postActionText, { color: colors.text }]}>{post.likes_count}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.postAction}>
@@ -159,7 +95,7 @@ export default function HomeScreen() {
             size={24}
             color={colors.text}
           />
-          <Text style={[styles.postActionText, { color: colors.text }]}>{item.comments_count}</Text>
+          <Text style={[styles.postActionText, { color: colors.text }]}>{post.comments_count}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.postAction}>
@@ -172,14 +108,155 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
-      {item.caption && (
+      {post.caption && (
         <View style={styles.postCaption}>
-          <Text style={[styles.postCaptionUsername, { color: colors.text }]}>@{item.profiles.username}</Text>
-          <Text style={[styles.postCaptionText, { color: colors.text }]}> {item.caption}</Text>
+          <Text style={[styles.postCaptionUsername, { color: colors.text }]}>@{post.profiles.username}</Text>
+          <Text style={[styles.postCaptionText, { color: colors.text }]}> {post.caption}</Text>
         </View>
       )}
     </TouchableOpacity>
   );
+});
+
+PostItem.displayName = 'PostItem';
+
+export default function HomeScreen() {
+  const { user } = useAuth();
+  const { colors } = useTheme();
+  const [streams, setStreams] = useState<Stream[]>([]);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState<'live' | 'posts'>('live');
+
+  // Memoize fetch streams function
+  const fetchStreams = useCallback(async () => {
+    try {
+      const data = await queryCache.getCached(
+        'streams_live',
+        async () => {
+          const { data, error } = await supabase
+            .from('streams')
+            .select('*')
+            .eq('status', 'live')
+            .order('started_at', { ascending: false });
+
+          if (error) {
+            console.error('Error fetching streams:', error);
+            return [];
+          }
+
+          return data || [];
+        },
+        30000 // 30 seconds cache for live streams
+      );
+
+      setStreams(data);
+    } catch (error) {
+      console.error('Error in fetchStreams:', error);
+    }
+  }, []);
+
+  // Memoize fetch posts function
+  const fetchPosts = useCallback(async () => {
+    try {
+      const data = await queryCache.getCached(
+        'posts_feed',
+        async () => {
+          const { data, error } = await supabase
+            .from('posts')
+            .select('*, profiles(*)')
+            .order('created_at', { ascending: false })
+            .limit(20);
+
+          if (error) {
+            console.error('Error fetching posts:', error);
+            return [];
+          }
+
+          return data || [];
+        },
+        60000 // 1 minute cache for posts
+      );
+
+      setPosts(data as any);
+    } catch (error) {
+      console.error('Error in fetchPosts:', error);
+    }
+  }, []);
+
+  // Memoize fetch data function
+  const fetchData = useCallback(async () => {
+    if (activeTab === 'live') {
+      await fetchStreams();
+    } else {
+      await fetchPosts();
+    }
+  }, [activeTab, fetchStreams, fetchPosts]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Memoize refresh handler
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    
+    // Invalidate cache
+    if (activeTab === 'live') {
+      queryCache.invalidate('streams_live');
+    } else {
+      queryCache.invalidate('posts_feed');
+    }
+    
+    await fetchData();
+    setRefreshing(false);
+  }, [activeTab, fetchData]);
+
+  // Memoize stream press handler
+  const handleStreamPress = useCallback((stream: Stream) => {
+    router.push({
+      pathname: '/live-player',
+      params: { streamId: stream.id },
+    });
+  }, []);
+
+  // Memoize post press handler
+  const handlePostPress = useCallback((post: Post) => {
+    console.log('Post pressed:', post.id);
+  }, []);
+
+  // Memoize stream render function
+  const renderStream = useCallback(({ item }: { item: Stream }) => (
+    <StreamPreviewCard
+      stream={item}
+      onPress={() => handleStreamPress(item)}
+    />
+  ), [handleStreamPress]);
+
+  // Memoize post render function
+  const renderPost = useCallback(({ item }: { item: Post }) => (
+    <PostItem
+      post={item}
+      onPress={handlePostPress}
+      colors={colors}
+    />
+  ), [handlePostPress, colors]);
+
+  // Memoize key extractors
+  const streamKeyExtractor = useCallback((item: Stream) => item.id, []);
+  const postKeyExtractor = useCallback((item: Post) => item.id, []);
+
+  // Memoize tab change handlers
+  const handleLiveTab = useCallback(() => {
+    setActiveTab('live');
+  }, []);
+
+  const handlePostsTab = useCallback(() => {
+    setActiveTab('posts');
+  }, []);
+
+  // Memoize header component
+  const ListHeaderComponent = useMemo(() => <StoriesBar />, []);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -191,7 +268,7 @@ export default function HomeScreen() {
       <View style={[styles.tabBar, { borderBottomColor: colors.border }]}>
         <TouchableOpacity
           style={[styles.tabButton, activeTab === 'live' && { borderBottomColor: colors.brandPrimary }]}
-          onPress={() => setActiveTab('live')}
+          onPress={handleLiveTab}
         >
           <IconSymbol
             ios_icon_name="video.fill"
@@ -206,7 +283,7 @@ export default function HomeScreen() {
 
         <TouchableOpacity
           style={[styles.tabButton, activeTab === 'posts' && { borderBottomColor: colors.brandPrimary }]}
-          onPress={() => setActiveTab('posts')}
+          onPress={handlePostsTab}
         >
           <IconSymbol
             ios_icon_name="square.grid.2x2.fill"
@@ -223,14 +300,9 @@ export default function HomeScreen() {
       {activeTab === 'live' ? (
         <FlatList
           data={streams}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <StreamPreviewCard
-              stream={item}
-              onPress={() => handleStreamPress(item)}
-            />
-          )}
-          ListHeaderComponent={<StoriesBar />}
+          keyExtractor={streamKeyExtractor}
+          renderItem={renderStream}
+          ListHeaderComponent={ListHeaderComponent}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -240,13 +312,18 @@ export default function HomeScreen() {
               tintColor={colors.brandPrimary}
             />
           }
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={5}
+          updateCellsBatchingPeriod={50}
+          initialNumToRender={5}
+          windowSize={5}
         />
       ) : (
         <FlatList
           data={posts}
-          keyExtractor={(item) => item.id}
+          keyExtractor={postKeyExtractor}
           renderItem={renderPost}
-          ListHeaderComponent={<StoriesBar />}
+          ListHeaderComponent={ListHeaderComponent}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -256,6 +333,11 @@ export default function HomeScreen() {
               tintColor={colors.brandPrimary}
             />
           }
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={5}
+          updateCellsBatchingPeriod={50}
+          initialNumToRender={5}
+          windowSize={5}
         />
       )}
     </View>
