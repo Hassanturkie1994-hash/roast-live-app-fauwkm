@@ -104,24 +104,34 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const themeOpacity = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    loadTheme();
-  }, []);
+    let mounted = true;
 
-  const loadTheme = async () => {
-    try {
-      const savedTheme = await AsyncStorage.getItem(THEME_STORAGE_KEY);
-      if (savedTheme === 'light' || savedTheme === 'dark') {
-        setThemeState(savedTheme);
-        console.log('✅ Theme loaded from storage:', savedTheme);
-      } else {
-        console.log('ℹ️ No saved theme, using default: light');
+    const loadTheme = async () => {
+      try {
+        const savedTheme = await AsyncStorage.getItem(THEME_STORAGE_KEY);
+        if (mounted) {
+          if (savedTheme === 'light' || savedTheme === 'dark') {
+            setThemeState(savedTheme);
+            console.log('✅ Theme loaded from storage:', savedTheme);
+          } else {
+            console.log('ℹ️ No saved theme, using default: light');
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error loading theme:', error);
+      } finally {
+        if (mounted) {
+          setIsLoading(false);
+        }
       }
-    } catch (error) {
-      console.error('❌ Error loading theme:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    };
+
+    loadTheme();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const saveTheme = async (newTheme: ThemeMode) => {
     try {

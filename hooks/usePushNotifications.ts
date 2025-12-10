@@ -17,12 +17,17 @@ Notifications.setNotificationHandler({
 export function usePushNotifications(userId: string | null) {
   const notificationListener = useRef<any>();
   const responseListener = useRef<any>();
+  const registrationAttempted = useRef(false);
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || registrationAttempted.current) return;
+
+    registrationAttempted.current = true;
 
     // Register for push notifications
-    registerForPushNotifications(userId);
+    registerForPushNotifications(userId).catch(error => {
+      console.error('Failed to register for push notifications:', error);
+    });
 
     // Listen for notifications received while app is foregrounded
     notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
@@ -48,6 +53,7 @@ export function usePushNotifications(userId: string | null) {
       if (responseListener.current) {
         Notifications.removeNotificationSubscription(responseListener.current);
       }
+      registrationAttempted.current = false;
     };
   }, [userId]);
 

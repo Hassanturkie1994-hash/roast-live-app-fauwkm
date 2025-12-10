@@ -47,22 +47,26 @@ export default function ProfileScreen() {
           .from('posts')
           .select('*')
           .eq('user_id', user.id)
-          .order('created_at', { ascending: false }),
+          .order('created_at', { ascending: false })
+          .then(res => ({ data: res.data || [], error: res.error })),
         supabase
           .from('post_likes')
           .select('post_id, posts(*)')
           .eq('user_id', user.id)
-          .order('created_at', { ascending: false }),
+          .order('created_at', { ascending: false })
+          .then(res => ({ data: res.data || [], error: res.error })),
         supabase
           .from('profiles')
           .select('followers_count, following_count')
           .eq('id', user.id)
-          .single(),
+          .single()
+          .then(res => ({ data: res.data, error: res.error })),
         supabase
           .from('wallet')
           .select('balance')
           .eq('user_id', user.id)
-          .single(),
+          .single()
+          .then(res => ({ data: res.data, error: res.error })),
       ]);
 
       if (postsData.data) setPosts(postsData.data);
@@ -75,7 +79,7 @@ export default function ProfileScreen() {
         setFollowingCount(profileData.data.following_count || 0);
       }
       if (walletData.data) {
-        setWalletBalance(parseFloat(walletData.data.balance));
+        setWalletBalance(parseFloat(walletData.data.balance) || 0);
       }
     } catch (error) {
       console.error('Error fetching user data:', error);
@@ -83,12 +87,18 @@ export default function ProfileScreen() {
   }, [user]);
 
   useEffect(() => {
+    let mounted = true;
+
     if (!user) {
       router.replace('/auth/login');
-    } else {
+    } else if (mounted) {
       fetchUserData();
     }
-  }, [user, fetchUserData]);
+
+    return () => {
+      mounted = false;
+    };
+  }, [user]);
 
   const handleEditProfile = () => {
     router.push('/screens/EditProfileScreen');

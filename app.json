@@ -1,8 +1,7 @@
-
 {
   "expo": {
     "name": "Roast Live",
-    "slug": "Roast Live",
+    "slug": "roast-live-app-fauwkm",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/natively-dark.png",
@@ -26,7 +25,7 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.anonymous.Natively",
+      "package": "com.roastlive.roastlive",
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
