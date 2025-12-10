@@ -63,21 +63,41 @@ interface AdminMessage {
 }
 
 class AdminService {
-  // Check if user has admin role
+  // Check if user has admin role - checks both admin_roles and profiles tables
   async checkAdminRole(userId: string): Promise<{ success: boolean; role: AdminRole | null }> {
     try {
-      const { data, error } = await supabase
+      // First check admin_roles table
+      const { data: adminRoleData, error: adminRoleError } = await supabase
         .from('admin_roles')
         .select('role')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
 
-      if (error) {
-        console.log('User is not an admin');
+      if (adminRoleData && !adminRoleError) {
+        return { success: true, role: adminRoleData.role as AdminRole };
+      }
+
+      // If not found in admin_roles, check profiles table
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (profileError) {
+        console.log('Error checking profile role:', profileError);
         return { success: true, role: null };
       }
 
-      return { success: true, role: data.role as AdminRole };
+      if (profileData && profileData.role) {
+        const role = profileData.role.toUpperCase();
+        if (['HEAD_ADMIN', 'ADMIN', 'SUPPORT', 'MODERATOR'].includes(role)) {
+          return { success: true, role: role as AdminRole };
+        }
+      }
+
+      console.log('User is not an admin');
+      return { success: true, role: null };
     } catch (error) {
       console.error('Error checking admin role:', error);
       return { success: false, role: null };
