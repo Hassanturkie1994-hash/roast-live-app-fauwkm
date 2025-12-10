@@ -14,6 +14,7 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import GradientButton from '@/components/GradientButton';
+import GlobalLeaderboard from '@/components/GlobalLeaderboard';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { supabase } from '@/app/integrations/supabase/client';
@@ -58,7 +59,7 @@ export default function PublicProfileScreen() {
   const { colors } = useTheme();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<ProfileData | null>(null);
-  const [activeTab, setActiveTab] = useState<'posts' | 'streams' | 'stories'>('posts');
+  const [activeTab, setActiveTab] = useState<'posts' | 'streams' | 'stories' | 'supporters'>('posts');
   const [posts, setPosts] = useState<Post[]>([]);
   const [savedStreams, setSavedStreams] = useState<SavedStream[]>([]);
   const [isFollowing, setIsFollowing] = useState(false);
@@ -262,6 +263,15 @@ export default function PublicProfileScreen() {
       );
     }
 
+    if (activeTab === 'supporters') {
+      return (
+        <View style={styles.supportersContainer}>
+          <GlobalLeaderboard creatorId={userId || ''} type="weekly" limit={10} />
+          <GlobalLeaderboard creatorId={userId || ''} type="alltime" limit={10} />
+        </View>
+      );
+    }
+
     // Stories tab
     return (
       <View style={styles.emptyState}>
@@ -370,7 +380,7 @@ export default function PublicProfileScreen() {
         </View>
 
         {/* Tabs */}
-        <View style={[styles.tabsContainer, { borderBottomColor: colors.border }]}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.tabsContainer, { borderBottomColor: colors.border }]}>
           <TouchableOpacity
             style={[styles.tab, activeTab === 'posts' && { borderBottomColor: colors.brandPrimary }]}
             onPress={() => setActiveTab('posts')}
@@ -402,6 +412,21 @@ export default function PublicProfileScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
+            style={[styles.tab, activeTab === 'supporters' && { borderBottomColor: colors.brandPrimary }]}
+            onPress={() => setActiveTab('supporters')}
+          >
+            <IconSymbol
+              ios_icon_name="star.fill"
+              android_material_icon_name="star"
+              size={20}
+              color={activeTab === 'supporters' ? colors.brandPrimary : colors.textSecondary}
+            />
+            <Text style={[styles.tabText, { color: activeTab === 'supporters' ? colors.brandPrimary : colors.textSecondary }]}>
+              SUPPORTERS
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={[styles.tab, activeTab === 'stories' && { borderBottomColor: colors.brandPrimary }]}
             onPress={() => setActiveTab('stories')}
           >
@@ -415,7 +440,7 @@ export default function PublicProfileScreen() {
               STORIES
             </Text>
           </TouchableOpacity>
-        </View>
+        </ScrollView>
 
         {/* Content */}
         {renderContent()}
@@ -553,11 +578,11 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   tab: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 16,
+    paddingHorizontal: 20,
     gap: 8,
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
@@ -637,6 +662,9 @@ const styles = StyleSheet.create({
   streamMetaText: {
     fontSize: 12,
     fontWeight: '400',
+  },
+  supportersContainer: {
+    paddingHorizontal: 20,
   },
   emptyState: {
     width: '100%',
