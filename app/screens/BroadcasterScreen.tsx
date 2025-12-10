@@ -24,11 +24,15 @@ import ConnectionStatusIndicator from '@/components/ConnectionStatusIndicator';
 import ModerationHistoryModal from '@/components/ModerationHistoryModal';
 import ContentLabelModal, { ContentLabel } from '@/components/ContentLabelModal';
 import ContentLabelBadge from '@/components/ContentLabelBadge';
+import CreatorRulesModal from '@/components/CreatorRulesModal';
+import SafetyAcknowledgementModal from '@/components/SafetyAcknowledgementModal';
+import ForcedReviewLockModal from '@/components/ForcedReviewLockModal';
 import { moderationService } from '@/app/services/moderationService';
 import { viewerTrackingService } from '@/app/services/viewerTrackingService';
 import { liveStreamArchiveService } from '@/app/services/liveStreamArchiveService';
 import { commentService } from '@/app/services/commentService';
 import { contentSafetyService } from '@/app/services/contentSafetyService';
+import { enhancedContentSafetyService } from '@/app/services/enhancedContentSafetyService';
 import { useStreamConnection } from '@/hooks/useStreamConnection';
 
 interface StreamData {
@@ -79,6 +83,14 @@ export default function BroadcasterScreen() {
   const [showModerationHistory, setShowModerationHistory] = useState(false);
   const [showContentLabelModal, setShowContentLabelModal] = useState(false);
   const [contentLabel, setContentLabel] = useState<ContentLabel | null>(null);
+  
+  // New state for enhanced safety features
+  const [showCreatorRulesModal, setShowCreatorRulesModal] = useState(false);
+  const [showSafetyAcknowledgement, setShowSafetyAcknowledgement] = useState(false);
+  const [showForcedReviewLock, setShowForcedReviewLock] = useState(false);
+  const [forcedReviewReportCount, setForcedReviewReportCount] = useState(0);
+  const [isCheckingSafety, setIsCheckingSafety] = useState(true);
+  
   const realtimeChannelRef = useRef<any>(null);
   const giftChannelRef = useRef<any>(null);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -102,6 +114,71 @@ export default function BroadcasterScreen() {
       endStream();
     },
   });
+
+  // Check safety acknowledgement and forced review lock on mount
+  useEffect(() => {
+    if (user) {
+      checkSafetyStatus();
+    }
+  }, [user]);
+
+  const checkSafetyStatus = async () => {
+    if (!user) return;
+
+    setIsCheckingSafety(true);
+
+    try {
+      // Check if user has accepted safety guidelines
+      const hasAcknowledgement = await enhancedContentSafetyService.hasSafetyAcknowledgement(user.id);
+      
+      if (!hasAcknowledgement) {
+        setShowSafetyAcknowledgement(true);
+        setIsCheckingSafety(false);
+        return;
+      }
+
+      // Check if user is under forced review lock
+      const isLocked = await enhancedContentSafetyService.isUserLockedForReview(user.id);
+      
+      if (isLocked) {
+        const lock = await enhancedContentSafetyService.getForcedReviewLock(user.id);
+        if (lock) {
+          setForcedReviewReportCount(lock.report_count);
+          setShowForcedReviewLock(true);
+        }
+      }
+    } catch (error) {
+      console.error('Error checking safety status:', error);
+    } finally {
+      setIsCheckingSafety(false);
+    }
+  };
+
+  const handleSafetyAcknowledgement = async () => {
+    if (!user) return;
+
+    setIsLoading(true);
+
+    try {
+      const result = await enhancedContentSafetyService.recordSafetyAcknowledgement(user.id);
+      
+      if (result.success) {
+        setShowSafetyAcknowledgement(false);
+        Alert.alert(
+          'Welcome!',
+          'You can now use all features of Roast Live. Remember to follow our community guidelines!',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('Error', result.error || 'Failed to record acknowledgement');
+      }
+    } catch (error) {
+      console.error('Error recording safety acknowledgement:', error);
+      Alert.alert('Error', 'Failed to record acknowledgement');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!user) {
@@ -281,12 +358,37 @@ export default function BroadcasterScreen() {
     setIsMicOn((current) => !current);
   };
 
-  const handleStartLiveSetup = () => {
+  const handleStartLiveSetup = async () => {
+    if (!user) {
+      Alert.alert('Error', 'You must be logged in to start streaming');
+      return;
+    }
+
     if (isLive) {
       setShowExitConfirmation(true);
-    } else {
-      setShowSetup(true);
+      return;
     }
+
+    // Check if user is under forced review lock
+    const isLocked = await enhancedContentSafetyService.isUserLockedForReview(user.id);
+    if (isLocked) {
+      const lock = await enhancedContentSafetyService.getForcedReviewLock(user.id);
+      if (lock) {
+        setForcedReviewReportCount(lock.report_count);
+        setShowForcedReviewLock(true);
+      }
+      return;
+    }
+
+    // Check if user has accepted safety guidelines
+    const canStream = await enhancedContentSafetyService.canUserLivestream(user.id);
+    if (!canStream.canStream) {
+      Alert.alert('Cannot Start Stream', canStream.reason, [{ text: 'OK' }]);
+      setShowSafetyAcknowledgement(true);
+      return;
+    }
+
+    setShowSetup(true);
   };
 
   const handleEndStreamConfirm = () => {
@@ -297,8 +399,35 @@ export default function BroadcasterScreen() {
   const handleContentLabelSelected = (label: ContentLabel) => {
     setContentLabel(label);
     setShowContentLabelModal(false);
-    // Proceed to start stream
-    startStreamWithLabel(label);
+    // Show creator rules modal
+    setShowCreatorRulesModal(true);
+  };
+
+  const handleCreatorRulesConfirm = async () => {
+    if (!user) return;
+
+    setIsLoading(true);
+
+    try {
+      // Log creator rules acceptance
+      const result = await enhancedContentSafetyService.logCreatorRulesAcceptance(user.id);
+      
+      if (!result.success) {
+        console.error('Failed to log creator rules acceptance:', result.error);
+        // Continue anyway - don't block streaming
+      }
+
+      setShowCreatorRulesModal(false);
+      
+      // Now start the stream
+      await startStreamWithLabel(contentLabel!);
+    } catch (error) {
+      console.error('Error in handleCreatorRulesConfirm:', error);
+      setShowCreatorRulesModal(false);
+      await startStreamWithLabel(contentLabel!);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const startStream = async () => {
@@ -505,6 +634,35 @@ export default function BroadcasterScreen() {
     return baseStyle;
   };
 
+  // Show safety acknowledgement modal if needed
+  if (showSafetyAcknowledgement) {
+    return (
+      <View style={commonStyles.container}>
+        <SafetyAcknowledgementModal
+          visible={showSafetyAcknowledgement}
+          onAccept={handleSafetyAcknowledgement}
+          isLoading={isLoading}
+        />
+      </View>
+    );
+  }
+
+  // Show forced review lock modal if needed
+  if (showForcedReviewLock) {
+    return (
+      <View style={commonStyles.container}>
+        <ForcedReviewLockModal
+          visible={showForcedReviewLock}
+          onClose={() => {
+            setShowForcedReviewLock(false);
+            router.back();
+          }}
+          reportCount={forcedReviewReportCount}
+        />
+      </View>
+    );
+  }
+
   return (
     <View style={commonStyles.container}>
       {/* Camera View */}
@@ -704,7 +862,7 @@ export default function BroadcasterScreen() {
               title="Go Live"
               onPress={handleStartLiveSetup}
               size="large"
-              disabled={isLoading}
+              disabled={isLoading || isCheckingSafety}
             />
           </View>
         )}
@@ -783,6 +941,17 @@ export default function BroadcasterScreen() {
           setShowContentLabelModal(false);
           setShowSetup(false);
         }}
+      />
+
+      {/* Creator Rules Modal */}
+      <CreatorRulesModal
+        visible={showCreatorRulesModal}
+        onConfirm={handleCreatorRulesConfirm}
+        onCancel={() => {
+          setShowCreatorRulesModal(false);
+          setShowSetup(false);
+        }}
+        isLoading={isLoading}
       />
 
       {/* Setup Modal */}
