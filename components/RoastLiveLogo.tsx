@@ -1,8 +1,7 @@
 
 import React from 'react';
-import { Image, StyleSheet, View, ViewStyle } from 'react-native';
+import { Animated, StyleSheet, View, ViewStyle } from 'react-native';
 import { useTheme } from '@/contexts/ThemeContext';
-import Animated from 'react-native-reanimated';
 
 interface RoastLiveLogoProps {
   size?: 'small' | 'medium' | 'large' | 'xlarge';
@@ -28,6 +27,9 @@ export default function RoastLiveLogo({
 
   const currentSize = sizeStyles[size];
 
+  // Multiply the themeOpacity with the opacity prop
+  const combinedOpacity = Animated.multiply(themeOpacity, opacity);
+
   return (
     <View style={[styles.container, style]}>
       <Animated.Image
@@ -37,10 +39,7 @@ export default function RoastLiveLogo({
           {
             width: currentSize.width,
             height: currentSize.height,
-            opacity: themeOpacity.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0, opacity],
-            }),
+            opacity: combinedOpacity,
           },
           withShadow && styles.logoWithShadow,
         ]}
