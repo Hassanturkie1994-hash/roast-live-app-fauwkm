@@ -221,7 +221,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [fetchProfile, profileFetched]);
 
   const signIn = async (email: string, password: string) => {
     // Check device ban before sign in

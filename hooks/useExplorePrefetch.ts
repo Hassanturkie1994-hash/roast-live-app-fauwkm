@@ -124,7 +124,7 @@ export function useExplorePrefetch(options: UseExplorePrefetchOptions = {}) {
       // Cleanup on unmount
       clearCache();
     };
-  }, [enabled]);
+  }, [enabled, prefetchNextPage, clearCache]);
 
   return {
     prefetchThumbnails,

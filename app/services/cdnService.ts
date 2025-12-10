@@ -110,11 +110,11 @@ interface CDNMonitoringData {
   cacheMisses: number;
   cacheHitPercentage: number;
   avgDeliveryLatency: number;
-  topMedia: Array<{
+  topMedia: {
     url: string;
     accessCount: number;
     type: string;
-  }>;
+  }[];
 }
 
 interface SEOMetadata {
@@ -506,7 +506,7 @@ class CDNService {
         img.src = this.getOptimizedImageUrl(url, 'thumbnail');
       } else {
         // React Native: Use Image.prefetch
-        const Image = require('react-native').Image;
+        const { Image } = await import('react-native');
         Image.prefetch(this.getOptimizedImageUrl(url, 'thumbnail'))
           .then(() => resolve())
           .catch(() => resolve());
@@ -1174,7 +1174,7 @@ class CDNService {
   async getCacheHitPercentagePerUser(
     startDate?: Date,
     endDate?: Date
-  ): Promise<Array<{ userId: string; username: string; cacheHitPercentage: number }>> {
+  ): Promise<{ userId: string; username: string; cacheHitPercentage: number }[]> {
     try {
       const start = startDate || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
       const end = endDate || new Date();
@@ -1231,13 +1231,13 @@ class CDNService {
   async getUserCDNEvents(
     userId: string,
     limit: number = 50
-  ): Promise<Array<{
+  ): Promise<{
     id: string;
     eventType: string;
     mediaUrl: string | null;
     timestamp: string;
     metadata: any;
-  }>> {
+  }[]> {
     try {
       const { data, error } = await supabase
         .from('cdn_media_events')

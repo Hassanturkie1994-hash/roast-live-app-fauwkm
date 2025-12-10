@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { View, StyleSheet, Platform, Text, Dimensions } from 'react-native';
+import { View, StyleSheet, Platform, Text, Dimensions, Image } from 'react-native';
 import { CameraView, CameraType } from 'expo-camera';
 import { colors } from '@/styles/commonStyles';
 
@@ -12,11 +12,15 @@ let RTCView: any;
 
 if (Platform.OS !== 'web') {
   try {
-    const WebRTC = require('react-native-webrtc');
-    RTCPeerConnection = WebRTC.RTCPeerConnection;
-    RTCSessionDescription = WebRTC.RTCSessionDescription;
-    mediaDevices = WebRTC.mediaDevices;
-    RTCView = WebRTC.RTCView;
+    // ES6 style import for react-native-webrtc
+    import('react-native-webrtc').then((WebRTC) => {
+      RTCPeerConnection = WebRTC.RTCPeerConnection;
+      RTCSessionDescription = WebRTC.RTCSessionDescription;
+      mediaDevices = WebRTC.mediaDevices;
+      RTCView = WebRTC.RTCView;
+    }).catch((error) => {
+      console.log('react-native-webrtc not available:', error);
+    });
   } catch (error) {
     console.log('react-native-webrtc not available:', error);
   }
