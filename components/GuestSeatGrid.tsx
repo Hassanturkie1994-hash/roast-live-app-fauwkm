@@ -1,5 +1,5 @@
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -24,6 +24,156 @@ interface GuestSeatGridProps {
 }
 
 const { width, height } = Dimensions.get('window');
+
+// Extract Participant component to fix React Hooks errors
+const ParticipantCell = React.memo(({
+  participant,
+  index,
+  cellWidth,
+  cellHeight,
+  totalParticipants,
+  onLongPress,
+}: {
+  participant: {
+    name: string;
+    avatarUrl?: string | null;
+    isHost: boolean;
+    guest?: StreamGuestSeat;
+  };
+  index: number;
+  cellWidth: number;
+  cellHeight: number;
+  totalParticipants: number;
+  onLongPress: () => void;
+}) => {
+  const scaleAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    // Animate in
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [scaleAnim, fadeAnim]);
+
+  const isHostCell = participant.isHost;
+  const guest = participant.guest;
+
+  return (
+    <Animated.View
+      key={index}
+      style={[
+        styles.cell,
+        {
+          width: cellWidth - 8,
+          height: cellHeight - 8,
+          transform: [{ scale: scaleAnim }],
+          opacity: fadeAnim,
+        },
+        isHostCell && styles.hostCell,
+        guest && !guest.camera_enabled && styles.cellDimmed,
+      ]}
+    >
+      <TouchableOpacity
+        style={styles.cellTouchable}
+        onLongPress={onLongPress}
+        delayLongPress={500}
+        activeOpacity={0.8}
+      >
+        <View style={styles.cellContent}>
+          {/* Avatar */}
+          <View style={styles.avatarContainer}>
+            {participant.avatarUrl ? (
+              <Image source={{ uri: participant.avatarUrl }} style={styles.avatar} />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <IconSymbol
+                  ios_icon_name="person.fill"
+                  android_material_icon_name="person"
+                  size={totalParticipants <= 2 ? 48 : 32}
+                  color={colors.textSecondary}
+                />
+              </View>
+            )}
+          </View>
+
+          {/* Name */}
+          <Text style={styles.participantName} numberOfLines={1}>
+            {participant.name}
+          </Text>
+
+          {/* Status indicators */}
+          <View style={styles.statusRow}>
+            {guest && (
+              <>
+                {/* Mic status */}
+                <View
+                  style={[
+                    styles.statusBadge,
+                    !guest.mic_enabled && styles.statusBadgeOff,
+                  ]}
+                >
+                  <IconSymbol
+                    ios_icon_name={guest.mic_enabled ? 'mic.fill' : 'mic.slash.fill'}
+                    android_material_icon_name={guest.mic_enabled ? 'mic' : 'mic_off'}
+                    size={12}
+                    color={colors.text}
+                  />
+                </View>
+
+                {/* Camera status */}
+                <View
+                  style={[
+                    styles.statusBadge,
+                    !guest.camera_enabled && styles.statusBadgeOff,
+                  ]}
+                >
+                  <IconSymbol
+                    ios_icon_name={guest.camera_enabled ? 'video.fill' : 'video.slash.fill'}
+                    android_material_icon_name={
+                      guest.camera_enabled ? 'videocam' : 'videocam_off'
+                    }
+                    size={12}
+                    color={colors.text}
+                  />
+                </View>
+
+                {/* Moderator badge */}
+                {guest.is_moderator && (
+                  <View style={styles.moderatorBadge}>
+                    <IconSymbol
+                      ios_icon_name="shield.fill"
+                      android_material_icon_name="shield"
+                      size={12}
+                      color={colors.text}
+                    />
+                  </View>
+                )}
+              </>
+            )}
+          </View>
+
+          {/* Host badge */}
+          {isHostCell && (
+            <View style={styles.hostBadge}>
+              <Text style={styles.hostBadgeText}>LIVE HOST</Text>
+            </View>
+          )}
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+});
 
 export default function GuestSeatGrid({
   hostName,
@@ -56,152 +206,7 @@ export default function GuestSeatGrid({
   const cellWidth = (width - 16) / layout.columns;
   const cellHeight = totalParticipants === 1 ? height * 0.7 : (height * 0.7) / layout.rows;
 
-  const renderParticipant = (
-    participant: {
-      name: string;
-      avatarUrl?: string | null;
-      isHost: boolean;
-      guest?: StreamGuestSeat;
-    },
-    index: number
-  ) => {
-    const isHostCell = participant.isHost;
-    const guest = participant.guest;
-    const scaleAnim = useRef(new Animated.Value(0)).current;
-    const fadeAnim = useRef(new Animated.Value(0)).current;
-
-    useEffect(() => {
-      // Animate in
-      Animated.parallel([
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          tension: 50,
-          friction: 7,
-          useNativeDriver: true,
-        }),
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }, []);
-
-    const handleLongPress = () => {
-      if (isHostCell && onHostLongPress) {
-        onHostLongPress();
-      } else if (guest && onGuestLongPress) {
-        onGuestLongPress(guest);
-      }
-    };
-
-    return (
-      <Animated.View
-        key={index}
-        style={[
-          styles.cell,
-          {
-            width: cellWidth - 8,
-            height: cellHeight - 8,
-            transform: [{ scale: scaleAnim }],
-            opacity: fadeAnim,
-          },
-          isHostCell && styles.hostCell,
-          guest && !guest.camera_enabled && styles.cellDimmed,
-        ]}
-      >
-        <TouchableOpacity
-          style={styles.cellTouchable}
-          onLongPress={handleLongPress}
-          delayLongPress={500}
-          activeOpacity={0.8}
-        >
-          <View style={styles.cellContent}>
-            {/* Avatar */}
-            <View style={styles.avatarContainer}>
-              {participant.avatarUrl ? (
-                <Image source={{ uri: participant.avatarUrl }} style={styles.avatar} />
-              ) : (
-                <View style={styles.avatarPlaceholder}>
-                  <IconSymbol
-                    ios_icon_name="person.fill"
-                    android_material_icon_name="person"
-                    size={totalParticipants <= 2 ? 48 : 32}
-                    color={colors.textSecondary}
-                  />
-                </View>
-              )}
-            </View>
-
-            {/* Name */}
-            <Text style={styles.participantName} numberOfLines={1}>
-              {participant.name}
-            </Text>
-
-            {/* Status indicators */}
-            <View style={styles.statusRow}>
-              {guest && (
-                <>
-                  {/* Mic status */}
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      !guest.mic_enabled && styles.statusBadgeOff,
-                    ]}
-                  >
-                    <IconSymbol
-                      ios_icon_name={guest.mic_enabled ? 'mic.fill' : 'mic.slash.fill'}
-                      android_material_icon_name={guest.mic_enabled ? 'mic' : 'mic_off'}
-                      size={12}
-                      color={colors.text}
-                    />
-                  </View>
-
-                  {/* Camera status */}
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      !guest.camera_enabled && styles.statusBadgeOff,
-                    ]}
-                  >
-                    <IconSymbol
-                      ios_icon_name={guest.camera_enabled ? 'video.fill' : 'video.slash.fill'}
-                      android_material_icon_name={
-                        guest.camera_enabled ? 'videocam' : 'videocam_off'
-                      }
-                      size={12}
-                      color={colors.text}
-                    />
-                  </View>
-
-                  {/* Moderator badge */}
-                  {guest.is_moderator && (
-                    <View style={styles.moderatorBadge}>
-                      <IconSymbol
-                        ios_icon_name="shield.fill"
-                        android_material_icon_name="shield"
-                        size={12}
-                        color={colors.text}
-                      />
-                    </View>
-                  )}
-                </>
-              )}
-            </View>
-
-            {/* Host badge */}
-            {isHostCell && (
-              <View style={styles.hostBadge}>
-                <Text style={styles.hostBadgeText}>LIVE HOST</Text>
-              </View>
-            )}
-          </View>
-        </TouchableOpacity>
-      </Animated.View>
-    );
-  };
-
-  const renderEmptySeat = (index: number) => {
+  const renderEmptySeat = useCallback((index: number) => {
     return (
       <TouchableOpacity
         key={`empty-${index}`}
@@ -227,7 +232,7 @@ export default function GuestSeatGrid({
         </View>
       </TouchableOpacity>
     );
-  };
+  }, [cellWidth, cellHeight, onEmptySeatPress]);
 
   // Build participants array
   const participants = [
@@ -246,7 +251,27 @@ export default function GuestSeatGrid({
   return (
     <View style={styles.container}>
       <View style={styles.grid}>
-        {participants.map((participant, index) => renderParticipant(participant, index))}
+        {participants.map((participant, index) => {
+          const handleLongPress = () => {
+            if (participant.isHost && onHostLongPress) {
+              onHostLongPress();
+            } else if (participant.guest && onGuestLongPress) {
+              onGuestLongPress(participant.guest);
+            }
+          };
+
+          return (
+            <ParticipantCell
+              key={index}
+              participant={participant}
+              index={index}
+              cellWidth={cellWidth}
+              cellHeight={cellHeight}
+              totalParticipants={totalParticipants}
+              onLongPress={handleLongPress}
+            />
+          );
+        })}
         {isHost && Array.from({ length: emptySeatsCount }).map((_, index) => renderEmptySeat(index))}
       </View>
     </View>

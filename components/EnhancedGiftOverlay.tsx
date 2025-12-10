@@ -1,5 +1,5 @@
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, Animated, Dimensions } from 'react-native';
 import { useTheme } from '@/contexts/ThemeContext';
 
@@ -27,6 +27,28 @@ export default function EnhancedGiftOverlay({
   const scaleAnim = useRef(new Animated.Value(0.5)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
 
+  const animateOut = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 0.8,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: -50,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      onComplete();
+    });
+  }, [fadeAnim, scaleAnim, slideAnim, onComplete]);
+
   useEffect(() => {
     if (visible) {
       // Animate in
@@ -51,30 +73,12 @@ export default function EnhancedGiftOverlay({
 
       // Animate out after 3 seconds
       const timeout = setTimeout(() => {
-        Animated.parallel([
-          Animated.timing(fadeAnim, {
-            toValue: 0,
-            duration: 500,
-            useNativeDriver: true,
-          }),
-          Animated.timing(scaleAnim, {
-            toValue: 0.8,
-            duration: 500,
-            useNativeDriver: true,
-          }),
-          Animated.timing(slideAnim, {
-            toValue: -50,
-            duration: 500,
-            useNativeDriver: true,
-          }),
-        ]).start(() => {
-          onComplete();
-        });
+        animateOut();
       }, 3000);
 
       return () => clearTimeout(timeout);
     }
-  }, [visible]);
+  }, [visible, fadeAnim, scaleAnim, slideAnim, animateOut]);
 
   if (!visible) return null;
 

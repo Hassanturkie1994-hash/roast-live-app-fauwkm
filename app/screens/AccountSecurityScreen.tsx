@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   ScrollView,
@@ -29,11 +29,7 @@ export default function AccountSecurityScreen() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [email, setEmail] = useState('');
 
-  useEffect(() => {
-    loadData();
-  }, [user]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!user) return;
 
     setLoading(true);
@@ -45,7 +41,11 @@ export default function AccountSecurityScreen() {
     setTwoFactorSettings(settings);
     setLoginHistory(history);
     setLoading(false);
-  };
+  }, [user]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const handleToggle2FA = async (enabled: boolean) => {
     if (!user) return;

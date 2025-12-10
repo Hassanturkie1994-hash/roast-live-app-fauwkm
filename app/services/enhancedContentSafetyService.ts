@@ -503,7 +503,7 @@ class EnhancedContentSafetyService {
   /**
    * Get report categories with labels
    */
-  getReportCategories(): Array<{ value: ReportCategory; label: string }> {
+  getReportCategories(): { value: ReportCategory; label: string }[] {
     return [
       { value: 'harassment_bullying', label: 'Harassment / Bullying' },
       { value: 'violent_threats', label: 'Violent threats' },

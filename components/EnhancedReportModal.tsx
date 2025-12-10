@@ -33,7 +33,7 @@ export default function EnhancedReportModal({
   const [selectedCategory, setSelectedCategory] = useState<ReportCategory | null>(null);
   const [notes, setNotes] = useState('');
 
-  const categories: Array<{ value: ReportCategory; label: string; icon: string }> = [
+  const categories: { value: ReportCategory; label: string; icon: string }[] = [
     { value: 'harassment_bullying', label: 'Harassment / Bullying', icon: '😠' },
     { value: 'violent_threats', label: 'Violent threats', icon: '⚠️' },
     { value: 'sexual_content_minors', label: 'Sexual content involving minors', icon: '🚫' },

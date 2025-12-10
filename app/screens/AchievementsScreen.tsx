@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -23,11 +23,7 @@ export default function AchievementsScreen() {
   const [selectedBadges, setSelectedBadges] = useState<(string | null)[]>([null, null, null]);
   const [editMode, setEditMode] = useState(false);
 
-  useEffect(() => {
-    loadAchievements();
-  }, [user]);
-
-  const loadAchievements = async () => {
+  const loadAchievements = useCallback(async () => {
     if (!user) return;
 
     setLoading(true);
@@ -49,7 +45,11 @@ export default function AchievementsScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    loadAchievements();
+  }, [loadAchievements]);
 
   const isUnlocked = (achievementKey: string) => {
     return userAchievements.some((ua) => ua.achievement_key === achievementKey);

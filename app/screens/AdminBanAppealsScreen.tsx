@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -27,16 +27,16 @@ export default function AdminBanAppealsScreen() {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [adminNotes, setAdminNotes] = useState('');
 
-  useEffect(() => {
-    fetchAppeals();
-  }, [selectedFilter]);
-
-  const fetchAppeals = async () => {
+  const fetchAppeals = useCallback(async () => {
     setIsLoading(true);
     const data = await automatedSafetyService.getBanAppeals(selectedFilter);
     setAppeals(data);
     setIsLoading(false);
-  };
+  }, [selectedFilter]);
+
+  useEffect(() => {
+    fetchAppeals();
+  }, [fetchAppeals]);
 
   const handleReviewAppeal = async (status: 'approved' | 'rejected') => {
     if (!selectedAppeal || !user) return;

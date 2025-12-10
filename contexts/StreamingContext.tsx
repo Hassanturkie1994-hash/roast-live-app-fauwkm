@@ -38,9 +38,10 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
 
   // Cleanup timer on unmount
   useEffect(() => {
+    const currentTimer = timerRef.current;
     return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
+      if (currentTimer) {
+        clearInterval(currentTimer);
       }
     };
   }, []);
