@@ -1,6 +1,14 @@
 
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Dimensions,
+  Animated,
+  Image,
+} from 'react-native';
 import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import { StreamGuestSeat } from '@/app/services/streamGuestService';
@@ -10,17 +18,21 @@ interface GuestSeatGridProps {
   hostAvatarUrl?: string | null;
   guests: StreamGuestSeat[];
   isHost?: boolean;
-  onGuestPress?: (guest: StreamGuestSeat) => void;
+  onGuestLongPress?: (guest: StreamGuestSeat) => void;
+  onHostLongPress?: () => void;
+  onEmptySeatPress?: () => void;
 }
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 export default function GuestSeatGrid({
   hostName,
   hostAvatarUrl,
   guests,
   isHost = false,
-  onGuestPress,
+  onGuestLongPress,
+  onHostLongPress,
+  onEmptySeatPress,
 }: GuestSeatGridProps) {
   const activeGuests = guests.filter((g) => !g.left_at);
   const totalParticipants = activeGuests.length + 1; // +1 for host
@@ -28,9 +40,9 @@ export default function GuestSeatGrid({
   // Determine grid layout based on number of participants
   const getGridLayout = () => {
     if (totalParticipants === 1) {
-      return { columns: 1, rows: 1 }; // Just host
+      return { columns: 1, rows: 1 }; // Just host (fullscreen)
     } else if (totalParticipants === 2) {
-      return { columns: 2, rows: 1 }; // Side by side
+      return { columns: 1, rows: 2 }; // Split view (host top)
     } else if (totalParticipants <= 4) {
       return { columns: 2, rows: 2 }; // 2x2 grid
     } else if (totalParticipants <= 6) {
@@ -41,101 +53,177 @@ export default function GuestSeatGrid({
   };
 
   const layout = getGridLayout();
-  const cellWidth = (width - 32) / layout.columns;
-  const cellHeight = cellWidth * 1.2;
+  const cellWidth = (width - 16) / layout.columns;
+  const cellHeight = totalParticipants === 1 ? height * 0.7 : (height * 0.7) / layout.rows;
 
   const renderParticipant = (
-    participant: { name: string; avatarUrl?: string | null; isHost: boolean; guest?: StreamGuestSeat },
+    participant: {
+      name: string;
+      avatarUrl?: string | null;
+      isHost: boolean;
+      guest?: StreamGuestSeat;
+    },
     index: number
   ) => {
     const isHostCell = participant.isHost;
     const guest = participant.guest;
+    const scaleAnim = useRef(new Animated.Value(0)).current;
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+      // Animate in
+      Animated.parallel([
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          tension: 50,
+          friction: 7,
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }, []);
+
+    const handleLongPress = () => {
+      if (isHostCell && onHostLongPress) {
+        onHostLongPress();
+      } else if (guest && onGuestLongPress) {
+        onGuestLongPress(guest);
+      }
+    };
 
     return (
-      <TouchableOpacity
+      <Animated.View
         key={index}
         style={[
           styles.cell,
           {
             width: cellWidth - 8,
-            height: cellHeight,
+            height: cellHeight - 8,
+            transform: [{ scale: scaleAnim }],
+            opacity: fadeAnim,
           },
           isHostCell && styles.hostCell,
+          guest && !guest.camera_enabled && styles.cellDimmed,
         ]}
-        onPress={() => guest && onGuestPress && onGuestPress(guest)}
-        disabled={!guest || !onGuestPress}
       >
-        <View style={styles.cellContent}>
-          {/* Avatar placeholder */}
-          <View style={styles.avatarPlaceholder}>
-            <IconSymbol
-              ios_icon_name="person.fill"
-              android_material_icon_name="person"
-              size={32}
-              color={colors.textSecondary}
-            />
-          </View>
-
-          {/* Name */}
-          <Text style={styles.participantName} numberOfLines={1}>
-            {participant.name}
-          </Text>
-
-          {/* Status indicators */}
-          <View style={styles.statusRow}>
-            {guest && (
-              <>
-                {/* Mic status */}
-                <View
-                  style={[
-                    styles.statusBadge,
-                    !guest.mic_enabled && styles.statusBadgeOff,
-                  ]}
-                >
+        <TouchableOpacity
+          style={styles.cellTouchable}
+          onLongPress={handleLongPress}
+          delayLongPress={500}
+          activeOpacity={0.8}
+        >
+          <View style={styles.cellContent}>
+            {/* Avatar */}
+            <View style={styles.avatarContainer}>
+              {participant.avatarUrl ? (
+                <Image source={{ uri: participant.avatarUrl }} style={styles.avatar} />
+              ) : (
+                <View style={styles.avatarPlaceholder}>
                   <IconSymbol
-                    ios_icon_name={guest.mic_enabled ? 'mic.fill' : 'mic.slash.fill'}
-                    android_material_icon_name={guest.mic_enabled ? 'mic' : 'mic_off'}
-                    size={12}
-                    color={colors.text}
+                    ios_icon_name="person.fill"
+                    android_material_icon_name="person"
+                    size={totalParticipants <= 2 ? 48 : 32}
+                    color={colors.textSecondary}
                   />
                 </View>
+              )}
+            </View>
 
-                {/* Camera status */}
-                <View
-                  style={[
-                    styles.statusBadge,
-                    !guest.camera_enabled && styles.statusBadgeOff,
-                  ]}
-                >
-                  <IconSymbol
-                    ios_icon_name={guest.camera_enabled ? 'video.fill' : 'video.slash.fill'}
-                    android_material_icon_name={guest.camera_enabled ? 'videocam' : 'videocam_off'}
-                    size={12}
-                    color={colors.text}
-                  />
-                </View>
+            {/* Name */}
+            <Text style={styles.participantName} numberOfLines={1}>
+              {participant.name}
+            </Text>
 
-                {/* Moderator badge */}
-                {guest.is_moderator && (
-                  <View style={styles.moderatorBadge}>
+            {/* Status indicators */}
+            <View style={styles.statusRow}>
+              {guest && (
+                <>
+                  {/* Mic status */}
+                  <View
+                    style={[
+                      styles.statusBadge,
+                      !guest.mic_enabled && styles.statusBadgeOff,
+                    ]}
+                  >
                     <IconSymbol
-                      ios_icon_name="shield.fill"
-                      android_material_icon_name="shield"
+                      ios_icon_name={guest.mic_enabled ? 'mic.fill' : 'mic.slash.fill'}
+                      android_material_icon_name={guest.mic_enabled ? 'mic' : 'mic_off'}
                       size={12}
                       color={colors.text}
                     />
                   </View>
-                )}
-              </>
+
+                  {/* Camera status */}
+                  <View
+                    style={[
+                      styles.statusBadge,
+                      !guest.camera_enabled && styles.statusBadgeOff,
+                    ]}
+                  >
+                    <IconSymbol
+                      ios_icon_name={guest.camera_enabled ? 'video.fill' : 'video.slash.fill'}
+                      android_material_icon_name={
+                        guest.camera_enabled ? 'videocam' : 'videocam_off'
+                      }
+                      size={12}
+                      color={colors.text}
+                    />
+                  </View>
+
+                  {/* Moderator badge */}
+                  {guest.is_moderator && (
+                    <View style={styles.moderatorBadge}>
+                      <IconSymbol
+                        ios_icon_name="shield.fill"
+                        android_material_icon_name="shield"
+                        size={12}
+                        color={colors.text}
+                      />
+                    </View>
+                  )}
+                </>
+              )}
+            </View>
+
+            {/* Host badge */}
+            {isHostCell && (
+              <View style={styles.hostBadge}>
+                <Text style={styles.hostBadgeText}>LIVE HOST</Text>
+              </View>
             )}
           </View>
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  };
 
-          {/* Host badge */}
-          {isHostCell && (
-            <View style={styles.hostBadge}>
-              <Text style={styles.hostBadgeText}>HOST</Text>
-            </View>
-          )}
+  const renderEmptySeat = (index: number) => {
+    return (
+      <TouchableOpacity
+        key={`empty-${index}`}
+        style={[
+          styles.cell,
+          styles.emptyCell,
+          {
+            width: cellWidth - 8,
+            height: cellHeight - 8,
+          },
+        ]}
+        onPress={onEmptySeatPress}
+      >
+        <View style={styles.emptyCellContent}>
+          <IconSymbol
+            ios_icon_name="person.badge.plus.fill"
+            android_material_icon_name="person_add"
+            size={32}
+            color={colors.textSecondary}
+          />
+          <Text style={styles.emptyCellText}>Seat available</Text>
+          <Text style={styles.emptyCellSubtext}>Tap to invite viewer</Text>
         </View>
       </TouchableOpacity>
     );
@@ -152,10 +240,14 @@ export default function GuestSeatGrid({
     })),
   ];
 
+  // Add empty seats if host
+  const emptySeatsCount = isHost ? Math.min(9 - activeGuests.length, layout.columns * layout.rows - participants.length) : 0;
+
   return (
     <View style={styles.container}>
-      <View style={[styles.grid, { flexDirection: 'row', flexWrap: 'wrap' }]}>
+      <View style={styles.grid}>
         {participants.map((participant, index) => renderParticipant(participant, index))}
+        {isHost && Array.from({ length: emptySeatsCount }).map((_, index) => renderEmptySeat(index))}
       </View>
     </View>
   );
@@ -166,7 +258,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   grid: {
-    padding: 16,
+    flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: 8,
     gap: 8,
   },
   cell: {
@@ -181,11 +276,26 @@ const styles = StyleSheet.create({
     borderColor: colors.gradientEnd,
     borderWidth: 3,
   },
+  cellDimmed: {
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+  },
+  cellTouchable: {
+    flex: 1,
+  },
   cellContent: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 12,
+  },
+  avatarContainer: {
+    marginBottom: 8,
+  },
+  avatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: colors.backgroundAlt,
   },
   avatarPlaceholder: {
     width: 60,
@@ -194,7 +304,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.backgroundAlt,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
   },
   participantName: {
     fontSize: 14,
@@ -225,15 +334,36 @@ const styles = StyleSheet.create({
   hostBadge: {
     position: 'absolute',
     top: 8,
-    right: 8,
+    left: 8,
     backgroundColor: colors.gradientEnd,
     borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
   hostBadgeText: {
     fontSize: 10,
     fontWeight: '800',
     color: colors.text,
+  },
+  emptyCell: {
+    borderStyle: 'dashed',
+    borderColor: colors.textSecondary,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  emptyCellContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+  },
+  emptyCellText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  emptyCellSubtext: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: colors.textSecondary,
   },
 });

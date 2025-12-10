@@ -10,7 +10,7 @@ interface GuestSelfControlsProps {
   cameraEnabled: boolean;
   onToggleMic: () => void;
   onToggleCamera: () => void;
-  onLeave: () => void;
+  onLeaveSeat: () => void;
 }
 
 export default function GuestSelfControls({
@@ -18,7 +18,7 @@ export default function GuestSelfControls({
   cameraEnabled,
   onToggleMic,
   onToggleCamera,
-  onLeave,
+  onLeaveSeat,
 }: GuestSelfControlsProps) {
   return (
     <View style={styles.container}>
@@ -33,7 +33,9 @@ export default function GuestSelfControls({
             size={24}
             color={colors.text}
           />
-          <Text style={styles.controlLabel}>{micEnabled ? 'Mute' : 'Unmute'}</Text>
+          <Text style={styles.controlButtonText}>
+            {micEnabled ? 'Mute' : 'Unmute'}
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -46,12 +48,18 @@ export default function GuestSelfControls({
             size={24}
             color={colors.text}
           />
-          <Text style={styles.controlLabel}>{cameraEnabled ? 'Camera Off' : 'Camera On'}</Text>
+          <Text style={styles.controlButtonText}>
+            {cameraEnabled ? 'Camera Off' : 'Camera On'}
+          </Text>
         </TouchableOpacity>
-      </View>
 
-      <View style={styles.leaveButtonContainer}>
-        <GradientButton title="LEAVE STREAM" onPress={onLeave} size="medium" />
+        <View style={styles.leaveButtonContainer}>
+          <GradientButton
+            title="LEAVE SEAT"
+            onPress={onLeaveSeat}
+            size="small"
+          />
+        </View>
       </View>
     </View>
   );
@@ -62,7 +70,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderRadius: 16,
     padding: 16,
-    gap: 16,
   },
   controls: {
     flexDirection: 'row',
@@ -70,25 +77,25 @@ const styles = StyleSheet.create({
   },
   controlButton: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.backgroundAlt,
-    borderColor: colors.border,
+    backgroundColor: 'rgba(0, 255, 0, 0.2)',
+    borderColor: 'rgba(0, 255, 0, 0.5)',
     borderWidth: 1,
     borderRadius: 12,
-    paddingVertical: 16,
-    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    gap: 6,
   },
   controlButtonOff: {
-    backgroundColor: 'rgba(164, 0, 40, 0.2)',
-    borderColor: colors.gradientEnd,
+    backgroundColor: 'rgba(255, 0, 0, 0.2)',
+    borderColor: 'rgba(255, 0, 0, 0.5)',
   },
-  controlLabel: {
+  controlButtonText: {
     fontSize: 12,
     fontWeight: '700',
     color: colors.text,
   },
   leaveButtonContainer: {
-    width: '100%',
+    flex: 1,
   },
 });

@@ -135,7 +135,9 @@ class StreamGuestService {
         return { success: false, error: 'User already has a pending invitation' };
       }
 
-      // Create invitation
+      // Create invitation with 20 second expiration
+      const expiresAt = new Date(Date.now() + 20000).toISOString();
+      
       const { data: invitation, error } = await supabase
         .from('stream_guest_invitations')
         .insert({
@@ -144,6 +146,7 @@ class StreamGuestService {
           invitee_id: inviteeId,
           seat_index: seatIndex,
           status: 'pending',
+          expires_at: expiresAt,
         })
         .select()
         .single();
@@ -152,6 +155,28 @@ class StreamGuestService {
         console.error('Error creating invitation:', error);
         return { success: false, error: error.message };
       }
+
+      // Get inviter profile for notification
+      const { data: inviterProfile } = await supabase
+        .from('profiles')
+        .select('display_name')
+        .eq('id', inviterId)
+        .single();
+
+      // Send socket event to invitee
+      const channel = supabase.channel(`user:${inviteeId}:invitations`);
+      await channel.send({
+        type: 'broadcast',
+        event: 'invitation_received',
+        payload: {
+          invitationId: invitation.id,
+          hostId: inviterId,
+          hostName: inviterProfile?.display_name || 'Host',
+          streamId: streamId,
+          seatIndex: seatIndex,
+          expirationTime: expiresAt,
+        },
+      });
 
       // Send notification to invitee
       await supabase.from('notifications').insert({
@@ -203,6 +228,17 @@ class StreamGuestService {
         return { success: false, error: 'Invitation has expired' };
       }
 
+      // Check if seats are locked
+      const { data: stream } = await supabase
+        .from('streams')
+        .select('seats_locked')
+        .eq('id', invitation.stream_id)
+        .single();
+
+      if (stream?.seats_locked) {
+        return { success: false, error: 'Seats are currently locked' };
+      }
+
       // Create guest seat
       const { data: seat, error: seatError } = await supabase
         .from('stream_guest_seats')
@@ -240,6 +276,18 @@ class StreamGuestService {
         seat.profiles?.display_name || 'Guest'
       );
 
+      // Send socket event to host and all viewers
+      const channel = supabase.channel(`stream:${invitation.stream_id}:guest_events`);
+      await channel.send({
+        type: 'broadcast',
+        event: 'guest_joined',
+        payload: {
+          userId: userId,
+          displayName: seat.profiles?.display_name || 'Guest',
+          seatIndex: invitation.seat_index,
+        },
+      });
+
       return { success: true, seat };
     } catch (error) {
       console.error('Error in acceptInvitation:', error);
@@ -255,6 +303,14 @@ class StreamGuestService {
    */
   async declineInvitation(invitationId: string, userId: string): Promise<boolean> {
     try {
+      // Get invitation details
+      const { data: invitation } = await supabase
+        .from('stream_guest_invitations')
+        .select('*, profiles!stream_guest_invitations_invitee_id_fkey(display_name)')
+        .eq('id', invitationId)
+        .eq('invitee_id', userId)
+        .single();
+
       const { error } = await supabase
         .from('stream_guest_invitations')
         .update({
@@ -267,6 +323,29 @@ class StreamGuestService {
       if (error) {
         console.error('Error declining invitation:', error);
         return false;
+      }
+
+      // Send system message to host
+      if (invitation) {
+        const displayName = invitation.profiles?.display_name || 'User';
+        await this.logGuestEvent(
+          invitation.stream_id,
+          userId,
+          'declined_invitation',
+          displayName,
+          { message: `${displayName} declined invitation` }
+        );
+
+        // Send socket event to host
+        const channel = supabase.channel(`stream:${invitation.stream_id}:guest_events`);
+        await channel.send({
+          type: 'broadcast',
+          event: 'invitation_declined',
+          payload: {
+            userId: userId,
+            displayName: displayName,
+          },
+        });
       }
 
       return true;
@@ -314,6 +393,18 @@ class StreamGuestService {
         'left_live',
         seat.profiles?.display_name || 'Guest'
       );
+
+      // Send socket event
+      const channel = supabase.channel(`stream:${streamId}:guest_events`);
+      await channel.send({
+        type: 'broadcast',
+        event: 'guest_left',
+        payload: {
+          userId: userId,
+          displayName: seat.profiles?.display_name || 'Guest',
+          seatIndex: seat.seat_index,
+        },
+      });
 
       return true;
     } catch (error) {
@@ -373,6 +464,18 @@ class StreamGuestService {
         seat.profiles?.display_name || 'Guest'
       );
 
+      // Send socket event
+      const channel = supabase.channel(`stream:${streamId}:guest_events`);
+      await channel.send({
+        type: 'broadcast',
+        event: 'guest_removed',
+        payload: {
+          userId: userId,
+          displayName: seat.profiles?.display_name || 'Guest',
+          seatIndex: seat.seat_index,
+        },
+      });
+
       return true;
     } catch (error) {
       console.error('Error in removeGuest:', error);
@@ -421,6 +524,18 @@ class StreamGuestService {
         seat.profiles?.display_name || 'Guest'
       );
 
+      // Send socket event
+      const channel = supabase.channel(`stream:${streamId}:guest_events`);
+      await channel.send({
+        type: 'broadcast',
+        event: 'guest_mic_updated',
+        payload: {
+          userId: userId,
+          micEnabled: micEnabled,
+          seatIndex: seat.seat_index,
+        },
+      });
+
       return true;
     } catch (error) {
       console.error('Error in updateMicStatus:', error);
@@ -468,6 +583,18 @@ class StreamGuestService {
         cameraEnabled ? 'enabled_camera' : 'disabled_camera',
         seat.profiles?.display_name || 'Guest'
       );
+
+      // Send socket event
+      const channel = supabase.channel(`stream:${streamId}:guest_events`);
+      await channel.send({
+        type: 'broadcast',
+        event: 'guest_camera_updated',
+        payload: {
+          userId: userId,
+          cameraEnabled: cameraEnabled,
+          seatIndex: seat.seat_index,
+        },
+      });
 
       return true;
     } catch (error) {
@@ -530,6 +657,18 @@ class StreamGuestService {
         seat.profiles?.display_name || 'Guest'
       );
 
+      // Send socket event
+      const channel = supabase.channel(`stream:${streamId}:guest_events`);
+      await channel.send({
+        type: 'broadcast',
+        event: 'guest_moderator_updated',
+        payload: {
+          userId: userId,
+          isModerator: isModerator,
+          seatIndex: seat.seat_index,
+        },
+      });
+
       return true;
     } catch (error) {
       console.error('Error in toggleModeratorStatus:', error);
@@ -563,6 +702,16 @@ class StreamGuestService {
         console.error('Error toggling seats lock:', error);
         return false;
       }
+
+      // Send socket event
+      const channel = supabase.channel(`stream:${streamId}:guest_events`);
+      await channel.send({
+        type: 'broadcast',
+        event: 'seats_lock_updated',
+        payload: {
+          locked: locked,
+        },
+      });
 
       return true;
     } catch (error) {
@@ -623,6 +772,17 @@ class StreamGuestService {
         .from('stream_guest_seats')
         .update({ seat_index: seatIndex1 })
         .eq('id', seat2.id);
+
+      // Send socket event
+      const channel = supabase.channel(`stream:${streamId}:guest_events`);
+      await channel.send({
+        type: 'broadcast',
+        event: 'seats_swapped',
+        payload: {
+          seatIndex1: seatIndex1,
+          seatIndex2: seatIndex2,
+        },
+      });
 
       return true;
     } catch (error) {
@@ -697,6 +857,26 @@ class StreamGuestService {
   }
 
   /**
+   * Get pending invitations for a user
+   */
+  async getPendingInvitations(userId: string): Promise<StreamGuestInvitation[]> {
+    const { data, error } = await supabase
+      .from('stream_guest_invitations')
+      .select('*')
+      .eq('invitee_id', userId)
+      .eq('status', 'pending')
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false});
+
+    if (error) {
+      console.error('Error fetching pending invitations:', error);
+      return [];
+    }
+
+    return data || [];
+  }
+
+  /**
    * Subscribe to guest seat changes
    */
   subscribeToGuestSeats(streamId: string, callback: (payload: any) => void) {
@@ -731,6 +911,77 @@ class StreamGuestService {
           table: 'stream_guest_events',
           filter: `stream_id=eq.${streamId}`,
         },
+        callback
+      )
+      .on(
+        'broadcast',
+        { event: 'guest_joined' },
+        callback
+      )
+      .on(
+        'broadcast',
+        { event: 'guest_left' },
+        callback
+      )
+      .on(
+        'broadcast',
+        { event: 'guest_removed' },
+        callback
+      )
+      .on(
+        'broadcast',
+        { event: 'invitation_declined' },
+        callback
+      )
+      .on(
+        'broadcast',
+        { event: 'guest_mic_updated' },
+        callback
+      )
+      .on(
+        'broadcast',
+        { event: 'guest_camera_updated' },
+        callback
+      )
+      .on(
+        'broadcast',
+        { event: 'guest_moderator_updated' },
+        callback
+      )
+      .on(
+        'broadcast',
+        { event: 'seats_lock_updated' },
+        callback
+      )
+      .on(
+        'broadcast',
+        { event: 'seats_swapped' },
+        callback
+      )
+      .subscribe();
+
+    return channel;
+  }
+
+  /**
+   * Subscribe to invitations for a specific user
+   */
+  subscribeToInvitations(userId: string, callback: (payload: any) => void) {
+    const channel = supabase
+      .channel(`user:${userId}:invitations`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'stream_guest_invitations',
+          filter: `invitee_id=eq.${userId}`,
+        },
+        callback
+      )
+      .on(
+        'broadcast',
+        { event: 'invitation_received' },
         callback
       )
       .subscribe();
