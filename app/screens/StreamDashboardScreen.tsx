@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
   Image,
   RefreshControl,
-} from 'react';
+} from 'react-native';
 import { router } from 'expo-router';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
