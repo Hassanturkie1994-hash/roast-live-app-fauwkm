@@ -233,16 +233,16 @@ export default function AccountSettingsScreen() {
 
           <TouchableOpacity 
             style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
-            onPress={handleChangePassword}
+            onPress={() => router.push('/screens/AccountSecurityScreen')}
           >
             <View style={styles.settingLeft}>
               <IconSymbol
-                ios_icon_name="lock.fill"
-                android_material_icon_name="lock"
+                ios_icon_name="shield.fill"
+                android_material_icon_name="security"
                 size={20}
                 color={colors.text}
               />
-              <Text style={[styles.settingText, { color: colors.text }]}>Change Password</Text>
+              <Text style={[styles.settingText, { color: colors.text }]}>Account Security</Text>
             </View>
             <IconSymbol
               ios_icon_name="chevron.right"
@@ -254,16 +254,16 @@ export default function AccountSettingsScreen() {
 
           <TouchableOpacity 
             style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
-            onPress={handleEnable2FA}
+            onPress={() => router.push('/screens/AppealsViolationsScreen')}
           >
             <View style={styles.settingLeft}>
               <IconSymbol
-                ios_icon_name="shield.fill"
-                android_material_icon_name="security"
+                ios_icon_name="doc.text.fill"
+                android_material_icon_name="description"
                 size={20}
                 color={colors.text}
               />
-              <Text style={[styles.settingText, { color: colors.text }]}>Enable 2FA</Text>
+              <Text style={[styles.settingText, { color: colors.text }]}>Appeals & Violations</Text>
             </View>
             <IconSymbol
               ios_icon_name="chevron.right"
@@ -285,6 +285,53 @@ export default function AccountSettingsScreen() {
                 color={colors.brandPrimary}
               />
               <Text style={[styles.settingText, styles.dangerText, { color: colors.brandPrimary }]}>Logout</Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="chevron_right"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+        </View>
+
+        {/* Legal Section */}
+        <View style={[styles.section, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>📄 Legal & Privacy</Text>
+
+          <TouchableOpacity 
+            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
+            onPress={() => router.push('/screens/TermsOfServiceScreen')}
+          >
+            <View style={styles.settingLeft}>
+              <IconSymbol
+                ios_icon_name="doc.text.fill"
+                android_material_icon_name="description"
+                size={20}
+                color={colors.text}
+              />
+              <Text style={[styles.settingText, { color: colors.text }]}>Terms of Service</Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="chevron_right"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
+            onPress={() => router.push('/screens/PrivacyPolicyScreen')}
+          >
+            <View style={styles.settingLeft}>
+              <IconSymbol
+                ios_icon_name="hand.raised.fill"
+                android_material_icon_name="privacy_tip"
+                size={20}
+                color={colors.text}
+              />
+              <Text style={[styles.settingText, { color: colors.text }]}>Privacy Policy</Text>
             </View>
             <IconSymbol
               ios_icon_name="chevron.right"
