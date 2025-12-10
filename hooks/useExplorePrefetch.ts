@@ -124,7 +124,8 @@ export function useExplorePrefetch(options: UseExplorePrefetchOptions = {}) {
       // Cleanup on unmount
       clearCache();
     };
-  }, [enabled, prefetchNextPage, clearCache]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled]);
 
   return {
     prefetchThumbnails,

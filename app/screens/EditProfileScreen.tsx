@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   ScrollView,
@@ -35,11 +35,11 @@ export default function EditProfileScreen() {
       setUsername(profile.username || '');
       setBio(profile.bio || '');
       setAvatarUrl(profile.avatar_url);
-      setBannerUrl(profile.banner_url);
+      setBannerUrl(profile.banner_url || null);
     }
   }, [profile]);
 
-  const checkUsernameUnique = async (newUsername: string): Promise<boolean> => {
+  const checkUsernameUnique = useCallback(async (newUsername: string): Promise<boolean> => {
     if (newUsername === profile?.username) return true;
 
     const { data, error } = await supabase
@@ -54,9 +54,9 @@ export default function EditProfileScreen() {
     }
 
     return !data;
-  };
+  }, [profile?.username]);
 
-  const pickImage = async (type: 'avatar' | 'banner') => {
+  const pickImage = useCallback(async (type: 'avatar' | 'banner') => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
@@ -71,9 +71,9 @@ export default function EditProfileScreen() {
         setBannerUrl(result.assets[0].uri);
       }
     }
-  };
+  }, []);
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     if (!user) return;
 
     // Validation
@@ -161,7 +161,7 @@ export default function EditProfileScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, displayName, username, bio, avatarUrl, bannerUrl, checkUsernameUnique, refreshProfile]);
 
   return (
     <View style={commonStyles.container}>

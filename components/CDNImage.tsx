@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Image, ImageProps, View, ActivityIndicator, StyleSheet } from 'react-native';
 import { cdnService } from '@/app/services/cdnService';
 
@@ -39,11 +39,25 @@ export function CDNImage({
   const [error, setError] = useState(false);
   const [useFallback, setUseFallback] = useState(false);
 
-  useEffect(() => {
-    loadImage();
-  }, [source, type]);
+  // Memoize handleImageError to prevent recreation on every render
+  const handleImageError = useCallback((err: any) => {
+    console.warn('CDN image failed, trying fallback:', err);
+    
+    if (!useFallback) {
+      // Try fallback URL
+      const sourceUrl = typeof source === 'string' ? source : source.uri;
+      const fallback = fallbackSource || cdnService.getFallbackUrl(sourceUrl);
+      setImageUrl(fallback);
+      setUseFallback(true);
+      setError(false);
+    } else {
+      setError(true);
+      onError?.(err);
+    }
+  }, [useFallback, source, fallbackSource, onError]);
 
-  const loadImage = async () => {
+  // Memoize loadImage to prevent recreation on every render
+  const loadImage = useCallback(async () => {
     try {
       setLoading(true);
       setError(false);
@@ -70,33 +84,21 @@ export function CDNImage({
     } finally {
       setLoading(false);
     }
-  };
+  }, [source, type, handleImageError]);
 
-  const handleImageError = (err: any) => {
-    console.warn('CDN image failed, trying fallback:', err);
-    
-    if (!useFallback) {
-      // Try fallback URL
-      const sourceUrl = typeof source === 'string' ? source : source.uri;
-      const fallback = fallbackSource || cdnService.getFallbackUrl(sourceUrl);
-      setImageUrl(fallback);
-      setUseFallback(true);
-      setError(false);
-    } else {
-      setError(true);
-      onError?.(err);
-    }
-  };
+  useEffect(() => {
+    loadImage();
+  }, [loadImage]);
 
-  const handleLoadStart = () => {
+  const handleLoadStart = useCallback(() => {
     setLoading(true);
     onLoadStart?.();
-  };
+  }, [onLoadStart]);
 
-  const handleLoadEnd = () => {
+  const handleLoadEnd = useCallback(() => {
     setLoading(false);
     onLoadEnd?.();
-  };
+  }, [onLoadEnd]);
 
   if (error && !useFallback) {
     return (

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -31,19 +31,8 @@ export default function SearchScreen() {
   });
   const [activeTab, setActiveTab] = useState<'all' | 'users' | 'posts' | 'streams'>('all');
 
-  useEffect(() => {
-    if (searchQuery.length > 0) {
-      const delaySearch = setTimeout(() => {
-        performSearch();
-      }, 300);
-
-      return () => clearTimeout(delaySearch);
-    } else {
-      setResults({ users: [], posts: [], streams: [] });
-    }
-  }, [searchQuery]);
-
-  const performSearch = async () => {
+  // Memoize search function to prevent recreation on every render
+  const performSearch = useCallback(async () => {
     setLoading(true);
     try {
       const result = await searchService.searchAll(searchQuery);
@@ -55,24 +44,36 @@ export default function SearchScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [searchQuery]);
 
-  const handleUserPress = (userId: string) => {
+  useEffect(() => {
+    if (searchQuery.length > 0) {
+      const delaySearch = setTimeout(() => {
+        performSearch();
+      }, 300);
+
+      return () => clearTimeout(delaySearch);
+    } else {
+      setResults({ users: [], posts: [], streams: [] });
+    }
+  }, [searchQuery, performSearch]);
+
+  const handleUserPress = useCallback((userId: string) => {
     router.push(`/screens/UserProfileScreen?userId=${userId}`);
-  };
+  }, []);
 
-  const handlePostPress = (postId: string) => {
+  const handlePostPress = useCallback((postId: string) => {
     router.push(`/screens/PostDetailScreen?postId=${postId}`);
-  };
+  }, []);
 
-  const handleStreamPress = (streamId: string) => {
+  const handleStreamPress = useCallback((streamId: string) => {
     router.push({
       pathname: '/live-player',
       params: { streamId },
     });
-  };
+  }, []);
 
-  const renderUsers = () => {
+  const renderUsers = useCallback(() => {
     const users = results.users;
     if (users.length === 0) return null;
 
@@ -107,9 +108,9 @@ export default function SearchScreen() {
         ))}
       </View>
     );
-  };
+  }, [results.users, handleUserPress]);
 
-  const renderPosts = () => {
+  const renderPosts = useCallback(() => {
     const posts = results.posts;
     if (posts.length === 0) return null;
 
@@ -143,9 +144,9 @@ export default function SearchScreen() {
         </View>
       </View>
     );
-  };
+  }, [results.posts, handlePostPress]);
 
-  const renderStreams = () => {
+  const renderStreams = useCallback(() => {
     const streams = results.streams;
     if (streams.length === 0) return null;
 
@@ -181,7 +182,7 @@ export default function SearchScreen() {
         ))}
       </View>
     );
-  };
+  }, [results.streams, handleStreamPress]);
 
   return (
     <View style={commonStyles.container}>
