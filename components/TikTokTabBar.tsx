@@ -116,7 +116,7 @@ export default function TikTokTabBar({ isStreaming = false }: TikTokTabBarProps)
             >
               <IconSymbol
                 ios_icon_name={isActive('/(tabs)/(home)') ? 'house.fill' : 'house'}
-                android_material_icon_name="home"
+                android_material_icon_name={isActive('/(tabs)/(home)') ? 'home' : 'home-outline'}
                 size={28}
                 color={isActive('/(tabs)/(home)') ? colors.tabIconActiveColor : colors.tabIconColor}
               />
@@ -132,7 +132,7 @@ export default function TikTokTabBar({ isStreaming = false }: TikTokTabBarProps)
             >
               <IconSymbol
                 ios_icon_name={isActive('/explore') ? 'magnifyingglass.circle.fill' : 'magnifyingglass'}
-                android_material_icon_name="search"
+                android_material_icon_name={isActive('/explore') ? 'search' : 'search-outline'}
                 size={28}
                 color={isActive('/explore') ? colors.tabIconActiveColor : colors.tabIconColor}
               />
@@ -170,7 +170,7 @@ export default function TikTokTabBar({ isStreaming = false }: TikTokTabBarProps)
               <View style={styles.iconContainer}>
                 <IconSymbol
                   ios_icon_name={isActive('/inbox') ? 'tray.fill' : 'tray'}
-                  android_material_icon_name="inbox"
+                  android_material_icon_name={isActive('/inbox') ? 'mail' : 'mail-outline'}
                   size={28}
                   color={isActive('/inbox') ? colors.tabIconActiveColor : colors.tabIconColor}
                 />
@@ -192,7 +192,7 @@ export default function TikTokTabBar({ isStreaming = false }: TikTokTabBarProps)
             >
               <IconSymbol
                 ios_icon_name={isActive('/profile') ? 'person.fill' : 'person'}
-                android_material_icon_name="person"
+                android_material_icon_name={isActive('/profile') ? 'person' : 'person-outline'}
                 size={28}
                 color={isActive('/profile') ? colors.tabIconActiveColor : colors.tabIconColor}
               />
