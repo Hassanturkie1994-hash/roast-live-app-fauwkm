@@ -1,6 +1,7 @@
 
 import { supabase } from '@/app/integrations/supabase/client';
 import { pushNotificationService } from '@/app/services/pushNotificationService';
+import { analyticsService } from './analyticsService';
 
 export type GiftTier = 'A' | 'B' | 'C';
 
@@ -236,6 +237,11 @@ export async function purchaseGift(
         amount: giftPrice,
       }
     );
+
+    // Track gift in analytics if it's during a livestream
+    if (livestreamId) {
+      await analyticsService.updateViewerGiftAmount(livestreamId, senderId, giftPrice);
+    }
 
     // Return gift event with additional info for broadcasting
     const giftEventWithInfo = {

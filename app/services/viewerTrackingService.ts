@@ -1,5 +1,6 @@
 
 import { supabase } from '@/app/integrations/supabase/client';
+import { analyticsService } from './analyticsService';
 
 export interface StreamViewer {
   id: string;
@@ -52,12 +53,35 @@ class ViewerTrackingService {
         return { success: false, error: error.message };
       }
 
+      // Track in analytics system
+      const { data: followData } = await supabase
+        .from('followers')
+        .select('id')
+        .eq('follower_id', userId)
+        .eq('following_id', (await supabase.from('streams').select('broadcaster_id').eq('id', streamId).single()).data?.broadcaster_id)
+        .single();
+
+      const deviceType = this.detectDeviceType();
+      await analyticsService.trackViewerJoin(streamId, userId, deviceType, !!followData);
+
       console.log('✅ Viewer join tracked successfully');
       return { success: true, data: data as StreamViewer };
     } catch (error) {
       console.error('Error in joinStream:', error);
       return { success: false, error: 'Failed to track viewer join' };
     }
+  }
+
+  // Detect device type
+  private detectDeviceType(): 'mobile' | 'web' | 'tablet' {
+    // Simple device detection - can be enhanced
+    if (typeof window !== 'undefined') {
+      const width = window.innerWidth;
+      if (width < 768) return 'mobile';
+      if (width < 1024) return 'tablet';
+      return 'web';
+    }
+    return 'mobile'; // Default for React Native
   }
 
   // Track when a viewer leaves a stream
@@ -77,6 +101,9 @@ class ViewerTrackingService {
         console.error('Error tracking viewer leave:', error);
         return { success: false, error: error.message };
       }
+
+      // Track in analytics system
+      await analyticsService.trackViewerLeave(streamId, userId);
 
       console.log('✅ Viewer leave tracked successfully');
       return { success: true };
@@ -183,6 +210,9 @@ class ViewerTrackingService {
         console.error('Error cleaning up viewer sessions:', error);
         return { success: false, error: error.message };
       }
+
+      // Calculate and store stream metrics
+      await analyticsService.calculateStreamMetrics(streamId);
 
       console.log('✅ Viewer sessions cleaned up successfully');
       return { success: true };

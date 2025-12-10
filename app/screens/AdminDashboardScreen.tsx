@@ -417,6 +417,35 @@ export default function AdminDashboardScreen() {
               color={colors.textSecondary}
             />
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => router.push('/screens/AdminAnalyticsScreen' as any)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.actionButtonContent}>
+              <IconSymbol
+                ios_icon_name="chart.bar.xaxis"
+                android_material_icon_name="bar_chart"
+                size={24}
+                color="#3498DB"
+              />
+              <View style={styles.actionButtonText}>
+                <Text style={[styles.actionButtonTitle, { color: colors.text }]}>
+                  Analytics Dashboard
+                </Text>
+                <Text style={[styles.actionButtonSubtitle, { color: colors.textSecondary }]}>
+                  View platform analytics and insights
+                </Text>
+              </View>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="chevron_right"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </View>

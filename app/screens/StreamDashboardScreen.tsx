@@ -186,6 +186,19 @@ export default function StreamDashboardScreen() {
           <View style={styles.quickActions}>
             <TouchableOpacity
               style={styles.quickActionButton}
+              onPress={() => router.push('/screens/PerformanceGrowthScreen' as any)}
+            >
+              <IconSymbol
+                ios_icon_name="chart.bar.xaxis"
+                android_material_icon_name="bar_chart"
+                size={32}
+                color={colors.gradientEnd}
+              />
+              <Text style={styles.quickActionText}>Analytics</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.quickActionButton}
               onPress={() => router.push('/screens/FanClubManagementScreen' as any)}
             >
               <IconSymbol
@@ -608,10 +621,11 @@ const styles = StyleSheet.create({
   },
   quickActions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 16,
   },
   quickActionButton: {
-    flex: 1,
+    width: '30%',
     backgroundColor: colors.backgroundAlt,
     borderRadius: 12,
     paddingVertical: 20,
