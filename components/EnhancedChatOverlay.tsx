@@ -4,66 +4,44 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
-  Animated,
-  TouchableOpacity,
-  Alert,
-  Modal,
   TextInput,
+  TouchableOpacity,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  Animated,
 } from 'react-native';
 import { colors } from '@/styles/commonStyles';
+import { IconSymbol } from '@/components/IconSymbol';
+import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/app/integrations/supabase/client';
 import { Tables } from '@/app/integrations/supabase/types';
-import { IconSymbol } from '@/components/IconSymbol';
-import { moderationService } from '@/app/services/moderationService';
-import { fanClubService } from '@/app/services/fanClubService';
-import { userBlockingService } from '@/app/services/userBlockingService';
-import UserActionModal from '@/components/UserActionModal';
+import { streamGuestService, GuestEvent } from '@/app/services/streamGuestService';
 
 type ChatMessage = Tables<'chat_messages'> & {
   users: Tables<'users'>;
-  likes?: number;
-  isLiked?: boolean;
 };
-
-type GiftMessage = {
-  id: string;
-  type: 'gift';
-  sender_username: string;
-  gift_name: string;
-  amount: number;
-  timestamp: number;
-};
-
-type Message = (ChatMessage & { type: 'chat' }) | GiftMessage;
 
 interface EnhancedChatOverlayProps {
   streamId: string;
-  streamerId: string;
-  currentUserId: string;
-  isStreamer: boolean;
-  isModerator: boolean;
+  isBroadcaster?: boolean;
+  streamDelay?: number;
 }
 
 export default function EnhancedChatOverlay({
   streamId,
-  streamerId,
-  currentUserId,
-  isStreamer,
-  isModerator,
+  isBroadcaster = false,
+  streamDelay = 0,
 }: EnhancedChatOverlayProps) {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [pinnedComment, setPinnedComment] = useState<any>(null);
-  const [selectedMessage, setSelectedMessage] = useState<ChatMessage | null>(null);
-  const [showUserActionModal, setShowUserActionModal] = useState(false);
-  const [showCommentActions, setShowCommentActions] = useState(false);
-  const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set());
-  const [fanClubBadges, setFanClubBadges] = useState<Map<string, { color: string; name: string }>>(new Map());
-  const [moderatorIds, setModeratorIds] = useState<Set<string>>(new Set());
+  const { user } = useAuth();
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [guestEvents, setGuestEvents] = useState<GuestEvent[]>([]);
+  const [messageText, setMessageText] = useState('');
+  const [isExpanded, setIsExpanded] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
-  const chatChannelRef = useRef<any>(null);
-  const giftChannelRef = useRef<any>(null);
-  const moderationChannelRef = useRef<any>(null);
+  const channelRef = useRef<any>(null);
+  const guestEventsChannelRef = useRef<any>(null);
+  const fadeAnim = useRef(new Animated.Value(1)).current;
 
   const fetchRecentMessages = useCallback(async () => {
     try {
@@ -72,729 +50,353 @@ export default function EnhancedChatOverlay({
         .select('*, users(*)')
         .eq('stream_id', streamId)
         .order('created_at', { ascending: true })
-        .limit(30);
+        .limit(50);
 
       if (error) {
         console.error('Error fetching chat messages:', error);
         return;
       }
 
-      const chatMessages: Message[] = (data as ChatMessage[]).map((msg) => ({
-        ...msg,
-        type: 'chat' as const,
-      }));
-
-      setMessages(chatMessages);
+      setMessages(data as ChatMessage[]);
     } catch (error) {
       console.error('Error in fetchRecentMessages:', error);
     }
   }, [streamId]);
 
-  const fetchPinnedComment = useCallback(async () => {
-    const pinned = await moderationService.getPinnedComment(streamId);
-    setPinnedComment(pinned);
+  const fetchRecentGuestEvents = useCallback(async () => {
+    try {
+      const events = await streamGuestService.getGuestEvents(streamId, 20);
+      setGuestEvents(events);
+    } catch (error) {
+      console.error('Error fetching guest events:', error);
+    }
   }, [streamId]);
-
-  const fetchBlockedUsers = useCallback(async () => {
-    const blocked = await userBlockingService.getBlockedUsers(currentUserId);
-    const blockedIds = new Set(blocked.map((b) => b.blocked_id));
-    setBlockedUserIds(blockedIds);
-  }, [currentUserId]);
-
-  const fetchFanClubBadges = useCallback(async () => {
-    // Get fan club info
-    const fanClub = await fanClubService.getFanClub(streamerId);
-    if (!fanClub) return;
-
-    // Get all members
-    const members = await fanClubService.getFanClubMembers(fanClub.id);
-    const badgeMap = new Map();
-    members.forEach((member) => {
-      badgeMap.set(member.user_id, {
-        color: fanClub.badge_color,
-        name: fanClub.club_name,
-      });
-    });
-    setFanClubBadges(badgeMap);
-  }, [streamerId]);
-
-  const fetchModerators = useCallback(async () => {
-    const mods = await moderationService.getModerators(streamerId);
-    const modIds = new Set(mods.map((m) => m.user_id));
-    setModeratorIds(modIds);
-  }, [streamerId]);
 
   const subscribeToChat = useCallback(() => {
-    const chatChannel = supabase
+    const channel = supabase
       .channel(`stream:${streamId}:chat`)
-      .on('broadcast', { event: 'message' }, (payload) => {
-        console.log('💬 New chat message received:', payload);
-        const newMessage: Message = {
-          ...payload.payload,
-          type: 'chat' as const,
-        };
-        
-        // Don't show messages from blocked users
-        if (blockedUserIds.has(newMessage.user_id)) {
-          return;
-        }
-        
+      .on('broadcast', { event: 'message' }, async (payload) => {
+        console.log('New chat message:', payload);
+        const newMessage = payload.payload as ChatMessage;
         setMessages((prev) => [...prev, newMessage]);
+
+        Animated.sequence([
+          Animated.timing(fadeAnim, {
+            toValue: 0.5,
+            duration: 100,
+            useNativeDriver: true,
+          }),
+          Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 200,
+            useNativeDriver: true,
+          }),
+        ]).start();
       })
       .subscribe();
 
-    chatChannelRef.current = chatChannel;
-  }, [streamId, blockedUserIds]);
+    channelRef.current = channel;
+  }, [streamId, fadeAnim]);
 
-  const subscribeToGifts = useCallback(() => {
-    const giftChannel = supabase
-      .channel(`stream:${streamId}:gifts`)
-      .on('broadcast', { event: 'gift_sent' }, (payload) => {
-        console.log('🎁 Gift notification received:', payload);
-        const giftData = payload.payload;
-        const giftMessage: GiftMessage = {
-          id: `gift-${Date.now()}-${Math.random()}`,
-          type: 'gift',
-          sender_username: giftData.sender_username,
-          gift_name: giftData.gift_name,
-          amount: giftData.amount,
-          timestamp: Date.now(),
-        };
-        setMessages((prev) => [...prev, giftMessage]);
-      })
-      .subscribe();
+  const subscribeToGuestEvents = useCallback(() => {
+    const channel = streamGuestService.subscribeToGuestEvents(streamId, (payload) => {
+      console.log('New guest event:', payload);
+      const newEvent = payload.new as GuestEvent;
+      setGuestEvents((prev) => [newEvent, ...prev].slice(0, 20));
+    });
 
-    giftChannelRef.current = giftChannel;
+    guestEventsChannelRef.current = channel;
   }, [streamId]);
-
-  const subscribeToModeration = useCallback(() => {
-    const moderationChannel = supabase
-      .channel(`stream:${streamId}:moderation`)
-      .on('broadcast', { event: 'comment_removed' }, (payload) => {
-        console.log('🗑️ Comment removed:', payload);
-        setMessages((prev) => prev.filter((msg) => msg.id !== payload.payload.message_id));
-      })
-      .on('broadcast', { event: 'comment_pinned' }, () => {
-        console.log('📌 Comment pinned');
-        fetchPinnedComment();
-      })
-      .on('broadcast', { event: 'comment_unpinned' }, () => {
-        console.log('📌 Comment unpinned');
-        setPinnedComment(null);
-      })
-      .on('broadcast', { event: 'user_banned' }, (payload) => {
-        console.log('🚫 User banned:', payload);
-        // Remove all messages from banned user
-        setMessages((prev) => prev.filter((msg) => {
-          if (msg.type === 'chat') {
-            return msg.user_id !== payload.payload.user_id;
-          }
-          return true;
-        }));
-      })
-      .subscribe();
-
-    moderationChannelRef.current = moderationChannel;
-  }, [streamId, fetchPinnedComment]);
 
   useEffect(() => {
     fetchRecentMessages();
-    fetchPinnedComment();
-    fetchBlockedUsers();
-    fetchFanClubBadges();
-    fetchModerators();
+    fetchRecentGuestEvents();
     subscribeToChat();
-    subscribeToGifts();
-    subscribeToModeration();
+    subscribeToGuestEvents();
 
     return () => {
-      if (chatChannelRef.current) {
-        supabase.removeChannel(chatChannelRef.current);
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
       }
-      if (giftChannelRef.current) {
-        supabase.removeChannel(giftChannelRef.current);
-      }
-      if (moderationChannelRef.current) {
-        supabase.removeChannel(moderationChannelRef.current);
+      if (guestEventsChannelRef.current) {
+        supabase.removeChannel(guestEventsChannelRef.current);
       }
     };
-  }, [
-    fetchRecentMessages,
-    fetchPinnedComment,
-    fetchBlockedUsers,
-    fetchFanClubBadges,
-    fetchModerators,
-    subscribeToChat,
-    subscribeToGifts,
-    subscribeToModeration,
-  ]);
+  }, [fetchRecentMessages, fetchRecentGuestEvents, subscribeToChat, subscribeToGuestEvents]);
 
   useEffect(() => {
-    if (messages.length > 0) {
+    if (messages.length > 0 || guestEvents.length > 0) {
       setTimeout(() => {
         scrollViewRef.current?.scrollToEnd({ animated: true });
       }, 100);
     }
-  }, [messages]);
+  }, [messages, guestEvents]);
 
-  const handleLongPressMessage = (msg: ChatMessage) => {
-    if (msg.user_id === currentUserId) return; // Can't moderate yourself
-    
-    setSelectedMessage(msg);
-    setShowCommentActions(true);
-  };
+  const handleSendMessage = async () => {
+    if (!messageText.trim() || !user) return;
 
-  const handleLikeComment = async (messageId: string) => {
-    const result = await moderationService.likeComment(messageId, currentUserId);
-    if (result.success) {
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === messageId && msg.type === 'chat'
-            ? { ...msg, likes: (msg.likes || 0) + 1, isLiked: true }
-            : msg
-        )
-      );
+    try {
+      const { data: newMessage, error } = await supabase
+        .from('chat_messages')
+        .insert({
+          stream_id: streamId,
+          user_id: user.id,
+          message: messageText.trim(),
+        })
+        .select('*, users(*)')
+        .single();
+
+      if (error) {
+        console.error('Error sending message:', error);
+        return;
+      }
+
+      if (channelRef.current && newMessage) {
+        await channelRef.current.send({
+          type: 'broadcast',
+          event: 'message',
+          payload: newMessage,
+        });
+      }
+
+      setMessageText('');
+    } catch (error) {
+      console.error('Error in handleSendMessage:', error);
     }
   };
 
-  const handleReportComment = async (msg: ChatMessage) => {
-    Alert.alert(
-      'Report Comment',
-      'Why are you reporting this comment?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Spam',
-          onPress: async () => {
-            const result = await userBlockingService.reportComment(msg.id, currentUserId, 'Spam');
-            if (result.success) {
-              Alert.alert('Success', 'Comment reported successfully');
-            } else {
-              Alert.alert('Error', result.error || 'Failed to report comment');
-            }
-          },
-        },
-        {
-          text: 'Harassment',
-          onPress: async () => {
-            const result = await userBlockingService.reportComment(msg.id, currentUserId, 'Harassment');
-            if (result.success) {
-              Alert.alert('Success', 'Comment reported successfully');
-            } else {
-              Alert.alert('Error', result.error || 'Failed to report comment');
-            }
-          },
-        },
-        {
-          text: 'Inappropriate',
-          onPress: async () => {
-            const result = await userBlockingService.reportComment(msg.id, currentUserId, 'Inappropriate');
-            if (result.success) {
-              Alert.alert('Success', 'Comment reported successfully');
-            } else {
-              Alert.alert('Error', result.error || 'Failed to report comment');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleBlockUser = async (msg: ChatMessage) => {
-    Alert.alert(
-      'Block User',
-      `Are you sure you want to block ${msg.users.display_name}? You won't see their messages anymore.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Block',
-          style: 'destructive',
-          onPress: async () => {
-            const result = await userBlockingService.blockUser(currentUserId, msg.user_id);
-            if (result.success) {
-              Alert.alert('Success', `${msg.users.display_name} has been blocked`);
-              setBlockedUserIds((prev) => new Set(prev).add(msg.user_id));
-              // Remove all messages from this user
-              setMessages((prev) => prev.filter((m) => m.type === 'gift' || m.user_id !== msg.user_id));
-            } else {
-              Alert.alert('Error', result.error || 'Failed to block user');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleRemoveComment = async (messageId: string) => {
-    Alert.alert(
-      'Remove Comment',
-      'Are you sure you want to remove this comment?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            const result = await moderationService.removeComment(messageId);
-            if (result.success) {
-              setMessages((prev) => prev.filter((msg) => msg.id !== messageId));
-              
-              // Broadcast removal
-              await supabase.channel(`stream:${streamId}:moderation`).send({
-                type: 'broadcast',
-                event: 'comment_removed',
-                payload: { message_id: messageId },
-              });
-            } else {
-              Alert.alert('Error', result.error || 'Failed to remove comment');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handlePinComment = async (msg: ChatMessage) => {
-    Alert.alert(
-      'Pin Comment',
-      'How long do you want to pin this comment?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: '1 minute', onPress: () => pinComment(msg, 1) },
-        { text: '3 minutes', onPress: () => pinComment(msg, 3) },
-        { text: '5 minutes', onPress: () => pinComment(msg, 5) },
-      ]
-    );
-  };
-
-  const pinComment = async (msg: ChatMessage, duration: number) => {
-    const result = await moderationService.pinComment(streamId, msg.id, currentUserId, duration);
-    if (result.success) {
-      fetchPinnedComment();
-      
-      // Broadcast pin
-      await supabase.channel(`stream:${streamId}:moderation`).send({
-        type: 'broadcast',
-        event: 'comment_pinned',
-        payload: { message_id: msg.id },
-      });
-    } else {
-      Alert.alert('Error', result.error || 'Failed to pin comment');
-    }
-  };
-
-  const handleUnpinComment = async () => {
-    const result = await moderationService.unpinComment(streamId);
-    if (result.success) {
-      setPinnedComment(null);
-      
-      // Broadcast unpin
-      await supabase.channel(`stream:${streamId}:moderation`).send({
-        type: 'broadcast',
-        event: 'comment_unpinned',
-        payload: {},
-      });
-    } else {
-      Alert.alert('Error', result.error || 'Failed to unpin comment');
-    }
-  };
-
-  const renderBadges = (userId: string) => {
-    const badges = [];
-
-    // Moderator badge
-    if (moderatorIds.has(userId)) {
-      badges.push(
-        <View key="mod" style={[styles.badge, { backgroundColor: colors.gradientEnd }]}>
-          <IconSymbol
-            ios_icon_name="shield.fill"
-            android_material_icon_name="shield"
-            size={10}
-            color={colors.text}
-          />
-          <Text style={styles.badgeText}>MOD</Text>
-        </View>
-      );
-    }
-
-    // Fan club badge
-    const fanBadge = fanClubBadges.get(userId);
-    if (fanBadge) {
-      badges.push(
-        <View key="fan" style={[styles.badge, { backgroundColor: fanBadge.color }]}>
-          <IconSymbol
-            ios_icon_name="heart.fill"
-            android_material_icon_name="favorite"
-            size={10}
-            color={colors.text}
-          />
-          <Text style={styles.badgeText}>{fanBadge.name}</Text>
-        </View>
-      );
-    }
-
-    return badges.length > 0 ? <View style={styles.badgeContainer}>{badges}</View> : null;
-  };
-
-  const renderMessage = (msg: Message, index: number) => {
-    if (msg.type === 'gift') {
-      return (
-        <FadingMessage key={msg.id} delay={3000}>
-          <View style={styles.giftMessage}>
-            <View style={styles.giftIconContainer}>
-              <IconSymbol
-                ios_icon_name="gift.fill"
-                android_material_icon_name="card_giftcard"
-                size={16}
-                color="#FFD700"
-              />
-            </View>
-            <Text style={styles.giftText}>
-              <Text style={styles.giftSender}>{msg.sender_username}</Text>
-              {' sent '}
-              <Text style={styles.giftName}>{msg.gift_name}</Text>
-              {' worth '}
-              <Text style={styles.giftAmount}>{msg.amount} kr!</Text>
-            </Text>
-          </View>
-        </FadingMessage>
-      );
-    }
-
-    // Don't render messages from blocked users
-    if (blockedUserIds.has(msg.user_id)) {
-      return null;
-    }
-
-    const canModerate = isStreamer || isModerator;
-    const isOwnMessage = msg.user_id === currentUserId;
+  const renderGuestEvent = (event: GuestEvent, index: number) => {
+    const getEventMessage = () => {
+      switch (event.event_type) {
+        case 'joined_live':
+          return `${event.display_name} joined live`;
+        case 'left_live':
+          return `${event.display_name} left live`;
+        case 'muted_mic':
+          return `${event.display_name} muted mic`;
+        case 'unmuted_mic':
+          return `${event.display_name} unmuted mic`;
+        case 'enabled_camera':
+          return `${event.display_name} enabled camera`;
+        case 'disabled_camera':
+          return `${event.display_name} disabled camera`;
+        case 'host_removed':
+          return `Host removed ${event.display_name}`;
+        case 'became_moderator':
+          return `${event.display_name} is now moderator`;
+        case 'removed_moderator':
+          return `${event.display_name} is no longer moderator`;
+        case 'kicked':
+          return `${event.display_name} was kicked`;
+        case 'timed_out':
+          return `${event.display_name} was timed out`;
+        default:
+          return `${event.display_name} ${event.event_type}`;
+      }
+    };
 
     return (
-      <FadingMessage key={index} delay={5000}>
-        <TouchableOpacity
-          style={styles.chatMessage}
-          onLongPress={() => handleLongPressMessage(msg)}
-          delayLongPress={500}
-        >
-          <View style={styles.chatHeader}>
-            <Text style={styles.chatUsername}>{msg.users.display_name}</Text>
-            {renderBadges(msg.user_id)}
-          </View>
-          <Text style={styles.chatText}>{msg.message}</Text>
-          
-          <View style={styles.messageActions}>
-            {/* Like button (everyone can like) */}
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => handleLikeComment(msg.id)}
-            >
-              <IconSymbol
-                ios_icon_name={msg.isLiked ? "heart.fill" : "heart"}
-                android_material_icon_name={msg.isLiked ? "favorite" : "favorite_border"}
-                size={14}
-                color={msg.isLiked ? colors.gradientEnd : colors.text}
-              />
-              {msg.likes && msg.likes > 0 && (
-                <Text style={styles.likeCount}>{msg.likes}</Text>
-              )}
-            </TouchableOpacity>
-
-            {/* Report button (viewers only, not own messages) */}
-            {!canModerate && !isOwnMessage && (
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => handleReportComment(msg)}
-              >
-                <IconSymbol
-                  ios_icon_name="flag"
-                  android_material_icon_name="flag"
-                  size={14}
-                  color={colors.text}
-                />
-              </TouchableOpacity>
-            )}
-
-            {/* Block button (viewers only, not own messages) */}
-            {!canModerate && !isOwnMessage && (
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => handleBlockUser(msg)}
-              >
-                <IconSymbol
-                  ios_icon_name="hand.raised"
-                  android_material_icon_name="block"
-                  size={14}
-                  color={colors.gradientEnd}
-                />
-              </TouchableOpacity>
-            )}
-
-            {/* Moderator actions */}
-            {canModerate && !isOwnMessage && (
-              <>
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={() => handlePinComment(msg)}
-                >
-                  <IconSymbol
-                    ios_icon_name="pin"
-                    android_material_icon_name="push_pin"
-                    size={14}
-                    color={colors.text}
-                  />
-                </TouchableOpacity>
-                
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={() => handleRemoveComment(msg.id)}
-                >
-                  <IconSymbol
-                    ios_icon_name="trash"
-                    android_material_icon_name="delete"
-                    size={14}
-                    color={colors.gradientEnd}
-                  />
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
-        </TouchableOpacity>
-      </FadingMessage>
+      <View key={`event-${index}`} style={styles.guestEvent}>
+        <IconSymbol
+          ios_icon_name="person.2.fill"
+          android_material_icon_name="people"
+          size={14}
+          color={colors.gradientEnd}
+        />
+        <Text style={styles.guestEventText}>{getEventMessage()}</Text>
+      </View>
     );
   };
 
-  return (
-    <View style={styles.container}>
-      {/* Pinned Comment */}
-      {pinnedComment && (
-        <View style={styles.pinnedContainer}>
-          <View style={styles.pinnedHeader}>
-            <IconSymbol
-              ios_icon_name="pin.fill"
-              android_material_icon_name="push_pin"
-              size={16}
-              color={colors.gradientEnd}
-            />
-            <Text style={styles.pinnedLabel}>Pinned</Text>
-            {(isStreamer || isModerator) && (
-              <TouchableOpacity onPress={handleUnpinComment}>
-                <IconSymbol
-                  ios_icon_name="xmark"
-                  android_material_icon_name="close"
-                  size={16}
-                  color={colors.text}
-                />
-              </TouchableOpacity>
-            )}
-          </View>
-          <View style={styles.chatHeader}>
-            <Text style={styles.pinnedUsername}>
-              {pinnedComment.chat_messages?.users?.display_name}
-            </Text>
-            {renderBadges(pinnedComment.chat_messages?.user_id)}
-          </View>
-          <Text style={styles.pinnedText}>{pinnedComment.chat_messages?.message}</Text>
-        </View>
-      )}
-
-      <ScrollView
-        ref={scrollViewRef}
-        style={styles.messagesContainer}
-        contentContainerStyle={styles.messagesContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {messages.slice(-15).map(renderMessage)}
-      </ScrollView>
-
-      {selectedMessage && (
-        <UserActionModal
-          visible={showUserActionModal}
-          onClose={() => {
-            setShowUserActionModal(false);
-            setSelectedMessage(null);
-          }}
-          userId={selectedMessage.user_id}
-          username={selectedMessage.users.display_name}
-          streamId={streamId}
-          streamerId={streamerId}
-          currentUserId={currentUserId}
-          isStreamer={isStreamer}
-          isModerator={isModerator}
-        />
-      )}
-    </View>
+  const renderMessage = (msg: ChatMessage, index: number) => (
+    <Animated.View
+      key={`msg-${index}`}
+      style={[
+        styles.chatMessage,
+        index === messages.length - 1 && { opacity: fadeAnim },
+      ]}
+    >
+      <Text style={styles.chatUsername}>{msg.users.display_name}:</Text>
+      <Text style={styles.chatText}>{msg.message}</Text>
+    </Animated.View>
   );
-}
 
-function FadingMessage({
-  children,
-  delay,
-}: {
-  children: React.ReactNode;
-  delay: number;
-}) {
-  const fadeAnim = useRef(new Animated.Value(1)).current;
+  // Combine and sort messages and events by timestamp
+  const combinedItems = [
+    ...messages.map((msg) => ({ type: 'message' as const, data: msg, timestamp: msg.created_at })),
+    ...guestEvents.map((event) => ({ type: 'event' as const, data: event, timestamp: event.created_at })),
+  ].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 1000,
-        useNativeDriver: true,
-      }).start();
-    }, delay);
-
-    return () => clearTimeout(timer);
-  }, [delay, fadeAnim]);
+  if (isBroadcaster) {
+    return (
+      <View style={styles.broadcasterChatContainer}>
+        <ScrollView
+          ref={scrollViewRef}
+          style={styles.broadcasterChatMessages}
+          contentContainerStyle={styles.chatMessagesContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {combinedItems.slice(-10).map((item, index) =>
+            item.type === 'message'
+              ? renderMessage(item.data as ChatMessage, index)
+              : renderGuestEvent(item.data as GuestEvent, index)
+          )}
+        </ScrollView>
+      </View>
+    );
+  }
 
   return (
-    <Animated.View style={{ opacity: fadeAnim }}>{children}</Animated.View>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={[styles.viewerChatContainer, isExpanded && styles.viewerChatExpanded]}
+    >
+      <TouchableOpacity
+        style={styles.chatToggle}
+        onPress={() => setIsExpanded(!isExpanded)}
+      >
+        <IconSymbol
+          ios_icon_name="bubble.left.fill"
+          android_material_icon_name="chat"
+          size={20}
+          color={colors.text}
+        />
+        <Text style={styles.chatToggleText}>
+          {isExpanded ? 'Hide Chat' : 'Show Chat'}
+        </Text>
+      </TouchableOpacity>
+
+      {isExpanded && (
+        <>
+          <ScrollView
+            ref={scrollViewRef}
+            style={styles.viewerChatMessages}
+            contentContainerStyle={styles.chatMessagesContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {combinedItems.map((item, index) =>
+              item.type === 'message'
+                ? renderMessage(item.data as ChatMessage, index)
+                : renderGuestEvent(item.data as GuestEvent, index)
+            )}
+          </ScrollView>
+
+          <View style={styles.chatInputContainer}>
+            <TextInput
+              style={styles.chatInput}
+              placeholder="Send a message..."
+              placeholderTextColor={colors.placeholder}
+              value={messageText}
+              onChangeText={setMessageText}
+              onSubmitEditing={handleSendMessage}
+              returnKeyType="send"
+            />
+            <TouchableOpacity style={styles.sendButton} onPress={handleSendMessage}>
+              <IconSymbol
+                ios_icon_name="paperplane.fill"
+                android_material_icon_name="send"
+                size={20}
+                color={colors.text}
+              />
+            </TouchableOpacity>
+          </View>
+        </>
+      )}
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  broadcasterChatContainer: {
     position: 'absolute',
     left: 16,
     bottom: 140,
-    width: '65%',
-    maxHeight: 400,
+    width: '55%',
+    maxHeight: 250,
   },
-  pinnedContainer: {
-    backgroundColor: 'rgba(227, 0, 82, 0.95)',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 8,
-    marginBottom: 8,
-    borderWidth: 2,
-    borderColor: '#FFD700',
+  broadcasterChatMessages: {
+    maxHeight: 250,
   },
-  pinnedHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
-  },
-  pinnedLabel: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: colors.text,
-    flex: 1,
-  },
-  pinnedUsername: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFD700',
-  },
-  pinnedText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.text,
-    marginTop: 4,
-  },
-  messagesContainer: {
-    flex: 1,
-  },
-  messagesContent: {
+  chatMessagesContent: {
     paddingBottom: 8,
   },
   chatMessage: {
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
     marginBottom: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.gradientEnd,
-  },
-  chatHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 2,
   },
   chatUsername: {
     fontSize: 12,
     fontWeight: '700',
     color: colors.gradientEnd,
-  },
-  badgeContainer: {
-    flexDirection: 'row',
-    gap: 4,
-  },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  badgeText: {
-    fontSize: 8,
-    fontWeight: '800',
-    color: colors.text,
+    marginBottom: 2,
   },
   chatText: {
     fontSize: 14,
     fontWeight: '400',
     color: colors.text,
-    lineHeight: 18,
   },
-  messageActions: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  actionButton: {
+  guestEvent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-  },
-  likeCount: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  giftMessage: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(227, 0, 82, 0.95)',
+    backgroundColor: 'rgba(164, 0, 40, 0.3)',
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 8,
     borderRadius: 8,
     marginBottom: 8,
-    borderWidth: 2,
-    borderColor: '#FFD700',
     gap: 8,
   },
-  giftIconContainer: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 215, 0, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
+  guestEventText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.text,
+    fontStyle: 'italic',
   },
-  giftText: {
-    flex: 1,
+  viewerChatContainer: {
+    position: 'absolute',
+    left: 16,
+    bottom: 120,
+    width: '60%',
+    maxHeight: 60,
+  },
+  viewerChatExpanded: {
+    maxHeight: 350,
+  },
+  chatToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    gap: 8,
+    marginBottom: 8,
+  },
+  chatToggleText: {
     fontSize: 14,
     fontWeight: '600',
     color: colors.text,
   },
-  giftSender: {
-    fontWeight: '800',
-    color: '#FFD700',
+  viewerChatMessages: {
+    maxHeight: 250,
+    marginBottom: 8,
   },
-  giftName: {
-    fontWeight: '800',
+  chatInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    borderRadius: 25,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  chatInput: {
+    flex: 1,
     color: colors.text,
+    fontSize: 14,
   },
-  giftAmount: {
-    fontWeight: '800',
-    color: '#FFD700',
+  sendButton: {
+    marginLeft: 8,
   },
 });
