@@ -4,6 +4,24 @@ import { View, StyleSheet, Platform, Text, Dimensions } from 'react-native';
 import { CameraView, CameraType } from 'expo-camera';
 import { colors } from '@/styles/commonStyles';
 
+// Import WebRTC for native platforms
+let RTCPeerConnection: any;
+let RTCSessionDescription: any;
+let mediaDevices: any;
+let RTCView: any;
+
+if (Platform.OS !== 'web') {
+  try {
+    const WebRTC = require('react-native-webrtc');
+    RTCPeerConnection = WebRTC.RTCPeerConnection;
+    RTCSessionDescription = WebRTC.RTCSessionDescription;
+    mediaDevices = WebRTC.mediaDevices;
+    RTCView = WebRTC.RTCView;
+  } catch (error) {
+    console.log('react-native-webrtc not available:', error);
+  }
+}
+
 interface WebRTCLivePublisherProps {
   rtcPublishUrl: string;
   facing?: CameraType;
@@ -33,12 +51,10 @@ const FALLBACK_HEIGHT = 1280;
  * - Aspect ratio: 9:16 (portrait mode)
  * - Framerate: 30-60 fps (device dependent)
  * 
- * Note: WebRTC streaming from React Native requires native modules.
- * For Expo Go and web, this will show the camera preview but won't
- * actually stream via WebRTC. For production native builds, you would
- * need to integrate a WebRTC library like react-native-webrtc.
- * 
- * Cloudflare WebRTC streaming uses WHIP (WebRTC-HTTP Ingestion Protocol).
+ * Native Build Support:
+ * - Uses react-native-webrtc for native iOS/Android builds
+ * - Uses browser WebRTC API for web
+ * - Cloudflare WebRTC streaming uses WHIP (WebRTC-HTTP Ingestion Protocol)
  */
 export default function WebRTCLivePublisher({
   rtcPublishUrl,
@@ -50,20 +66,124 @@ export default function WebRTCLivePublisher({
 }: WebRTCLivePublisherProps) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
-  const localStreamRef = useRef<MediaStream | null>(null);
+  const [localStream, setLocalStream] = useState<any>(null);
+  const peerConnectionRef = useRef<any>(null);
+  const localStreamRef = useRef<any>(null);
 
-  const startWebRTCStream = useCallback(async () => {
+  const startWebRTCStreamNative = useCallback(async () => {
     try {
+      if (!mediaDevices || !RTCPeerConnection) {
+        throw new Error('WebRTC not available on this platform');
+      }
+
+      console.log('🎬 Starting native WebRTC stream');
+
+      // Get user media (camera and microphone) with TikTok-style vertical settings
+      const stream = await mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: TARGET_WIDTH, min: FALLBACK_WIDTH },
+          height: { ideal: TARGET_HEIGHT, min: FALLBACK_HEIGHT },
+          aspectRatio: { ideal: ASPECT_RATIO },
+          frameRate: { ideal: 60, min: 30 },
+          facingMode: facing === 'front' ? 'user' : 'environment',
+        },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 48000,
+          channelCount: 2,
+        },
+      });
+
+      localStreamRef.current = stream;
+      setLocalStream(stream);
+
+      // Log actual video settings
+      const videoTrack = stream.getVideoTracks()[0];
+      const settings = videoTrack.getSettings();
+      console.log('📹 Native camera settings:', {
+        width: settings.width,
+        height: settings.height,
+        aspectRatio: settings.aspectRatio,
+        frameRate: settings.frameRate,
+        facingMode: settings.facingMode,
+      });
+
+      // Create RTCPeerConnection
+      const peerConnection = new RTCPeerConnection({
+        iceServers: [
+          { urls: 'stun:stun.cloudflare.com:3478' },
+        ],
+      });
+
+      peerConnectionRef.current = peerConnection;
+
+      // Add tracks to peer connection
+      stream.getTracks().forEach((track: any) => {
+        peerConnection.addTrack(track, stream);
+      });
+
+      // Create offer
+      const offer = await peerConnection.createOffer();
+      await peerConnection.setLocalDescription(offer);
+
+      // Send offer to Cloudflare using WHIP protocol
+      const response = await fetch(rtcPublishUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/sdp',
+        },
+        body: offer.sdp,
+      });
+
+      if (!response.ok) {
+        throw new Error(`WHIP request failed: ${response.status}`);
+      }
+
+      // Get answer from Cloudflare
+      const answerSdp = await response.text();
+      const answer = new RTCSessionDescription({
+        type: 'answer',
+        sdp: answerSdp,
+      });
+
+      await peerConnection.setRemoteDescription(answer);
+
+      setIsStreaming(true);
+      console.log('✅ Native WebRTC streaming started successfully');
+
+      if (onStreamStarted) {
+        onStreamStarted();
+      }
+
+      // Monitor connection state
+      peerConnection.onconnectionstatechange = () => {
+        console.log('Connection state:', peerConnection.connectionState);
+        if (peerConnection.connectionState === 'failed') {
+          const error = new Error('WebRTC connection failed');
+          setError(error.message);
+          if (onStreamError) {
+            onStreamError(error);
+          }
+        }
+      };
+    } catch (err) {
+      console.error('❌ Error starting native WebRTC stream:', err);
+      throw err;
+    }
+  }, [rtcPublishUrl, facing, onStreamStarted, onStreamError]);
+
+  const startWebRTCStreamWeb = useCallback(async () => {
+    try {
+      console.log('🎬 Starting web WebRTC stream');
+
       // Get user media (camera and microphone) with TikTok-style vertical settings
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          // Target Full HD vertical (1080x1920)
           width: { ideal: TARGET_WIDTH, min: FALLBACK_WIDTH },
           height: { ideal: TARGET_HEIGHT, min: FALLBACK_HEIGHT },
-          // Aspect ratio 9:16 (portrait mode)
           aspectRatio: { ideal: ASPECT_RATIO },
-          // Framerate 30-60 fps
           frameRate: { ideal: 60, min: 30 },
           facingMode: facing === 'front' ? 'user' : 'environment',
         },
@@ -81,7 +201,7 @@ export default function WebRTCLivePublisher({
       // Log actual video settings
       const videoTrack = stream.getVideoTracks()[0];
       const settings = videoTrack.getSettings();
-      console.log('📹 Camera settings:', {
+      console.log('📹 Web camera settings:', {
         width: settings.width,
         height: settings.height,
         aspectRatio: settings.aspectRatio,
@@ -130,7 +250,7 @@ export default function WebRTCLivePublisher({
       await peerConnection.setRemoteDescription(answer);
 
       setIsStreaming(true);
-      console.log('✅ WebRTC streaming started successfully');
+      console.log('✅ Web WebRTC streaming started successfully');
 
       if (onStreamStarted) {
         onStreamStarted();
@@ -148,7 +268,7 @@ export default function WebRTCLivePublisher({
         }
       };
     } catch (err) {
-      console.error('❌ Error starting WebRTC stream:', err);
+      console.error('❌ Error starting web WebRTC stream:', err);
       throw err;
     }
   }, [rtcPublishUrl, facing, onStreamStarted, onStreamError]);
@@ -157,18 +277,25 @@ export default function WebRTCLivePublisher({
     try {
       console.log('🎬 Initializing WebRTC stream to:', rtcPublishUrl);
 
-      // Check if WebRTC is available (web only for now)
-      if (Platform.OS === 'web' && typeof RTCPeerConnection !== 'undefined') {
-        await startWebRTCStream();
+      if (Platform.OS === 'web') {
+        // Web platform
+        if (typeof RTCPeerConnection !== 'undefined') {
+          await startWebRTCStreamWeb();
+        } else {
+          throw new Error('WebRTC not supported in this browser');
+        }
       } else {
-        // For native platforms, we need react-native-webrtc
-        console.log('📱 WebRTC not available on this platform');
-        setError('WebRTC streaming requires native build with react-native-webrtc');
-        
-        // For now, we'll just show the camera preview
-        // In production, you would integrate react-native-webrtc here
-        if (onStreamStarted) {
-          onStreamStarted();
+        // Native platforms (iOS/Android)
+        if (mediaDevices && RTCPeerConnection) {
+          await startWebRTCStreamNative();
+        } else {
+          console.log('📱 WebRTC native module not available, showing camera preview only');
+          setError('WebRTC streaming requires native build');
+          
+          // Still call onStreamStarted to allow camera preview
+          if (onStreamStarted) {
+            onStreamStarted();
+          }
         }
       }
     } catch (err) {
@@ -179,7 +306,7 @@ export default function WebRTCLivePublisher({
         onStreamError(error);
       }
     }
-  }, [rtcPublishUrl, startWebRTCStream, onStreamStarted, onStreamError]);
+  }, [rtcPublishUrl, startWebRTCStreamWeb, startWebRTCStreamNative, onStreamStarted, onStreamError]);
 
   useEffect(() => {
     if (rtcPublishUrl) {
@@ -196,7 +323,7 @@ export default function WebRTCLivePublisher({
 
     // Stop all tracks
     if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach((track) => {
+      localStreamRef.current.getTracks().forEach((track: any) => {
         track.stop();
       });
       localStreamRef.current = null;
@@ -209,9 +336,35 @@ export default function WebRTCLivePublisher({
     }
 
     setIsStreaming(false);
+    setLocalStream(null);
   };
 
-  // For native platforms, show camera preview with 9:16 aspect ratio
+  // For native platforms with WebRTC support, show RTCView
+  if (Platform.OS !== 'web' && RTCView && localStream) {
+    return (
+      <View style={styles.container}>
+        <RTCView
+          streamURL={localStream.toURL()}
+          style={styles.camera}
+          objectFit="cover"
+          mirror={facing === 'front'}
+        />
+        {isStreaming && (
+          <View style={styles.streamingIndicator}>
+            <View style={styles.streamingDot} />
+            <Text style={styles.streamingText}>Streaming via WebRTC</Text>
+          </View>
+        )}
+        {error && (
+          <View style={styles.errorOverlay}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        )}
+      </View>
+    );
+  }
+
+  // For native platforms without WebRTC or as fallback, show camera preview
   if (Platform.OS !== 'web') {
     return (
       <View style={styles.container}>
@@ -220,9 +373,7 @@ export default function WebRTCLivePublisher({
             style={styles.camera} 
             facing={facing}
             flash={flashMode}
-            // Enable high quality video
             videoQuality="1080p"
-            // Maintain 9:16 aspect ratio
             ratio="16:9"
           />
         ) : (
@@ -234,7 +385,7 @@ export default function WebRTCLivePublisher({
           <View style={styles.errorOverlay}>
             <Text style={styles.errorText}>{error}</Text>
             <Text style={styles.errorSubtext}>
-              Camera preview is shown. For WebRTC streaming, build a native app with react-native-webrtc.
+              Camera preview is shown. For WebRTC streaming, ensure react-native-webrtc is properly linked.
             </Text>
           </View>
         )}
@@ -270,7 +421,6 @@ const styles = StyleSheet.create({
   },
   camera: {
     flex: 1,
-    // Ensure camera fills screen edge-to-edge with 9:16 aspect ratio
     width: '100%',
     height: '100%',
   },

@@ -2,7 +2,7 @@
 {
   "expo": {
     "name": "Roast Live",
-    "slug": "Roast Live",
+    "slug": "roast-live-app-fauwkm",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/natively-dark.png",
@@ -15,10 +15,16 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.Natively",
+      "bundleIdentifier": "com.roastlive.roastlive",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
-      }
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Allow Roast Live to access your camera to broadcast live streams and create content.",
+        "NSMicrophoneUsageDescription": "Allow Roast Live to access your microphone to broadcast live streams with audio.",
+        "NSPhotoLibraryUsageDescription": "Allow Roast Live to access your photo library to share images and videos.",
+        "NSPhotoLibraryAddUsageDescription": "Allow Roast Live to save photos and videos to your library.",
+        "UIBackgroundModes": ["audio", "voip"]
+      },
+      "bitcode": false
     },
     "android": {
       "adaptiveIcon": {
@@ -30,7 +36,13 @@
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
-        "android.permission.WAKE_LOCK"
+        "android.permission.WAKE_LOCK",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.VIBRATE"
       ]
     },
     "web": {
@@ -48,9 +60,31 @@
           "microphonePermission": "Allow Roast Live to access your microphone to broadcast live streams.",
           "recordAudioAndroid": true
         }
-      ]
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Roast Live to access your photos to share images.",
+          "cameraPermission": "Allow Roast Live to access your camera to take photos."
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Allow Roast Live to access your microphone for audio recording."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/natively-dark.png",
+          "color": "#E30052",
+          "sounds": []
+        }
+      ],
+      "react-native-reanimated/plugin"
     ],
-    "scheme": "natively",
+    "scheme": "roastlive",
     "experiments": {
       "typedRoutes": true
     },
@@ -65,6 +99,5 @@
         "react-native-nodemediaclient"
       ]
     }
-  },
-  "scheme": "Roast Live"
+  }
 }
