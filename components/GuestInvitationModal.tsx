@@ -40,7 +40,11 @@ export default function GuestInvitationModal({
       const result = await streamGuestService.inviteGuest(streamId, hostId, inviteeId);
 
       if (result.success) {
-        Alert.alert('Invitation Sent', `${inviteeName} has been invited to join your live stream!`);
+        Alert.alert(
+          'Invitation Sent',
+          `${inviteeName} has been invited to join your live stream!\n\nThey have 20 seconds to accept.`,
+          [{ text: 'OK' }]
+        );
         onClose();
       } else {
         Alert.alert('Error', result.error || 'Failed to send invitation');
@@ -61,15 +65,15 @@ export default function GuestInvitationModal({
             <IconSymbol
               ios_icon_name="person.badge.plus.fill"
               android_material_icon_name="person_add"
-              size={32}
+              size={48}
               color={colors.gradientEnd}
             />
             <Text style={styles.title}>Invite to Join Live</Text>
           </View>
 
           <Text style={styles.message}>
-            Do you want to invite <Text style={styles.highlight}>{inviteeName}</Text> to join your
-            live stream as a guest?
+            Invite <Text style={styles.highlight}>{inviteeName}</Text> to join your live stream as
+            a guest?
           </Text>
 
           <View style={styles.infoBox}>
@@ -80,7 +84,8 @@ export default function GuestInvitationModal({
               color={colors.gradientEnd}
             />
             <Text style={styles.infoText}>
-              They will be able to appear on your stream with their camera and microphone.
+              They will be able to appear on your stream with their camera and microphone. The
+              invitation expires in 20 seconds.
             </Text>
           </View>
 
@@ -116,7 +121,7 @@ export default function GuestInvitationModal({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
@@ -134,7 +139,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   title: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '800',
     color: colors.text,
     textAlign: 'center',

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,14 +9,17 @@ import {
   FlatList,
   Image,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/app/integrations/supabase/client';
 import { Tables } from '@/app/integrations/supabase/types';
 import UserActionModal from '@/components/UserActionModal';
+import GuestInvitationModal from '@/components/GuestInvitationModal';
 import { fanClubService } from '@/app/services/fanClubService';
 import { moderationService } from '@/app/services/moderationService';
+import { streamGuestService } from '@/app/services/streamGuestService';
 
 interface ViewerListModalProps {
   visible: boolean;
@@ -50,27 +53,39 @@ export default function ViewerListModal({
   const [isLoading, setIsLoading] = useState(false);
   const [selectedViewer, setSelectedViewer] = useState<Viewer | null>(null);
   const [showUserActionModal, setShowUserActionModal] = useState(false);
+  const [showInvitationModal, setShowInvitationModal] = useState(false);
+  const [inviteeViewer, setInviteeViewer] = useState<Viewer | null>(null);
   const [fanClubBadges, setFanClubBadges] = useState<Map<string, { color: string; name: string }>>(new Map());
   const [moderatorIds, setModeratorIds] = useState<Set<string>>(new Set());
+  const [activeGuestIds, setActiveGuestIds] = useState<Set<string>>(new Set());
+  const [seatsLocked, setSeatsLocked] = useState(false);
+  const [activeGuestCount, setActiveGuestCount] = useState(0);
+  const [invitingUserId, setInvitingUserId] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    await Promise.all([
+      fetchViewers(),
+      fetchFanClubBadges(),
+      fetchModerators(),
+      fetchActiveGuests(),
+      fetchSeatsLockStatus(),
+    ]);
+  }, [streamId, streamerId]);
 
   useEffect(() => {
     if (visible) {
-      fetchViewers();
-      fetchFanClubBadges();
-      fetchModerators();
+      fetchData();
       
       // Auto-refresh viewer list every 5 seconds
-      const interval = setInterval(fetchViewers, 5000);
+      const interval = setInterval(fetchData, 5000);
       return () => clearInterval(interval);
     }
-  }, [visible, streamId]);
+  }, [visible, fetchData]);
 
   const fetchFanClubBadges = async () => {
-    // Get fan club info
     const fanClub = await fanClubService.getFanClub(streamerId);
     if (!fanClub) return;
 
-    // Get all members
     const members = await fanClubService.getFanClubMembers(fanClub.id);
     const badgeMap = new Map();
     members.forEach((member) => {
@@ -86,6 +101,31 @@ export default function ViewerListModal({
     const mods = await moderationService.getModerators(streamerId);
     const modIds = new Set(mods.map((m) => m.user_id));
     setModeratorIds(modIds);
+  };
+
+  const fetchActiveGuests = async () => {
+    try {
+      const activeGuests = await streamGuestService.getActiveGuestSeats(streamId);
+      const guestIds = new Set(activeGuests.map((g) => g.user_id).filter((id): id is string => id !== null));
+      setActiveGuestIds(guestIds);
+      setActiveGuestCount(activeGuests.length);
+    } catch (error) {
+      console.error('Error fetching active guests:', error);
+    }
+  };
+
+  const fetchSeatsLockStatus = async () => {
+    try {
+      const { data } = await supabase
+        .from('streams')
+        .select('seats_locked')
+        .eq('id', streamId)
+        .single();
+      
+      setSeatsLocked(data?.seats_locked || false);
+    } catch (error) {
+      console.error('Error fetching seats lock status:', error);
+    }
   };
 
   const fetchViewers = async () => {
@@ -118,8 +158,55 @@ export default function ViewerListModal({
     }
   };
 
+  const handleInvitePress = (viewer: Viewer) => {
+    if (!isStreamer) {
+      Alert.alert('Permission Denied', 'Only the host can invite guests.');
+      return;
+    }
+
+    if (seatsLocked) {
+      Alert.alert('Seats Locked', 'Guest seats are currently locked. Unlock them to invite viewers.');
+      return;
+    }
+
+    if (activeGuestCount >= 9) {
+      Alert.alert('Seats Full', 'Maximum guest seats are full (9/9). Remove a guest to invite someone new.');
+      return;
+    }
+
+    if (activeGuestIds.has(viewer.user_id)) {
+      Alert.alert('Already a Guest', 'This viewer is already a guest on your stream.');
+      return;
+    }
+
+    setInviteeViewer(viewer);
+    setShowInvitationModal(true);
+  };
+
+  const handleInvitationSent = () => {
+    setShowInvitationModal(false);
+    setInviteeViewer(null);
+    // Refresh active guests
+    fetchActiveGuests();
+  };
+
   const renderBadges = (userId: string) => {
     const badges = [];
+
+    // Guest badge
+    if (activeGuestIds.has(userId)) {
+      badges.push(
+        <View key="guest" style={[styles.badge, { backgroundColor: colors.gradientEnd }]}>
+          <IconSymbol
+            ios_icon_name="video.fill"
+            android_material_icon_name="videocam"
+            size={10}
+            color={colors.text}
+          />
+          <Text style={styles.badgeText}>GUEST</Text>
+        </View>
+      );
+    }
 
     // Moderator badge
     if (moderatorIds.has(userId)) {
@@ -155,47 +242,82 @@ export default function ViewerListModal({
     return badges.length > 0 ? <View style={styles.badgeContainer}>{badges}</View> : null;
   };
 
-  const renderViewer = ({ item }: { item: Viewer }) => (
-    <TouchableOpacity
-      style={styles.viewerItem}
-      onPress={() => handleViewerPress(item)}
-      disabled={!isStreamer && !isModerator}
-    >
-      <View style={styles.avatarContainer}>
-        {item.users.avatar_url ? (
-          <Image source={{ uri: item.users.avatar_url }} style={styles.avatar} />
-        ) : (
-          <View style={[styles.avatar, styles.avatarPlaceholder]}>
-            <IconSymbol
-              ios_icon_name="person.fill"
-              android_material_icon_name="person"
-              size={24}
-              color={colors.textSecondary}
-            />
-          </View>
-        )}
-      </View>
-      <View style={styles.viewerInfo}>
-        <View style={styles.viewerNameRow}>
-          <Text style={styles.viewerName}>{item.users.display_name}</Text>
-          {renderBadges(item.user_id)}
+  const renderViewer = ({ item }: { item: Viewer }) => {
+    const isGuest = activeGuestIds.has(item.user_id);
+    const canInvite = isStreamer && !isGuest && !seatsLocked && activeGuestCount < 9;
+    const isInviting = invitingUserId === item.user_id;
+
+    return (
+      <TouchableOpacity
+        style={styles.viewerItem}
+        onPress={() => handleViewerPress(item)}
+        disabled={!isStreamer && !isModerator}
+      >
+        <View style={styles.avatarContainer}>
+          {item.users.avatar_url ? (
+            <Image source={{ uri: item.users.avatar_url }} style={styles.avatar} />
+          ) : (
+            <View style={[styles.avatar, styles.avatarPlaceholder]}>
+              <IconSymbol
+                ios_icon_name="person.fill"
+                android_material_icon_name="person"
+                size={24}
+                color={colors.textSecondary}
+              />
+            </View>
+          )}
         </View>
-        <Text style={styles.viewerUsername}>@{item.users.username}</Text>
-      </View>
-      <View style={styles.liveIndicator}>
-        <View style={styles.liveDot} />
-        <Text style={styles.liveText}>Watching</Text>
-      </View>
-      {(isStreamer || isModerator) && (
-        <IconSymbol
-          ios_icon_name="chevron.right"
-          android_material_icon_name="chevron_right"
-          size={20}
-          color={colors.textSecondary}
-        />
-      )}
-    </TouchableOpacity>
-  );
+        <View style={styles.viewerInfo}>
+          <View style={styles.viewerNameRow}>
+            <Text style={styles.viewerName}>{item.users.display_name}</Text>
+            {renderBadges(item.user_id)}
+          </View>
+          <Text style={styles.viewerUsername}>@{item.users.username}</Text>
+        </View>
+        <View style={styles.viewerActions}>
+          {isGuest ? (
+            <View style={styles.guestIndicator}>
+              <View style={styles.liveDot} />
+              <Text style={styles.liveText}>Live</Text>
+            </View>
+          ) : canInvite ? (
+            <TouchableOpacity
+              style={[styles.inviteButton, isInviting && styles.inviteButtonDisabled]}
+              onPress={() => handleInvitePress(item)}
+              disabled={isInviting}
+            >
+              {isInviting ? (
+                <ActivityIndicator size="small" color={colors.text} />
+              ) : (
+                <>
+                  <IconSymbol
+                    ios_icon_name="person.badge.plus.fill"
+                    android_material_icon_name="person_add"
+                    size={16}
+                    color={colors.text}
+                  />
+                  <Text style={styles.inviteButtonText}>Invite</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.watchingIndicator}>
+              <View style={styles.liveDot} />
+              <Text style={styles.liveText}>Watching</Text>
+            </View>
+          )}
+        </View>
+        {(isStreamer || isModerator) && (
+          <IconSymbol
+            ios_icon_name="chevron.right"
+            android_material_icon_name="chevron_right"
+            size={20}
+            color={colors.textSecondary}
+          />
+        )}
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <Modal
@@ -225,6 +347,49 @@ export default function ViewerListModal({
               />
             </TouchableOpacity>
           </View>
+
+          {/* Guest Seats Status */}
+          {isStreamer && (
+            <View style={styles.guestSeatsStatus}>
+              <View style={styles.guestSeatsInfo}>
+                <IconSymbol
+                  ios_icon_name="person.3.fill"
+                  android_material_icon_name="people"
+                  size={20}
+                  color={colors.gradientEnd}
+                />
+                <Text style={styles.guestSeatsText}>
+                  Guest Seats: {activeGuestCount}/9
+                </Text>
+              </View>
+              {seatsLocked && (
+                <View style={styles.lockedBadge}>
+                  <IconSymbol
+                    ios_icon_name="lock.fill"
+                    android_material_icon_name="lock"
+                    size={14}
+                    color={colors.text}
+                  />
+                  <Text style={styles.lockedText}>Locked</Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Maximum Seats Warning */}
+          {isStreamer && activeGuestCount >= 9 && (
+            <View style={styles.warningBox}>
+              <IconSymbol
+                ios_icon_name="exclamationmark.triangle.fill"
+                android_material_icon_name="warning"
+                size={16}
+                color={colors.gradientEnd}
+              />
+              <Text style={styles.warningText}>
+                Maximum guest seats are full
+              </Text>
+            </View>
+          )}
 
           {isLoading && viewers.length === 0 ? (
             <View style={styles.loadingContainer}>
@@ -283,6 +448,20 @@ export default function ViewerListModal({
           isModerator={isModerator}
         />
       )}
+
+      {inviteeViewer && (
+        <GuestInvitationModal
+          visible={showInvitationModal}
+          onClose={() => {
+            setShowInvitationModal(false);
+            setInviteeViewer(null);
+          }}
+          streamId={streamId}
+          hostId={streamerId}
+          inviteeId={inviteeViewer.user_id}
+          inviteeName={inviteeViewer.users.display_name}
+        />
+      )}
     </Modal>
   );
 }
@@ -297,7 +476,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: '70%',
+    maxHeight: '80%',
     paddingTop: 20,
   },
   header: {
@@ -321,6 +500,55 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     padding: 8,
+  },
+  guestSeatsStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(164, 0, 40, 0.1)',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  guestSeatsInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  guestSeatsText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  lockedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(164, 0, 40, 0.3)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  lockedText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  warningBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(164, 0, 40, 0.15)',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  warningText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.text,
   },
   updateIndicator: {
     flexDirection: 'row',
@@ -366,6 +594,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     marginBottom: 2,
+    flexWrap: 'wrap',
   },
   viewerName: {
     fontSize: 16,
@@ -375,6 +604,7 @@ const styles = StyleSheet.create({
   badgeContainer: {
     flexDirection: 'row',
     gap: 4,
+    flexWrap: 'wrap',
   },
   badge: {
     flexDirection: 'row',
@@ -394,7 +624,19 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: colors.textSecondary,
   },
-  liveIndicator: {
+  viewerActions: {
+    marginRight: 8,
+  },
+  guestIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(164, 0, 40, 0.2)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  watchingIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -409,6 +651,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: colors.gradientEnd,
+  },
+  inviteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.gradientEnd,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  inviteButtonDisabled: {
+    opacity: 0.6,
+  },
+  inviteButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.text,
   },
   loadingContainer: {
     padding: 40,
