@@ -1,9 +1,10 @@
 
 module.exports = ({ config }) => {
-  // This tells EAS to not try to write to this dynamic config
+  // Tell EAS Build to NOT write to app.json
   config._internalSkipAppJson = true;
   
   return {
+    ...config,
     name: "Roast Live",
     slug: "roast-live",
     owner: "hasselite",
@@ -12,7 +13,7 @@ module.exports = ({ config }) => {
     icon: "./assets/images/natively-dark.png",
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
-    scheme: "roastlive",
+    scheme: ["roastlive"],
 
     splash: {
       image: "./assets/images/natively-dark.png",
