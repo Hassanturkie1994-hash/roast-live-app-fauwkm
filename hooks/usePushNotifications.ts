@@ -2,6 +2,7 @@
 import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 import { pushNotificationService } from '@/app/services/pushNotificationService';
 
 // Configure notification handler
@@ -52,6 +53,15 @@ export function usePushNotifications(userId: string | null) {
 
   const registerForPushNotifications = async (userId: string) => {
     try {
+      // Check if running in Expo Go
+      const isExpoGo = Constants.appOwnership === 'expo';
+      
+      if (isExpoGo && Platform.OS === 'android') {
+        console.log('⚠️ Push notifications are not supported in Expo Go on Android (SDK 53+)');
+        console.log('Please use a development build for push notification testing');
+        return;
+      }
+
       // Request permissions
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
       let finalStatus = existingStatus;
@@ -67,20 +77,39 @@ export function usePushNotifications(userId: string | null) {
       }
 
       // Get push token
-      // Note: For production, set your Expo project ID here
-      // You can find it at https://expo.dev/
       let token: string;
       
       try {
-        const tokenData = await Notifications.getExpoPushTokenAsync({
-          projectId: process.env.EXPO_PUBLIC_PROJECT_ID || undefined,
-        });
-        token = tokenData.data;
+        // Get projectId from app.json extra.eas.projectId
+        const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+        
+        if (!projectId) {
+          console.warn('⚠️ No projectId found in app.json. Please add it under extra.eas.projectId');
+          console.warn('You can find your project ID at https://expo.dev/');
+          console.warn('Falling back to device push token...');
+          
+          // Fallback to device push token
+          const deviceToken = await Notifications.getDevicePushTokenAsync();
+          token = deviceToken.data;
+        } else {
+          // Use Expo push token with projectId
+          const tokenData = await Notifications.getExpoPushTokenAsync({
+            projectId: projectId,
+          });
+          token = tokenData.data;
+        }
       } catch (error) {
         console.error('Error getting Expo push token:', error);
+        
         // Fallback to device push token if Expo token fails
-        const deviceToken = await Notifications.getDevicePushTokenAsync();
-        token = deviceToken.data;
+        try {
+          const deviceToken = await Notifications.getDevicePushTokenAsync();
+          token = deviceToken.data;
+          console.log('✅ Using device push token as fallback');
+        } catch (deviceError) {
+          console.error('Error getting device push token:', deviceError);
+          return;
+        }
       }
 
       // Determine platform

@@ -1,3 +1,4 @@
+
 {
   "expo": {
     "name": "Roast Live",
@@ -54,7 +55,10 @@
       "typedRoutes": true
     },
     "extra": {
-      "router": {}
+      "router": {},
+      "eas": {
+        "projectId": "your-expo-project-id-here"
+      }
     }
   },
   "scheme": "Roast Live"
