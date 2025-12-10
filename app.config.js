@@ -94,7 +94,7 @@ module.exports = ({ config }) => {
     extra: {
       router: {},
       eas: {
-        projectId: process.env.EXPO_PUBLIC_PROJECT_ID || "your-expo-project-id-here"
+        projectId: "b1994843-ea99-4a51-8db1-d1049a44b5b7"
       },
       // Runtime environment variables (accessible via Constants.expoConfig.extra)
       EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
