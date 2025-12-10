@@ -15,7 +15,7 @@ import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { escalationService } from '@/services/escalationService';
+import { escalationService } from '@/app/services/escalationService';
 
 export default function AdminEscalationQueueScreen() {
   const router = useRouter();

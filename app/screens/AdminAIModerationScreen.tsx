@@ -13,10 +13,10 @@ import {
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
-import { aiModerationService, UserViolation } from '@/services/aiModerationService';
-import { adminService } from '@/services/adminService';
+import { aiModerationService, UserViolation } from '@/app/services/aiModerationService';
+import { adminService } from '@/app/services/adminService';
 import { useAuth } from '@/contexts/AuthContext';
-import { inboxService } from '@/services/inboxService';
+import { inboxService } from '@/app/services/inboxService';
 
 type TabType = 'violations' | 'banned' | 'reports';
 
@@ -32,8 +32,11 @@ export default function AdminAIModerationScreen() {
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    checkAdminAccess();
-    loadData();
+    const init = async () => {
+      await checkAdminAccess();
+      await loadData();
+    };
+    init();
   }, [activeTab]);
 
   const checkAdminAccess = async () => {

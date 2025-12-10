@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/app/integrations/supabase/client';
 import { Session, User } from '@supabase/supabase-js';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 
 interface Profile {
   id: string;
@@ -35,6 +36,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Register push notifications when user logs in
+  usePushNotifications(user?.id || null);
 
   const ensureWalletExists = async (userId: string) => {
     try {

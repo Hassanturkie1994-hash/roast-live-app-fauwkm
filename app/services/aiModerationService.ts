@@ -2,6 +2,7 @@
 import { supabase } from '@/app/integrations/supabase/client';
 import { inboxService } from './inboxService';
 import { escalationService } from './escalationService';
+import { pushNotificationService } from './pushNotificationService';
 
 export interface ClassificationScores {
   toxicity: number;
@@ -154,14 +155,16 @@ class AIModerationService {
 
   /**
    * PROMPT 1: Real-Time Chat Moderation with Escalation
+   * PROMPT 2: Push Notifications for AI & Moderator Actions
+   * 
    * Moderate a message and take appropriate action based on score
    * 
    * Threshold actions:
    * - Score < 0.30 → allow message
    * - Score ≥ 0.30 → flag silently
-   * - Score ≥ 0.50 → hide message from everyone except sender
+   * - Score ≥ 0.50 → hide message from everyone except sender + SEND PUSH
    * - Score ≥ 0.60 but < 0.85 → ESCALATE TO MODERATOR
-   * - Score ≥ 0.70 → auto timeout user for 2 minutes
+   * - Score ≥ 0.70 → auto timeout user for 2 minutes + SEND PUSH
    * - Score ≥ 0.85 → block user from current stream
    */
   async moderateMessage(
@@ -193,17 +196,19 @@ class AIModerationService {
         action = 'flag';
         actionTaken = 'flagged';
       }
-      // Score ≥ 0.50 → hide message from everyone except sender
+      // Score ≥ 0.50 → hide message from everyone except sender + SEND PUSH
       else if (scores.overall >= 0.50 && scores.overall < 0.60) {
         action = 'hide';
         actionTaken = 'hidden';
         hiddenFromOthers = true;
         
-        await inboxService.sendMessage(
+        // PROMPT 2: Send push notification
+        await pushNotificationService.sendPushNotification(
           userId,
-          userId,
-          'Your message violated the community rules and was hidden.',
-          'safety'
+          'MODERATION_WARNING',
+          'Your message was moderated',
+          'One of your messages was hidden for breaking the rules.',
+          { stream_id: streamId, post_id: postId, story_id: storyId }
         );
       }
       // Score ≥ 0.60 but < 0.85 → ESCALATE TO MODERATOR
@@ -254,7 +259,7 @@ class AIModerationService {
           'safety'
         );
       }
-      // Score ≥ 0.70 → auto timeout user for 2 minutes
+      // Score ≥ 0.70 → auto timeout user for 2 minutes + SEND PUSH
       else if (scores.overall >= 0.70 && scores.overall < 0.85) {
         action = 'timeout';
         actionTaken = 'timeout';
@@ -265,14 +270,16 @@ class AIModerationService {
           await this.applyTimeout(userId, streamId, 2);
         }
         
-        await inboxService.sendMessage(
+        // PROMPT 2: Send push notification
+        await pushNotificationService.sendPushNotification(
           userId,
-          userId,
-          'Your message violated the community rules. You have been timed out for 2 minutes.',
-          'safety'
+          'TIMEOUT_APPLIED',
+          'You\'ve been timed out',
+          'You cannot participate in chat for 2 minutes due to rule violations.',
+          { stream_id: streamId, duration_minutes: 2 }
         );
       }
-      // Score ≥ 0.85 → block user from current stream
+      // Score ≥ 0.85 → block user from current stream + SEND PUSH
       else if (scores.overall >= 0.85) {
         action = 'block';
         actionTaken = 'blocked';
@@ -283,11 +290,13 @@ class AIModerationService {
           await this.blockFromStream(userId, streamId);
         }
         
-        await inboxService.sendMessage(
+        // PROMPT 2: Send push notification
+        await pushNotificationService.sendPushNotification(
           userId,
-          userId,
-          'Your message violated the community rules. You have been blocked from this stream.',
-          'safety'
+          'BAN_APPLIED',
+          'You were banned from a livestream',
+          'You can no longer join this creator\'s lives due to repeated violations.',
+          { stream_id: streamId }
         );
       }
 
@@ -715,7 +724,7 @@ class AIModerationService {
       }
 
       return { success: true };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error in deleteViolation:', error);
       return { success: false, error: 'Failed to delete violation' };
     }
@@ -745,7 +754,7 @@ class AIModerationService {
       );
 
       return { success: true };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error in removeStrike:', error);
       return { success: false, error: 'Failed to remove strike' };
     }
@@ -756,7 +765,7 @@ class AIModerationService {
    */
   async getTrendingViolations(): Promise<Record<string, number>> {
     try {
-      const { data } = await this.getAllViolations(500);
+      const data = await this.getAllViolations(500);
       
       const categoryCount: Record<string, number> = {};
       data.forEach((violation) => {
@@ -773,9 +782,9 @@ class AIModerationService {
   /**
    * Get repeat offenders
    */
-  async getRepeatOffenders(minViolations: number = 3): Promise<Array<{ userId: string; count: number }>> {
+  async getRepeatOffenders(minViolations: number = 3): Promise<{ userId: string; count: number }[]> {
     try {
-      const { data } = await this.getAllViolations(1000);
+      const data = await this.getAllViolations(1000);
       
       const userViolationCount: Record<string, number> = {};
       data.forEach((violation) => {

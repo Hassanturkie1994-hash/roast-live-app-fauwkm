@@ -1,6 +1,7 @@
 
 import { supabase } from '@/app/integrations/supabase/client';
 import { inboxService } from './inboxService';
+import { pushNotificationService } from './pushNotificationService';
 
 export interface Appeal {
   id: string;
@@ -89,7 +90,7 @@ class AppealsService {
         .from('content_safety_violations')
         .select('*')
         .eq('reported_user_id', userId)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false});
 
       if (error) {
         console.error('Error fetching violations:', error);
@@ -135,7 +136,7 @@ class AppealsService {
         .from('appeals')
         .select('*')
         .eq('user_id', userId)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false});
 
       if (error) {
         console.error('Error fetching appeals:', error);
@@ -150,7 +151,7 @@ class AppealsService {
   }
 
   /**
-   * PROMPT 3: Submit an appeal
+   * PROMPT 3: Submit an appeal + SEND PUSH NOTIFICATION
    * Appeal reason (text field min 10 chars)
    * Optional screenshot upload
    */
@@ -228,6 +229,15 @@ class AppealsService {
         userId,
         'Your appeal has been submitted and is under review by administrators.',
         'safety'
+      );
+
+      // PROMPT 3: Send push notification
+      await pushNotificationService.sendPushNotification(
+        userId,
+        'APPEAL_RECEIVED',
+        'We received your appeal',
+        'Our team will review your case and notify you when it\'s resolved.',
+        { penalty_id: linkedPenaltyId }
       );
 
       console.log(`📝 Appeal submitted by user ${userId}`);
@@ -310,7 +320,7 @@ class AppealsService {
   }
 
   /**
-   * Admin review appeal: ACCEPT
+   * PROMPT 3: Admin review appeal: ACCEPT + SEND PUSH NOTIFICATION
    * Remove violation, remove strike, notify user
    */
   async acceptAppeal(
@@ -372,6 +382,19 @@ class AppealsService {
         'safety'
       );
 
+      // PROMPT 3: Send push notification with deep-link
+      await pushNotificationService.sendPushNotification(
+        appeal.user_id,
+        'APPEAL_APPROVED',
+        'Your appeal was approved',
+        'A penalty on your account has been removed. Check details in your Notifications.',
+        { 
+          route: 'AppealDetails',
+          appealId: appealId,
+          penalty_id: appeal.penalty_id
+        }
+      );
+
       console.log(`✅ Appeal accepted: ${appealId}`);
       return { success: true };
     } catch (error: any) {
@@ -381,7 +404,7 @@ class AppealsService {
   }
 
   /**
-   * Admin review appeal: DENY
+   * PROMPT 3: Admin review appeal: DENY + SEND PUSH NOTIFICATION
    * Notify user
    */
   async denyAppeal(
@@ -417,6 +440,18 @@ class AppealsService {
         appeal.user_id,
         `Your appeal was reviewed and denied. Reason: ${resolutionMessage}`,
         'safety'
+      );
+
+      // PROMPT 3: Send push notification with deep-link
+      await pushNotificationService.sendPushNotification(
+        appeal.user_id,
+        'APPEAL_DENIED',
+        'Your appeal was denied',
+        'The original decision stands. See more details in your Notifications.',
+        { 
+          route: 'AppealDetails',
+          appealId: appealId
+        }
       );
 
       console.log(`❌ Appeal denied: ${appealId}`);

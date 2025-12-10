@@ -15,7 +15,7 @@ import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { appealsService, AdminPenalty } from '@/services/appealsService';
+import { appealsService, AdminPenalty } from '@/app/services/appealsService';
 
 export default function AppealsCenterScreen() {
   const router = useRouter();

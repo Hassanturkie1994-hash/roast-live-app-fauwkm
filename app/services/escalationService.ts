@@ -1,6 +1,7 @@
 
 import { supabase } from '@/app/integrations/supabase/client';
 import { inboxService } from './inboxService';
+import { pushNotificationService } from './pushNotificationService';
 
 export interface ModeratorReviewItem {
   id: string;
@@ -319,7 +320,7 @@ class EscalationService {
   }
 
   /**
-   * Moderator decision: Timeout user (5-60 minutes)
+   * PROMPT 2: Moderator decision: Timeout user (5-60 minutes) + SEND PUSH NOTIFICATION
    */
   async moderatorTimeout(
     reviewId: string,
@@ -379,6 +380,19 @@ class EscalationService {
         message: `You have received a moderation decision from ${moderatorName}. You have been timed out for ${durationMinutes} minutes. Reason: ${reason}. If you want to appeal, open Appeals Center.`,
         category: 'safety',
       });
+
+      // PROMPT 2: Send push notification
+      await pushNotificationService.sendPushNotification(
+        review.user_id,
+        'TIMEOUT_APPLIED',
+        'You\'ve been timed out',
+        `You cannot participate in chat for ${durationMinutes} minutes due to rule violations.`,
+        { 
+          stream_id: review.stream_id,
+          duration_minutes: durationMinutes,
+          moderator_name: moderatorName
+        }
+      );
 
       console.log(`⏱️ User ${review.user_id} timed out for ${durationMinutes} minutes by moderator ${moderatorId}`);
       return { success: true };
@@ -468,7 +482,7 @@ class EscalationService {
         .from('admin_penalties')
         .select('*')
         .eq('user_id', userId)
-        .order('issued_at', { ascending: false });
+        .order('issued_at', { ascending: false});
 
       return {
         messages: messages || [],
@@ -490,7 +504,7 @@ class EscalationService {
   }
 
   /**
-   * Admin decision: Apply penalty (temporary or permanent ban)
+   * PROMPT 2: Admin decision: Apply penalty (temporary or permanent ban) + SEND PUSH NOTIFICATION
    */
   async adminApplyPenalty(
     userId: string,
@@ -538,6 +552,19 @@ class EscalationService {
         message: `Your account has received an administrative action${durationText}. Reason: ${reason}. Decision is final unless appealed. You can appeal this decision in Settings > Account > Appeals Center.`,
         category: 'safety',
       });
+
+      // PROMPT 2: Send push notification
+      await pushNotificationService.sendPushNotification(
+        userId,
+        'BAN_APPLIED',
+        'Administrative Action',
+        `Your account has received an administrative action${durationText}. Reason: ${reason}`,
+        { 
+          penalty_id: data.id,
+          severity,
+          duration_hours: durationHours
+        }
+      );
 
       console.log(`🔨 Admin penalty applied: ${severity} - ${reason}`);
       return { success: true, penaltyId: data.id };
@@ -614,10 +641,20 @@ class EscalationService {
   }
 
   /**
-   * Deactivate penalty (admin action)
+   * PROMPT 2: Deactivate penalty (admin action) + SEND PUSH NOTIFICATION for ban expiration
    */
-  async deactivatePenalty(penaltyId: string): Promise<{ success: boolean; error?: string }> {
+  async deactivatePenalty(
+    penaltyId: string,
+    sendNotification: boolean = false
+  ): Promise<{ success: boolean; error?: string }> {
     try {
+      // Get penalty details before deactivating
+      const { data: penalty } = await supabase
+        .from('admin_penalties')
+        .select('user_id')
+        .eq('id', penaltyId)
+        .single();
+
       const { error } = await supabase
         .from('admin_penalties')
         .update({ is_active: false })
@@ -626,6 +663,17 @@ class EscalationService {
       if (error) {
         console.error('Error deactivating penalty:', error);
         return { success: false, error: error.message };
+      }
+
+      // PROMPT 2: Send push notification for ban expiration
+      if (sendNotification && penalty) {
+        await pushNotificationService.sendPushNotification(
+          penalty.user_id,
+          'BAN_EXPIRED',
+          'Your restriction has ended',
+          'You can now interact again. Please follow the community rules.',
+          { penalty_id: penaltyId }
+        );
       }
 
       console.log(`✅ Penalty deactivated: ${penaltyId}`);
