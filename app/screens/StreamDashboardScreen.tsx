@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
   Image,
   RefreshControl,
-} from 'react-native';
+} from 'react';
 import { router } from 'expo-router';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -77,18 +77,12 @@ export default function StreamDashboardScreen() {
     totalRequests: 0,
     cacheHitPercentage: 0,
     avgDeliveryLatency: 0,
-    topMedia: [] as Array<{ url: string; accessCount: number; type: string }>,
+    topMedia: [] as { url: string; accessCount: number; type: string }[],
   });
   const [cacheHitPerUser, setCacheHitPerUser] = useState<CacheHitPerUser[]>([]);
   const [showCDNDetails, setShowCDNDetails] = useState(false);
 
-  useEffect(() => {
-    if (user) {
-      fetchData();
-    }
-  }, [user]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     if (!user) return;
 
     setIsLoading(true);
@@ -110,7 +104,13 @@ export default function StreamDashboardScreen() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (user) {
+      fetchData();
+    }
+  }, [user, fetchData]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);

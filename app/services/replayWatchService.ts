@@ -21,10 +21,10 @@ export interface ReplayEngagementSummary {
   likeRate: number;
   commentRate: number;
   shareRate: number;
-  dropOffPoints: Array<{
+  dropOffPoints: {
     timestamp: number;
     percentage: number;
-  }>;
+  }[];
 }
 
 class ReplayWatchService {
@@ -221,7 +221,7 @@ class ReplayWatchService {
    */
   private calculateDropOffPoints(
     watchLogs: ReplayWatchLog[]
-  ): Array<{ timestamp: number; percentage: number }> {
+  ): { timestamp: number; percentage: number }[] {
     // Group watch times into 30-second buckets
     const bucketSize = 30; // seconds
     const buckets = new Map<number, number>();
@@ -234,7 +234,7 @@ class ReplayWatchService {
     }
 
     // Convert to array and calculate percentages
-    const dropOffPoints: Array<{ timestamp: number; percentage: number }> = [];
+    const dropOffPoints: { timestamp: number; percentage: number }[] = [];
     const totalViews = watchLogs.length;
 
     for (const [timestamp, count] of buckets.entries()) {

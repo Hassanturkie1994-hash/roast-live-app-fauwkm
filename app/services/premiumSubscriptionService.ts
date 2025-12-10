@@ -397,11 +397,11 @@ class PremiumSubscriptionService {
   /**
    * Get premium benefits for display
    */
-  getPremiumBenefits(): Array<{
+  getPremiumBenefits(): {
     icon: string;
     title: string;
     description: string;
-  }> {
+  }[] {
     return [
       {
         icon: 'star.fill',

@@ -48,13 +48,13 @@ export interface AnalyticsSummary {
     avgSessionDuration: number;
   };
   trends: {
-    viewershipData: Array<{ date: string; viewers: number }>;
-    followersGained: Array<{ date: string; followers: number }>;
-    retentionRate: Array<{ date: string; rate: number }>;
+    viewershipData: { date: string; viewers: number }[];
+    followersGained: { date: string; followers: number }[];
+    retentionRate: { date: string; rate: number }[];
   };
   earnings: {
     totalGiftValue: number;
-    topGifters: Array<{ userId: string; username: string; amount: number }>;
+    topGifters: { userId: string; username: string; amount: number }[];
     conversionFunnel: {
       viewers: number;
       chatters: number;
@@ -279,7 +279,7 @@ class AnalyticsService {
       if (!events || events.length === 0) return 0;
 
       // Create timeline of join/leave events
-      const timeline: Array<{ time: Date; delta: number }> = [];
+      const timeline: { time: Date; delta: number }[] = [];
       events.forEach((event) => {
         timeline.push({ time: new Date(event.joined_at), delta: 1 });
         if (event.left_at) {

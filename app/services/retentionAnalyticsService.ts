@@ -24,11 +24,11 @@ export interface RetentionCurveData {
 export interface RetentionMetrics {
   averageRetentionTime: number; // in seconds
   retentionCurve: RetentionCurveData[];
-  dropMoments: Array<{
+  dropMoments: {
     minute: number;
     viewersLost: number;
     percentageDrop: number;
-  }>;
+  }[];
   peakMinute: number;
   totalMinutes: number;
 }
@@ -126,11 +126,11 @@ class RetentionAnalyticsService {
       }
 
       // Identify drop moments (significant viewer loss)
-      const dropMoments: Array<{
+      const dropMoments: {
         minute: number;
         viewersLost: number;
         percentageDrop: number;
-      }> = [];
+      }[] = [];
 
       for (let i = 1; i < retentionCurve.length; i++) {
         const current = retentionCurve[i];
