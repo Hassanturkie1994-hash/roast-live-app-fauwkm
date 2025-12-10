@@ -16,7 +16,16 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { adminService, AdminRole } from '@/app/services/adminService';
+import { supabase } from '@/app/integrations/supabase/client';
 import GradientButton from '@/components/GradientButton';
+
+interface UserSearchResult {
+  id: string;
+  username: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  role: string | null;
+}
 
 export default function HeadAdminDashboardScreen() {
   const { colors } = useTheme();
@@ -33,7 +42,18 @@ export default function HeadAdminDashboardScreen() {
     support: 0,
   });
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
-  const [announcementText, setAnnouncementText] = useState('');
+  const [announcementTitle, setAnnouncementTitle] = useState('');
+  const [announcementMessage, setAnnouncementMessage] = useState('');
+  const [announcementLink, setAnnouncementLink] = useState('');
+  const [showUserSearchModal, setShowUserSearchModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<UserSearchResult[]>([]);
+  const [selectedUser, setSelectedUser] = useState<UserSearchResult | null>(null);
+  const [showActionModal, setShowActionModal] = useState(false);
+  const [actionType, setActionType] = useState<'ban' | 'timeout' | 'permanent_ban' | 'warning'>('warning');
+  const [actionReason, setActionReason] = useState('');
+  const [actionNote, setActionNote] = useState('');
+  const [timeoutDuration, setTimeoutDuration] = useState(60);
 
   useEffect(() => {
     checkAccess();
@@ -59,10 +79,9 @@ export default function HeadAdminDashboardScreen() {
 
   const fetchStats = async () => {
     try {
-      const [reportsResult, usersResult, rolesResult] = await Promise.all([
+      const [reportsResult, usersResult] = await Promise.all([
         adminService.getReports({ status: 'open', limit: 1000 }),
         adminService.getUsersUnderPenalty(),
-        // Fetch admin roles count
       ]);
 
       setStats({
@@ -80,16 +99,192 @@ export default function HeadAdminDashboardScreen() {
     }
   };
 
-  const handleSendAnnouncement = async () => {
-    if (!announcementText.trim()) {
-      Alert.alert('Error', 'Please enter an announcement message.');
+  const handleSearchUsers = async () => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
       return;
     }
 
-    // TODO: Implement announcement sending
-    Alert.alert('Success', 'Announcement sent to all users.');
-    setShowAnnouncementModal(false);
-    setAnnouncementText('');
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, username, display_name, avatar_url, role')
+        .or(`username.ilike.%${searchQuery}%,display_name.ilike.%${searchQuery}%,id.eq.${searchQuery}`)
+        .limit(10);
+
+      if (error) {
+        console.error('Error searching users:', error);
+        Alert.alert('Error', 'Failed to search users');
+        return;
+      }
+
+      setSearchResults(data || []);
+    } catch (error) {
+      console.error('Error in handleSearchUsers:', error);
+      Alert.alert('Error', 'Failed to search users');
+    }
+  };
+
+  const handleSelectUser = (user: UserSearchResult) => {
+    setSelectedUser(user);
+    setShowUserSearchModal(false);
+    setShowActionModal(true);
+  };
+
+  const handleApplyAction = async () => {
+    if (!selectedUser || !user) {
+      Alert.alert('Error', 'No user selected');
+      return;
+    }
+
+    if (!actionReason.trim()) {
+      Alert.alert('Error', 'Please provide a reason for this action');
+      return;
+    }
+
+    try {
+      // Calculate expiration time for timeout
+      let expiresAt = null;
+      if (actionType === 'timeout') {
+        const now = new Date();
+        now.setMinutes(now.getMinutes() + timeoutDuration);
+        expiresAt = now.toISOString();
+      }
+
+      // Insert moderation action
+      const { error: actionError } = await supabase
+        .from('moderation_actions')
+        .insert({
+          target_user_id: selectedUser.id,
+          action_type: actionType,
+          reason: actionReason,
+          note: actionNote || null,
+          duration_minutes: actionType === 'timeout' ? timeoutDuration : null,
+          issued_by_admin_id: user.id,
+          expires_at: expiresAt,
+          is_active: true,
+        });
+
+      if (actionError) {
+        console.error('Error applying action:', actionError);
+        Alert.alert('Error', 'Failed to apply action');
+        return;
+      }
+
+      // Create notification for the user
+      const notificationMessage = getNotificationMessage(actionType, actionReason, timeoutDuration);
+      const { error: notifError } = await supabase
+        .from('notifications')
+        .insert({
+          sender_id: user.id,
+          receiver_id: selectedUser.id,
+          type: actionType === 'warning' ? 'warning' : 'admin_announcement',
+          message: notificationMessage,
+          category: 'safety',
+          read: false,
+        });
+
+      if (notifError) {
+        console.error('Error creating notification:', notifError);
+      }
+
+      Alert.alert('Success', `Action applied to ${selectedUser.username}`);
+      setShowActionModal(false);
+      setSelectedUser(null);
+      setActionReason('');
+      setActionNote('');
+      setTimeoutDuration(60);
+    } catch (error) {
+      console.error('Error in handleApplyAction:', error);
+      Alert.alert('Error', 'Failed to apply action');
+    }
+  };
+
+  const getNotificationMessage = (type: string, reason: string, duration?: number) => {
+    switch (type) {
+      case 'warning':
+        return `⚠️ Warning: ${reason}`;
+      case 'timeout':
+        return `⏱️ Timeout (${duration} minutes): ${reason}`;
+      case 'ban':
+        return `🚫 Temporary Ban: ${reason}`;
+      case 'permanent_ban':
+        return `🚫 Permanent Ban: ${reason}`;
+      default:
+        return reason;
+    }
+  };
+
+  const handleSendAnnouncement = async () => {
+    if (!announcementTitle.trim() || !announcementMessage.trim()) {
+      Alert.alert('Error', 'Please enter both title and message');
+      return;
+    }
+
+    if (!user) {
+      Alert.alert('Error', 'User not authenticated');
+      return;
+    }
+
+    try {
+      // Insert announcement
+      const { error: announcementError } = await supabase
+        .from('announcements')
+        .insert({
+          title: announcementTitle,
+          message: announcementMessage,
+          link: announcementLink || null,
+          issued_by_admin_id: user.id,
+          is_active: true,
+        });
+
+      if (announcementError) {
+        console.error('Error creating announcement:', announcementError);
+        Alert.alert('Error', 'Failed to create announcement');
+        return;
+      }
+
+      // Get all active users
+      const { data: users, error: usersError } = await supabase
+        .from('profiles')
+        .select('id')
+        .limit(10000);
+
+      if (usersError) {
+        console.error('Error fetching users:', usersError);
+        Alert.alert('Error', 'Failed to fetch users');
+        return;
+      }
+
+      // Create notifications for all users
+      const notifications = users.map(u => ({
+        sender_id: user.id,
+        receiver_id: u.id,
+        type: 'admin_announcement',
+        message: `📢 ${announcementTitle}: ${announcementMessage}`,
+        category: 'admin',
+        read: false,
+      }));
+
+      const { error: notifError } = await supabase
+        .from('notifications')
+        .insert(notifications);
+
+      if (notifError) {
+        console.error('Error creating notifications:', notifError);
+        Alert.alert('Warning', 'Announcement created but notifications failed');
+      } else {
+        Alert.alert('Success', `Announcement sent to ${users.length} users`);
+      }
+
+      setShowAnnouncementModal(false);
+      setAnnouncementTitle('');
+      setAnnouncementMessage('');
+      setAnnouncementLink('');
+    } catch (error) {
+      console.error('Error in handleSendAnnouncement:', error);
+      Alert.alert('Error', 'Failed to send announcement');
+    }
   };
 
   if (loading) {
@@ -173,6 +368,24 @@ export default function HeadAdminDashboardScreen() {
               <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Timed Out</Text>
             </View>
           </View>
+        </View>
+
+        {/* User Search & Actions */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>🔍 User Search & Actions</Text>
+          
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => setShowUserSearchModal(true)}
+          >
+            <IconSymbol
+              ios_icon_name="magnifyingglass"
+              android_material_icon_name="search"
+              size={20}
+              color={colors.brandPrimary}
+            />
+            <Text style={[styles.actionButtonText, { color: colors.text }]}>Search Users</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Reports Overview */}
@@ -288,7 +501,7 @@ export default function HeadAdminDashboardScreen() {
               size={20}
               color={colors.text}
             />
-            <Text style={[styles.actionButtonText, { color: colors.text }]}>Update Global Rules</Text>
+            <Text style={[styles.actionButtonText, { color: colors.text }]}>View Global Rules</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -305,6 +518,184 @@ export default function HeadAdminDashboardScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* User Search Modal */}
+      <Modal
+        visible={showUserSearchModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowUserSearchModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Search Users</Text>
+              <TouchableOpacity onPress={() => setShowUserSearchModal(false)}>
+                <IconSymbol
+                  ios_icon_name="xmark"
+                  android_material_icon_name="close"
+                  size={24}
+                  color={colors.text}
+                />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalBody}>
+              <View style={styles.searchContainer}>
+                <TextInput
+                  style={[styles.searchInput, { backgroundColor: colors.backgroundAlt, borderColor: colors.border, color: colors.text }]}
+                  placeholder="Username, User ID, or Email"
+                  placeholderTextColor={colors.textSecondary}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  onSubmitEditing={handleSearchUsers}
+                />
+                <TouchableOpacity
+                  style={[styles.searchButton, { backgroundColor: colors.brandPrimary }]}
+                  onPress={handleSearchUsers}
+                >
+                  <IconSymbol
+                    ios_icon_name="magnifyingglass"
+                    android_material_icon_name="search"
+                    size={20}
+                    color="#FFFFFF"
+                  />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.searchResults}>
+                {searchResults.map((result) => (
+                  <TouchableOpacity
+                    key={result.id}
+                    style={[styles.searchResultItem, { backgroundColor: colors.card, borderColor: colors.border }]}
+                    onPress={() => handleSelectUser(result)}
+                  >
+                    <View style={styles.searchResultLeft}>
+                      <IconSymbol
+                        ios_icon_name="person.circle.fill"
+                        android_material_icon_name="account_circle"
+                        size={40}
+                        color={colors.textSecondary}
+                      />
+                      <View>
+                        <Text style={[styles.searchResultName, { color: colors.text }]}>
+                          {result.display_name || result.username}
+                        </Text>
+                        <Text style={[styles.searchResultUsername, { color: colors.textSecondary }]}>
+                          @{result.username}
+                        </Text>
+                      </View>
+                    </View>
+                    <IconSymbol
+                      ios_icon_name="chevron.right"
+                      android_material_icon_name="chevron_right"
+                      size={20}
+                      color={colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Action Modal */}
+      <Modal
+        visible={showActionModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowActionModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>
+                Apply Action to {selectedUser?.username}
+              </Text>
+              <TouchableOpacity onPress={() => setShowActionModal(false)}>
+                <IconSymbol
+                  ios_icon_name="xmark"
+                  android_material_icon_name="close"
+                  size={24}
+                  color={colors.text}
+                />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody}>
+              <Text style={[styles.label, { color: colors.text }]}>Action Type</Text>
+              <View style={styles.actionTypeContainer}>
+                {(['warning', 'timeout', 'ban', 'permanent_ban'] as const).map((type) => (
+                  <TouchableOpacity
+                    key={type}
+                    style={[
+                      styles.actionTypeButton,
+                      { backgroundColor: colors.backgroundAlt, borderColor: colors.border },
+                      actionType === type && { borderColor: colors.brandPrimary, borderWidth: 2 },
+                    ]}
+                    onPress={() => setActionType(type)}
+                  >
+                    <Text style={[styles.actionTypeText, { color: colors.text }]}>
+                      {type.replace('_', ' ').toUpperCase()}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {actionType === 'timeout' && (
+                <>
+                  <Text style={[styles.label, { color: colors.text }]}>Duration (minutes)</Text>
+                  <TextInput
+                    style={[styles.input, { backgroundColor: colors.backgroundAlt, borderColor: colors.border, color: colors.text }]}
+                    placeholder="60"
+                    placeholderTextColor={colors.textSecondary}
+                    value={timeoutDuration.toString()}
+                    onChangeText={(text) => setTimeoutDuration(parseInt(text) || 60)}
+                    keyboardType="numeric"
+                  />
+                </>
+              )}
+
+              <Text style={[styles.label, { color: colors.text }]}>Reason (Required)</Text>
+              <TextInput
+                style={[styles.textArea, { backgroundColor: colors.backgroundAlt, borderColor: colors.border, color: colors.text }]}
+                placeholder="Enter reason for this action..."
+                placeholderTextColor={colors.textSecondary}
+                value={actionReason}
+                onChangeText={setActionReason}
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+              />
+
+              <Text style={[styles.label, { color: colors.text }]}>Note (Optional)</Text>
+              <TextInput
+                style={[styles.textArea, { backgroundColor: colors.backgroundAlt, borderColor: colors.border, color: colors.text }]}
+                placeholder="Additional notes..."
+                placeholderTextColor={colors.textSecondary}
+                value={actionNote}
+                onChangeText={setActionNote}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.cancelButton, { backgroundColor: colors.backgroundAlt, borderColor: colors.border }]}
+                  onPress={() => setShowActionModal(false)}
+                >
+                  <Text style={[styles.cancelButtonText, { color: colors.text }]}>Cancel</Text>
+                </TouchableOpacity>
+                <View style={styles.applyButtonContainer}>
+                  <GradientButton title="Apply Action" onPress={handleApplyAction} />
+                </View>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       {/* Announcement Modal */}
       <Modal
@@ -327,17 +718,35 @@ export default function HeadAdminDashboardScreen() {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.modalBody}>
-              <Text style={[styles.label, { color: colors.text }]}>Announcement Message</Text>
+            <ScrollView style={styles.modalBody}>
+              <Text style={[styles.label, { color: colors.text }]}>Title</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.backgroundAlt, borderColor: colors.border, color: colors.text }]}
+                placeholder="Announcement title..."
+                placeholderTextColor={colors.textSecondary}
+                value={announcementTitle}
+                onChangeText={setAnnouncementTitle}
+              />
+
+              <Text style={[styles.label, { color: colors.text }]}>Message</Text>
               <TextInput
                 style={[styles.textArea, { backgroundColor: colors.backgroundAlt, borderColor: colors.border, color: colors.text }]}
                 placeholder="Enter your announcement..."
                 placeholderTextColor={colors.textSecondary}
-                value={announcementText}
-                onChangeText={setAnnouncementText}
+                value={announcementMessage}
+                onChangeText={setAnnouncementMessage}
                 multiline
                 numberOfLines={6}
                 textAlignVertical="top"
+              />
+
+              <Text style={[styles.label, { color: colors.text }]}>Link (Optional)</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.backgroundAlt, borderColor: colors.border, color: colors.text }]}
+                placeholder="https://..."
+                placeholderTextColor={colors.textSecondary}
+                value={announcementLink}
+                onChangeText={setAnnouncementLink}
               />
 
               <View style={styles.modalButtons}>
@@ -351,7 +760,7 @@ export default function HeadAdminDashboardScreen() {
                   <GradientButton title="Send Announcement" onPress={handleSendAnnouncement} />
                 </View>
               </View>
-            </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -504,7 +913,7 @@ const styles = StyleSheet.create({
   modalContent: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: '80%',
+    maxHeight: '90%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -516,6 +925,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 20,
     fontWeight: '700',
+    flex: 1,
   },
   modalBody: {
     padding: 20,
@@ -524,18 +934,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     marginBottom: 12,
+    marginTop: 16,
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    marginBottom: 16,
   },
   textArea: {
     borderWidth: 1,
     borderRadius: 12,
     padding: 16,
     fontSize: 16,
-    minHeight: 120,
-    marginBottom: 24,
+    minHeight: 100,
+    marginBottom: 16,
   },
   modalButtons: {
     flexDirection: 'row',
     gap: 12,
+    marginTop: 24,
   },
   cancelButton: {
     flex: 1,
@@ -550,5 +969,69 @@ const styles = StyleSheet.create({
   },
   sendButtonContainer: {
     flex: 1,
+  },
+  applyButtonContainer: {
+    flex: 1,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20,
+  },
+  searchInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+  },
+  searchButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchResults: {
+    maxHeight: 400,
+  },
+  searchResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  searchResultLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  searchResultName: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  searchResultUsername: {
+    fontSize: 14,
+    fontWeight: '400',
+  },
+  actionTypeContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 16,
+  },
+  actionTypeButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  actionTypeText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

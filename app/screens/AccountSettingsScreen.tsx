@@ -206,9 +206,9 @@ export default function AccountSettingsScreen() {
           </View>
         ) : null}
 
-        {/* ALLMÄNT Section */}
+        {/* General Section */}
         <View style={[styles.section, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>ALLMÄNT</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>⚙️ General</Text>
 
           <TouchableOpacity 
             style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
@@ -243,48 +243,6 @@ export default function AccountSettingsScreen() {
                 color={colors.text}
               />
               <Text style={[styles.settingText, { color: colors.text }]}>Profile Settings</Text>
-            </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
-              size={20}
-              color={colors.textSecondary}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
-            onPress={() => router.push('/screens/WalletScreen')}
-          >
-            <View style={styles.settingLeft}>
-              <IconSymbol
-                ios_icon_name="wallet.pass.fill"
-                android_material_icon_name="account_balance_wallet"
-                size={20}
-                color={colors.brandPrimary}
-              />
-              <Text style={[styles.settingText, { color: colors.text }]}>Saldo</Text>
-            </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
-              size={20}
-              color={colors.textSecondary}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
-            onPress={() => router.push('/screens/GiftInformationScreen')}
-          >
-            <View style={styles.settingLeft}>
-              <IconSymbol
-                ios_icon_name="gift.fill"
-                android_material_icon_name="card_giftcard"
-                size={20}
-                color={colors.brandPrimary}
-              />
-              <Text style={[styles.settingText, { color: colors.text }]}>Gift Information</Text>
             </View>
             <IconSymbol
               ios_icon_name="chevron.right"
@@ -335,95 +293,11 @@ export default function AccountSettingsScreen() {
               color={colors.textSecondary}
             />
           </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
-            onPress={() => router.push('/screens/VIPClubDashboardScreen')}
-          >
-            <View style={styles.settingLeft}>
-              <IconSymbol
-                ios_icon_name="crown.fill"
-                android_material_icon_name="workspace_premium"
-                size={20}
-                color="#FFD700"
-              />
-              <Text style={[styles.settingText, { color: colors.text }]}>VIP Members</Text>
-            </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
-              size={20}
-              color={colors.textSecondary}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
-            onPress={() => router.push('/screens/ManageSubscriptionsScreen')}
-          >
-            <View style={styles.settingLeft}>
-              <IconSymbol
-                ios_icon_name="creditcard.fill"
-                android_material_icon_name="credit_card"
-                size={20}
-                color={colors.text}
-              />
-              <Text style={[styles.settingText, { color: colors.text }]}>Manage Subscriptions</Text>
-            </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
-              size={20}
-              color={colors.textSecondary}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
-            onPress={() => router.push('/screens/StreamDashboardScreen')}
-          >
-            <View style={styles.settingLeft}>
-              <IconSymbol
-                ios_icon_name="shield.fill"
-                android_material_icon_name="shield"
-                size={20}
-                color={colors.brandPrimary}
-              />
-              <Text style={[styles.settingText, { color: colors.text }]}>Stream Dashboard</Text>
-            </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
-              size={20}
-              color={colors.textSecondary}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
-            onPress={() => router.push('/screens/BlockedUsersScreen')}
-          >
-            <View style={styles.settingLeft}>
-              <IconSymbol
-                ios_icon_name="hand.raised.fill"
-                android_material_icon_name="block"
-                size={20}
-                color={colors.brandPrimary}
-              />
-              <Text style={[styles.settingText, { color: colors.text }]}>Blocked Users</Text>
-            </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
-              size={20}
-              color={colors.textSecondary}
-            />
-          </TouchableOpacity>
         </View>
 
-        {/* Security Section */}
+        {/* Account & Security Section */}
         <View style={[styles.section, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>🔐 Security</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>🔐 Account & Security</Text>
 
           <TouchableOpacity 
             style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
@@ -469,6 +343,210 @@ export default function AccountSettingsScreen() {
 
           <TouchableOpacity 
             style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
+            onPress={() => router.push('/screens/BlockedUsersScreen')}
+          >
+            <View style={styles.settingLeft}>
+              <IconSymbol
+                ios_icon_name="hand.raised.fill"
+                android_material_icon_name="block"
+                size={20}
+                color={colors.brandPrimary}
+              />
+              <Text style={[styles.settingText, { color: colors.text }]}>Blocked Users</Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="chevron_right"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+        </View>
+
+        {/* Streaming Section */}
+        <View style={[styles.section, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>📹 Streaming</Text>
+
+          <TouchableOpacity 
+            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
+            onPress={() => router.push('/screens/StreamDashboardScreen')}
+          >
+            <View style={styles.settingLeft}>
+              <IconSymbol
+                ios_icon_name="shield.fill"
+                android_material_icon_name="shield"
+                size={20}
+                color={colors.brandPrimary}
+              />
+              <Text style={[styles.settingText, { color: colors.text }]}>Stream Dashboard</Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="chevron_right"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
+            onPress={() => router.push('/screens/VIPClubDashboardScreen')}
+          >
+            <View style={styles.settingLeft}>
+              <IconSymbol
+                ios_icon_name="crown.fill"
+                android_material_icon_name="workspace_premium"
+                size={20}
+                color="#FFD700"
+              />
+              <Text style={[styles.settingText, { color: colors.text }]}>VIP Members</Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="chevron_right"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+        </View>
+
+        {/* Wallet & Gifts Section */}
+        <View style={[styles.section, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>💰 Wallet & Gifts</Text>
+
+          <TouchableOpacity 
+            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
+            onPress={() => router.push('/screens/WalletScreen')}
+          >
+            <View style={styles.settingLeft}>
+              <IconSymbol
+                ios_icon_name="wallet.pass.fill"
+                android_material_icon_name="account_balance_wallet"
+                size={20}
+                color={colors.brandPrimary}
+              />
+              <Text style={[styles.settingText, { color: colors.text }]}>Saldo</Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="chevron_right"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
+            onPress={() => router.push('/screens/GiftInformationScreen')}
+          >
+            <View style={styles.settingLeft}>
+              <IconSymbol
+                ios_icon_name="gift.fill"
+                android_material_icon_name="card_giftcard"
+                size={20}
+                color={colors.brandPrimary}
+              />
+              <Text style={[styles.settingText, { color: colors.text }]}>Gift Information</Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="chevron_right"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
+            onPress={() => router.push('/screens/ManageSubscriptionsScreen')}
+          >
+            <View style={styles.settingLeft}>
+              <IconSymbol
+                ios_icon_name="creditcard.fill"
+                android_material_icon_name="credit_card"
+                size={20}
+                color={colors.text}
+              />
+              <Text style={[styles.settingText, { color: colors.text }]}>Manage Subscriptions</Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="chevron_right"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
+            onPress={handleWithdrawEarnings}
+          >
+            <View style={styles.settingLeft}>
+              <IconSymbol
+                ios_icon_name="arrow.down.circle.fill"
+                android_material_icon_name="download"
+                size={20}
+                color={colors.text}
+              />
+              <Text style={[styles.settingText, { color: colors.text }]}>Withdraw Earnings</Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="chevron_right"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
+            onPress={handleTransactionHistory}
+          >
+            <View style={styles.settingLeft}>
+              <IconSymbol
+                ios_icon_name="list.bullet"
+                android_material_icon_name="history"
+                size={20}
+                color={colors.text}
+              />
+              <Text style={[styles.settingText, { color: colors.text }]}>Transaction History</Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="chevron_right"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+        </View>
+
+        {/* Safety & Rules Section */}
+        <View style={[styles.section, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>🛡️ Safety & Rules</Text>
+
+          <TouchableOpacity 
+            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
+            onPress={() => router.push('/screens/SafetyCommunityRulesScreen' as any)}
+          >
+            <View style={styles.settingLeft}>
+              <IconSymbol
+                ios_icon_name="shield.checkered"
+                android_material_icon_name="verified_user"
+                size={20}
+                color={colors.brandPrimary}
+              />
+              <Text style={[styles.settingText, { color: colors.text }]}>Safety & Community Rules</Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="chevron_right"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
             onPress={() => router.push('/screens/AppealsViolationsScreen')}
           >
             <View style={styles.settingLeft}>
@@ -487,39 +565,6 @@ export default function AccountSettingsScreen() {
               color={colors.textSecondary}
             />
           </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
-            onPress={handleSignOut}
-          >
-            <View style={styles.settingLeft}>
-              <IconSymbol
-                ios_icon_name="rectangle.portrait.and.arrow.right"
-                android_material_icon_name="logout"
-                size={20}
-                color={colors.brandPrimary}
-              />
-              <View>
-                <Text style={[styles.settingText, styles.dangerText, { color: colors.brandPrimary }]}>Logout</Text>
-                {isLive && (
-                  <Text style={[styles.settingSubtext, { color: colors.textSecondary }]}>
-                    End live session first
-                  </Text>
-                )}
-              </View>
-            </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
-              size={20}
-              color={colors.textSecondary}
-            />
-          </TouchableOpacity>
-        </View>
-
-        {/* Legal Section */}
-        <View style={[styles.section, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>📄 Legal & Privacy</Text>
 
           <TouchableOpacity 
             style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
@@ -619,64 +664,27 @@ export default function AccountSettingsScreen() {
           </View>
         </View>
 
-        {/* Payments & Payouts Section */}
+        {/* Logout Section */}
         <View style={[styles.section, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>💳 Payments & Payouts</Text>
-
           <TouchableOpacity 
             style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
-            onPress={handleAddCredits}
+            onPress={handleSignOut}
           >
             <View style={styles.settingLeft}>
               <IconSymbol
-                ios_icon_name="plus.circle.fill"
-                android_material_icon_name="add_circle"
+                ios_icon_name="rectangle.portrait.and.arrow.right"
+                android_material_icon_name="logout"
                 size={20}
                 color={colors.brandPrimary}
               />
-              <Text style={[styles.settingText, { color: colors.text }]}>Add Credits</Text>
-            </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
-              size={20}
-              color={colors.textSecondary}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
-            onPress={handleWithdrawEarnings}
-          >
-            <View style={styles.settingLeft}>
-              <IconSymbol
-                ios_icon_name="arrow.down.circle.fill"
-                android_material_icon_name="download"
-                size={20}
-                color={colors.text}
-              />
-              <Text style={[styles.settingText, { color: colors.text }]}>Withdraw Earnings</Text>
-            </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
-              size={20}
-              color={colors.textSecondary}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
-            onPress={handleTransactionHistory}
-          >
-            <View style={styles.settingLeft}>
-              <IconSymbol
-                ios_icon_name="list.bullet"
-                android_material_icon_name="history"
-                size={20}
-                color={colors.text}
-              />
-              <Text style={[styles.settingText, { color: colors.text }]}>Transaction History</Text>
+              <View>
+                <Text style={[styles.settingText, styles.dangerText, { color: colors.brandPrimary }]}>Logout</Text>
+                {isLive && (
+                  <Text style={[styles.settingSubtext, { color: colors.textSecondary }]}>
+                    End live session first
+                  </Text>
+                )}
+              </View>
             </View>
             <IconSymbol
               ios_icon_name="chevron.right"
