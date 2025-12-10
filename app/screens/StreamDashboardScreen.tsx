@@ -10,6 +10,7 @@ import {
   Alert,
   ActivityIndicator,
   Image,
+  RefreshControl,
 } from 'react-native';
 import { router } from 'expo-router';
 import { colors, commonStyles } from '@/styles/commonStyles';
@@ -18,6 +19,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { moderationService, Moderator, BannedUser } from '@/app/services/moderationService';
 import { supabase } from '@/app/integrations/supabase/client';
 import BadgeEditorModal from '@/components/BadgeEditorModal';
+import { cdnService } from '@/app/services/cdnService';
 
 const BADGE_COLORS = [
   '#FF1493', // Deep Pink
@@ -43,12 +45,19 @@ interface VIPMember {
   };
 }
 
+interface CacheHitPerUser {
+  userId: string;
+  username: string;
+  cacheHitPercentage: number;
+}
+
 export default function StreamDashboardScreen() {
   const { user } = useAuth();
   const [moderators, setModerators] = useState<Moderator[]>([]);
   const [bannedUsers, setBannedUsers] = useState<BannedUser[]>([]);
   const [vipMembers, setVipMembers] = useState<VIPMember[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchUsername, setSearchUsername] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -62,6 +71,16 @@ export default function StreamDashboardScreen() {
   const [announcementTitle, setAnnouncementTitle] = useState('');
   const [announcementMessage, setAnnouncementMessage] = useState('');
   const [isSendingAnnouncement, setIsSendingAnnouncement] = useState(false);
+
+  // CDN Monitoring state
+  const [cdnStats, setCdnStats] = useState({
+    totalRequests: 0,
+    cacheHitPercentage: 0,
+    avgDeliveryLatency: 0,
+    topMedia: [] as Array<{ url: string; accessCount: number; type: string }>,
+  });
+  const [cacheHitPerUser, setCacheHitPerUser] = useState<CacheHitPerUser[]>([]);
+  const [showCDNDetails, setShowCDNDetails] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -83,10 +102,35 @@ export default function StreamDashboardScreen() {
 
       // Fetch VIP club data
       await fetchVIPClubData();
+
+      // Fetch CDN monitoring data
+      await fetchCDNMonitoringData();
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchData();
+    setIsRefreshing(false);
+  };
+
+  const fetchCDNMonitoringData = async () => {
+    if (!user) return;
+
+    try {
+      // Fetch overall CDN stats
+      const data = await cdnService.getCDNMonitoringData(user.id);
+      setCdnStats(data);
+
+      // Fetch cache hit percentage per user
+      const cacheHitData = await cdnService.getCacheHitPercentagePerUser();
+      setCacheHitPerUser(cacheHitData);
+    } catch (error) {
+      console.error('Error fetching CDN monitoring data:', error);
     }
   };
 
@@ -299,6 +343,19 @@ export default function StreamDashboardScreen() {
     router.push('/screens/WithdrawScreen');
   };
 
+  const getTierColor = (tier: string) => {
+    switch (tier) {
+      case 'A':
+        return '#FFD700'; // Gold
+      case 'B':
+        return '#C0C0C0'; // Silver
+      case 'C':
+        return '#CD7F32'; // Bronze
+      default:
+        return colors.textSecondary;
+    }
+  };
+
   if (isLoading) {
     return (
       <View style={commonStyles.container}>
@@ -343,6 +400,14 @@ export default function StreamDashboardScreen() {
         style={styles.scrollView}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.gradientEnd}
+            colors={[colors.gradientEnd]}
+          />
+        }
       >
         {/* Quick Actions */}
         <View style={styles.section}>
@@ -389,18 +454,224 @@ export default function StreamDashboardScreen() {
           </View>
         </View>
 
+        {/* CDN Monitoring Panel */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionTitleRow}>
+              <IconSymbol
+                ios_icon_name="network"
+                android_material_icon_name="cloud"
+                size={20}
+                color={colors.gradientEnd}
+              />
+              <Text style={styles.sectionTitle}>CDN Performance</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.expandButton}
+              onPress={() => setShowCDNDetails(!showCDNDetails)}
+            >
+              <Text style={styles.expandButtonText}>
+                {showCDNDetails ? 'Hide' : 'Show'} Details
+              </Text>
+              <IconSymbol
+                ios_icon_name={showCDNDetails ? 'chevron.up' : 'chevron.down'}
+                android_material_icon_name={showCDNDetails ? 'expand_less' : 'expand_more'}
+                size={16}
+                color={colors.text}
+              />
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.sectionSubtitle}>
+            Monitor your media delivery performance
+          </Text>
+
+          <View style={styles.cdnStatsGrid}>
+            {/* CDN Usage */}
+            <View style={styles.cdnStatCard}>
+              <IconSymbol
+                ios_icon_name="arrow.up.arrow.down"
+                android_material_icon_name="swap_vert"
+                size={24}
+                color={colors.gradientEnd}
+              />
+              <Text style={styles.cdnStatLabel}>CDN Usage</Text>
+              <Text style={styles.cdnStatValue}>{cdnStats.totalRequests.toLocaleString()}</Text>
+              <Text style={styles.cdnStatUnit}>requests</Text>
+            </View>
+
+            {/* Cache HIT % */}
+            <View style={styles.cdnStatCard}>
+              <IconSymbol
+                ios_icon_name="bolt.fill"
+                android_material_icon_name="flash_on"
+                size={24}
+                color="#4CAF50"
+              />
+              <Text style={styles.cdnStatLabel}>Cache HIT %</Text>
+              <Text style={[styles.cdnStatValue, { color: '#4CAF50' }]}>
+                {cdnStats.cacheHitPercentage.toFixed(1)}%
+              </Text>
+              <Text style={styles.cdnStatUnit}>efficiency</Text>
+            </View>
+
+            {/* Average Latency */}
+            <View style={styles.cdnStatCard}>
+              <IconSymbol
+                ios_icon_name="timer"
+                android_material_icon_name="schedule"
+                size={24}
+                color="#FF9800"
+              />
+              <Text style={styles.cdnStatLabel}>Avg Latency</Text>
+              <Text style={[styles.cdnStatValue, { color: '#FF9800' }]}>
+                {cdnStats.avgDeliveryLatency.toFixed(0)}
+              </Text>
+              <Text style={styles.cdnStatUnit}>ms</Text>
+            </View>
+          </View>
+
+          {showCDNDetails && (
+            <>
+              {/* Top Media Accessed */}
+              {cdnStats.topMedia.length > 0 && (
+                <View style={styles.topMediaContainer}>
+                  <Text style={styles.topMediaTitle}>
+                    <IconSymbol
+                      ios_icon_name="star.fill"
+                      android_material_icon_name="star"
+                      size={16}
+                      color="#FFD700"
+                    />
+                    {' '}Top Media Accessed
+                  </Text>
+                  {cdnStats.topMedia.slice(0, 5).map((media, index) => (
+                    <View key={index} style={styles.topMediaItem}>
+                      <View style={styles.topMediaRank}>
+                        <Text style={styles.topMediaRankText}>#{index + 1}</Text>
+                      </View>
+                      <View style={styles.topMediaInfo}>
+                        <View style={styles.topMediaTypeRow}>
+                          <Text style={[styles.topMediaType, { color: getTierColor(media.type) }]}>
+                            {media.type.toUpperCase()}
+                          </Text>
+                        </View>
+                        <Text style={styles.topMediaUrl} numberOfLines={1}>
+                          {media.url.split('/').pop()}
+                        </Text>
+                      </View>
+                      <View style={styles.topMediaCountContainer}>
+                        <Text style={styles.topMediaCount}>{media.accessCount}</Text>
+                        <Text style={styles.topMediaCountLabel}>views</Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {/* Cache HIT % Per User */}
+              {cacheHitPerUser.length > 0 && (
+                <View style={styles.cacheHitPerUserContainer}>
+                  <Text style={styles.cacheHitPerUserTitle}>
+                    <IconSymbol
+                      ios_icon_name="person.3.fill"
+                      android_material_icon_name="group"
+                      size={16}
+                      color={colors.gradientEnd}
+                    />
+                    {' '}Cache HIT % Per User
+                  </Text>
+                  <Text style={styles.cacheHitPerUserSubtitle}>
+                    Top users by cache efficiency
+                  </Text>
+                  {cacheHitPerUser.slice(0, 10).map((user, index) => (
+                    <View key={index} style={styles.cacheHitPerUserItem}>
+                      <View style={styles.cacheHitPerUserRank}>
+                        <Text style={styles.cacheHitPerUserRankText}>{index + 1}</Text>
+                      </View>
+                      <View style={styles.cacheHitPerUserInfo}>
+                        <Text style={styles.cacheHitPerUserName}>{user.username}</Text>
+                        <View style={styles.cacheHitPerUserBar}>
+                          <View
+                            style={[
+                              styles.cacheHitPerUserBarFill,
+                              { width: `${user.cacheHitPercentage}%` },
+                            ]}
+                          />
+                        </View>
+                      </View>
+                      <Text style={styles.cacheHitPerUserPercentage}>
+                        {user.cacheHitPercentage.toFixed(1)}%
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {/* CDN Info */}
+              <View style={styles.cdnInfoContainer}>
+                <Text style={styles.cdnInfoTitle}>
+                  <IconSymbol
+                    ios_icon_name="info.circle.fill"
+                    android_material_icon_name="info"
+                    size={16}
+                    color={colors.textSecondary}
+                  />
+                  {' '}About CDN Tiers
+                </Text>
+                <View style={styles.cdnInfoItem}>
+                  <View style={[styles.cdnInfoBadge, { backgroundColor: '#FFD700' }]}>
+                    <Text style={styles.cdnInfoBadgeText}>A</Text>
+                  </View>
+                  <Text style={styles.cdnInfoText}>
+                    High Priority: Profile images, badges, receipts (30d cache)
+                  </Text>
+                </View>
+                <View style={styles.cdnInfoItem}>
+                  <View style={[styles.cdnInfoBadge, { backgroundColor: '#C0C0C0' }]}>
+                    <Text style={styles.cdnInfoBadgeText}>B</Text>
+                  </View>
+                  <Text style={styles.cdnInfoText}>
+                    Medium Priority: Posts, stories, thumbnails (14d cache)
+                  </Text>
+                </View>
+                <View style={styles.cdnInfoItem}>
+                  <View style={[styles.cdnInfoBadge, { backgroundColor: '#CD7F32' }]}>
+                    <Text style={styles.cdnInfoBadgeText}>C</Text>
+                  </View>
+                  <Text style={styles.cdnInfoText}>
+                    Low Priority: Cached media, banners, previews (3d cache)
+                  </Text>
+                </View>
+              </View>
+            </>
+          )}
+
+          <TouchableOpacity
+            style={styles.refreshButton}
+            onPress={fetchCDNMonitoringData}
+          >
+            <IconSymbol
+              ios_icon_name="arrow.clockwise"
+              android_material_icon_name="refresh"
+              size={16}
+              color={colors.text}
+            />
+            <Text style={styles.refreshButtonText}>Refresh CDN Stats</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* VIP Club Overview */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>
+            <View style={styles.sectionTitleRow}>
               <IconSymbol
                 ios_icon_name="crown.fill"
                 android_material_icon_name="workspace_premium"
                 size={20}
                 color="#FFD700"
               />
-              {' '}VIP Club Overview
-            </Text>
+              <Text style={styles.sectionTitle}>VIP Club Overview</Text>
+            </View>
             <TouchableOpacity
               style={styles.editButton}
               onPress={() => setShowBadgeEditor(true)}
@@ -450,15 +721,15 @@ export default function StreamDashboardScreen() {
 
         {/* VIP Members List */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
+          <View style={styles.sectionTitleRow}>
             <IconSymbol
               ios_icon_name="person.3.fill"
               android_material_icon_name="group"
               size={20}
               color={colors.text}
             />
-            {' '}VIP Members ({activeVIPMembers.length})
-          </Text>
+            <Text style={styles.sectionTitle}>VIP Members ({activeVIPMembers.length})</Text>
+          </View>
 
           {activeVIPMembers.length === 0 ? (
             <View style={styles.emptyState}>
@@ -532,15 +803,15 @@ export default function StreamDashboardScreen() {
 
         {/* Member Earnings Breakdown */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
+          <View style={styles.sectionTitleRow}>
             <IconSymbol
               ios_icon_name="dollarsign.circle.fill"
               android_material_icon_name="attach_money"
               size={20}
               color={colors.gradientEnd}
             />
-            {' '}Earnings Breakdown
-          </Text>
+            <Text style={styles.sectionTitle}>Earnings Breakdown</Text>
+          </View>
 
           <View style={styles.earningsCard}>
             <View style={styles.earningsRow}>
@@ -574,15 +845,15 @@ export default function StreamDashboardScreen() {
 
         {/* Announcements */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
+          <View style={styles.sectionTitleRow}>
             <IconSymbol
               ios_icon_name="megaphone.fill"
               android_material_icon_name="campaign"
               size={20}
               color={colors.gradientEnd}
             />
-            {' '}Send Announcement
-          </Text>
+            <Text style={styles.sectionTitle}>Send Announcement</Text>
+          </View>
           <Text style={styles.sectionSubtitle}>
             Send a message to all active VIP members
           </Text>
@@ -633,15 +904,15 @@ export default function StreamDashboardScreen() {
 
         {/* Add Moderator Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
+          <View style={styles.sectionTitleRow}>
             <IconSymbol
               ios_icon_name="shield.fill"
               android_material_icon_name="shield"
               size={20}
               color={colors.gradientEnd}
             />
-            {' '}Add Moderator
-          </Text>
+            <Text style={styles.sectionTitle}>Add Moderator</Text>
+          </View>
           <Text style={styles.sectionSubtitle}>
             Search by username to add a moderator ({moderators.length}/30)
           </Text>
@@ -712,15 +983,15 @@ export default function StreamDashboardScreen() {
 
         {/* Current Moderators Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
+          <View style={styles.sectionTitleRow}>
             <IconSymbol
               ios_icon_name="person.3.fill"
               android_material_icon_name="group"
               size={20}
               color={colors.text}
             />
-            {' '}Current Moderators ({moderators.length})
-          </Text>
+            <Text style={styles.sectionTitle}>Current Moderators ({moderators.length})</Text>
+          </View>
 
           {moderators.length === 0 ? (
             <View style={styles.emptyState}>
@@ -776,15 +1047,15 @@ export default function StreamDashboardScreen() {
 
         {/* Banned Users Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
+          <View style={styles.sectionTitleRow}>
             <IconSymbol
               ios_icon_name="hand.raised.fill"
               android_material_icon_name="block"
               size={20}
               color={colors.gradientEnd}
             />
-            {' '}Banned Users ({bannedUsers.length})
-          </Text>
+            <Text style={styles.sectionTitle}>Banned Users ({bannedUsers.length})</Text>
+          </View>
 
           {bannedUsers.length === 0 ? (
             <View style={styles.emptyState}>
@@ -906,11 +1177,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 16,
   },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: colors.text,
-    marginBottom: 8,
   },
   sectionSubtitle: {
     fontSize: 14,
@@ -930,6 +1206,22 @@ const styles = StyleSheet.create({
   editButtonText: {
     fontSize: 12,
     fontWeight: '700',
+    color: colors.text,
+  },
+  expandButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.backgroundAlt,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  expandButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
     color: colors.text,
   },
   clubOverviewCard: {
@@ -1246,6 +1538,228 @@ const styles = StyleSheet.create({
   sendButtonText: {
     fontSize: 14,
     fontWeight: '700',
+    color: colors.text,
+  },
+  cdnStatsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 16,
+  },
+  cdnStatCard: {
+    flex: 1,
+    minWidth: '30%',
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  cdnStatLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+  cdnStatValue: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  cdnStatUnit: {
+    fontSize: 10,
+    fontWeight: '400',
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+  },
+  topMediaContainer: {
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  topMediaTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 12,
+  },
+  topMediaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  topMediaRank: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.gradientEnd,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  topMediaRankText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  topMediaInfo: {
+    flex: 1,
+  },
+  topMediaTypeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  topMediaType: {
+    fontSize: 10,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  topMediaUrl: {
+    fontSize: 11,
+    fontWeight: '400',
+    color: colors.textSecondary,
+  },
+  topMediaCountContainer: {
+    alignItems: 'flex-end',
+  },
+  topMediaCount: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.gradientEnd,
+  },
+  topMediaCountLabel: {
+    fontSize: 10,
+    fontWeight: '400',
+    color: colors.textSecondary,
+  },
+  cacheHitPerUserContainer: {
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  cacheHitPerUserTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  cacheHitPerUserSubtitle: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: colors.textSecondary,
+    marginBottom: 12,
+  },
+  cacheHitPerUserItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    gap: 12,
+  },
+  cacheHitPerUserRank: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cacheHitPerUserRankText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  cacheHitPerUserInfo: {
+    flex: 1,
+  },
+  cacheHitPerUserName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  cacheHitPerUserBar: {
+    height: 6,
+    backgroundColor: colors.background,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  cacheHitPerUserBarFill: {
+    height: '100%',
+    backgroundColor: '#4CAF50',
+    borderRadius: 3,
+  },
+  cacheHitPerUserPercentage: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#4CAF50',
+    minWidth: 50,
+    textAlign: 'right',
+  },
+  cdnInfoContainer: {
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  cdnInfoTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 12,
+  },
+  cdnInfoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 8,
+  },
+  cdnInfoBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cdnInfoBadgeText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  cdnInfoText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '400',
+    color: colors.textSecondary,
+  },
+  refreshButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.backgroundAlt,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  refreshButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
     color: colors.text,
   },
 });
