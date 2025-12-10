@@ -1,7 +1,8 @@
+
 {
   "expo": {
     "name": "Roast Live",
-    "slug": "roast-live-app-fauwkm",
+    "slug": "Roast Live",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/natively-dark.png",
@@ -58,6 +59,11 @@
       "eas": {
         "projectId": "your-expo-project-id-here"
       }
+    },
+    "autolinking": {
+      "exclude": [
+        "react-native-nodemediaclient"
+      ]
     }
   },
   "scheme": "Roast Live"
