@@ -18,6 +18,17 @@ export type PushNotificationType =
   | 'GIFT_RECEIVED'
   | 'NEW_FOLLOWER'
   | 'FOLLOWERS_BATCH'
+  | 'NEW_COMMENT'
+  | 'COMMENT_REPLY'
+  | 'MENTION'
+  | 'PREMIUM_ACTIVATED'
+  | 'PREMIUM_RENEWED'
+  | 'PREMIUM_EXPIRING'
+  | 'PREMIUM_CANCELED'
+  | 'PAYMENT_FAILED'
+  | 'VIP_MEMBER_JOINED'
+  | 'VIP_CLUB_JOINED'
+  | 'MILESTONE_UNLOCKED'
   | 'stream_started'
   | 'moderator_role_updated'
   | 'gift_received'
@@ -198,6 +209,7 @@ class PushNotificationService {
       'TIMEOUT_APPLIED',
       'APPEAL_APPROVED',
       'APPEAL_DENIED',
+      'PAYMENT_FAILED',
     ];
     return criticalTypes.includes(type);
   }
@@ -490,6 +502,29 @@ class PushNotificationService {
           notificationType = 'follow';
           category = 'social';
           break;
+        case 'NEW_COMMENT':
+        case 'COMMENT_REPLY':
+        case 'MENTION':
+          notificationType = 'comment';
+          category = 'social';
+          break;
+        case 'PREMIUM_ACTIVATED':
+        case 'PREMIUM_RENEWED':
+        case 'PREMIUM_EXPIRING':
+        case 'PREMIUM_CANCELED':
+        case 'PAYMENT_FAILED':
+          notificationType = 'subscription_renewed';
+          category = 'wallet';
+          break;
+        case 'VIP_MEMBER_JOINED':
+        case 'VIP_CLUB_JOINED':
+          notificationType = 'follow';
+          category = 'social';
+          break;
+        case 'MILESTONE_UNLOCKED':
+          notificationType = 'system_update';
+          category = 'social';
+          break;
         case 'new_message':
           notificationType = 'message';
           category = 'social';
@@ -502,7 +537,7 @@ class PushNotificationService {
         receiver_id: userId,
         message: `${title}\n\n${body}`,
         ref_stream_id: payload?.stream_id || payload?.streamId || null,
-        ref_post_id: payload?.post_id || null,
+        ref_post_id: payload?.post_id || payload?.postId || null,
         ref_story_id: payload?.story_id || null,
         category,
         read: false,
@@ -811,6 +846,291 @@ class PushNotificationService {
       console.log(`✅ Sent gift received notification to ${receiverId}`);
     } catch (error) {
       console.error('Error sending gift received notification:', error);
+    }
+  }
+
+  /**
+   * PROMPT 4: Send notification for new comment on post
+   */
+  async sendNewCommentNotification(
+    postOwnerId: string,
+    commenterUserId: string,
+    commenterName: string,
+    postId: string
+  ): Promise<void> {
+    try {
+      // Don't notify if user comments on their own post
+      if (postOwnerId === commenterUserId) {
+        return;
+      }
+
+      await this.sendPushNotification(
+        postOwnerId,
+        'NEW_COMMENT',
+        'New comment',
+        `${commenterName} commented on your post.`,
+        {
+          route: 'CommentsThread',
+          postId: postId,
+          post_id: postId,
+          sender_id: commenterUserId,
+        }
+      );
+
+      console.log(`✅ Sent new comment notification to ${postOwnerId}`);
+    } catch (error) {
+      console.error('Error sending new comment notification:', error);
+    }
+  }
+
+  /**
+   * PROMPT 4: Send notification for comment reply
+   */
+  async sendCommentReplyNotification(
+    originalCommenterId: string,
+    replierUserId: string,
+    replierName: string,
+    postId: string
+  ): Promise<void> {
+    try {
+      // Don't notify if user replies to their own comment
+      if (originalCommenterId === replierUserId) {
+        return;
+      }
+
+      await this.sendPushNotification(
+        originalCommenterId,
+        'COMMENT_REPLY',
+        'New reply',
+        `${replierName} replied to your comment.`,
+        {
+          route: 'CommentsThread',
+          postId: postId,
+          post_id: postId,
+          sender_id: replierUserId,
+        }
+      );
+
+      console.log(`✅ Sent comment reply notification to ${originalCommenterId}`);
+    } catch (error) {
+      console.error('Error sending comment reply notification:', error);
+    }
+  }
+
+  /**
+   * PROMPT 4: Send notification for @mention
+   */
+  async sendMentionNotification(
+    mentionedUserId: string,
+    mentionerUserId: string,
+    mentionerName: string,
+    postId: string
+  ): Promise<void> {
+    try {
+      // Don't notify if user mentions themselves
+      if (mentionedUserId === mentionerUserId) {
+        return;
+      }
+
+      await this.sendPushNotification(
+        mentionedUserId,
+        'MENTION',
+        'You were mentioned',
+        `${mentionerName} tagged you in a comment.`,
+        {
+          route: 'CommentsThread',
+          postId: postId,
+          post_id: postId,
+          sender_id: mentionerUserId,
+        }
+      );
+
+      console.log(`✅ Sent mention notification to ${mentionedUserId}`);
+    } catch (error) {
+      console.error('Error sending mention notification:', error);
+    }
+  }
+
+  /**
+   * PROMPT 5: Send notification for premium subscription activated
+   */
+  async sendPremiumActivatedNotification(userId: string): Promise<void> {
+    try {
+      await this.sendPushNotification(
+        userId,
+        'PREMIUM_ACTIVATED',
+        'Premium activated!',
+        'Enjoy exclusive benefits!',
+        {
+          route: 'PremiumDashboard',
+        }
+      );
+
+      console.log(`✅ Sent premium activated notification to ${userId}`);
+    } catch (error) {
+      console.error('Error sending premium activated notification:', error);
+    }
+  }
+
+  /**
+   * PROMPT 5: Send notification for premium subscription renewed
+   */
+  async sendPremiumRenewedNotification(userId: string): Promise<void> {
+    try {
+      await this.sendPushNotification(
+        userId,
+        'PREMIUM_RENEWED',
+        'Premium renewed',
+        'Next billing cycle confirmed.',
+        {
+          route: 'PremiumDashboard',
+        }
+      );
+
+      console.log(`✅ Sent premium renewed notification to ${userId}`);
+    } catch (error) {
+      console.error('Error sending premium renewed notification:', error);
+    }
+  }
+
+  /**
+   * PROMPT 5: Send notification for premium subscription expiring soon
+   */
+  async sendPremiumExpiringNotification(userId: string): Promise<void> {
+    try {
+      await this.sendPushNotification(
+        userId,
+        'PREMIUM_EXPIRING',
+        'Premium ending soon',
+        'Renew now to keep your badge and features.',
+        {
+          route: 'PremiumDashboard',
+        }
+      );
+
+      console.log(`✅ Sent premium expiring notification to ${userId}`);
+    } catch (error) {
+      console.error('Error sending premium expiring notification:', error);
+    }
+  }
+
+  /**
+   * PROMPT 5: Send notification for premium subscription canceled
+   */
+  async sendPremiumCanceledNotification(userId: string): Promise<void> {
+    try {
+      await this.sendPushNotification(
+        userId,
+        'PREMIUM_CANCELED',
+        'Premium canceled',
+        'Your subscription has been canceled. You can resubscribe anytime.',
+        {
+          route: 'PremiumDashboard',
+        }
+      );
+
+      console.log(`✅ Sent premium canceled notification to ${userId}`);
+    } catch (error) {
+      console.error('Error sending premium canceled notification:', error);
+    }
+  }
+
+  /**
+   * PROMPT 5: Send notification for payment failed
+   */
+  async sendPaymentFailedNotification(userId: string): Promise<void> {
+    try {
+      await this.sendPushNotification(
+        userId,
+        'PAYMENT_FAILED',
+        'Payment Issue',
+        'Update payment method to continue Premium.',
+        {
+          route: 'PremiumDashboard',
+        }
+      );
+
+      console.log(`✅ Sent payment failed notification to ${userId}`);
+    } catch (error) {
+      console.error('Error sending payment failed notification:', error);
+    }
+  }
+
+  /**
+   * PROMPT 6: Send notification to creator when someone joins their VIP club
+   */
+  async sendVIPMemberJoinedNotification(
+    creatorId: string,
+    memberId: string,
+    memberName: string
+  ): Promise<void> {
+    try {
+      await this.sendPushNotification(
+        creatorId,
+        'VIP_MEMBER_JOINED',
+        'New VIP member!',
+        `${memberName} joined your community.`,
+        {
+          route: 'StreamDashboardVipMembers',
+          sender_id: memberId,
+        }
+      );
+
+      console.log(`✅ Sent VIP member joined notification to creator ${creatorId}`);
+    } catch (error) {
+      console.error('Error sending VIP member joined notification:', error);
+    }
+  }
+
+  /**
+   * PROMPT 6: Send notification to member when they join a VIP club
+   */
+  async sendVIPClubJoinedNotification(
+    memberId: string,
+    creatorId: string,
+    creatorName: string
+  ): Promise<void> {
+    try {
+      await this.sendPushNotification(
+        memberId,
+        'VIP_CLUB_JOINED',
+        `You joined ${creatorName}'s club!`,
+        'You now have exclusive badge & benefits.',
+        {
+          route: 'Profile',
+          userId: creatorId,
+          sender_id: creatorId,
+        }
+      );
+
+      console.log(`✅ Sent VIP club joined notification to member ${memberId}`);
+    } catch (error) {
+      console.error('Error sending VIP club joined notification:', error);
+    }
+  }
+
+  /**
+   * PROMPT 7: Send notification for milestone unlocked
+   */
+  async sendMilestoneNotification(
+    userId: string,
+    milestoneTitle: string,
+    milestoneBody: string
+  ): Promise<void> {
+    try {
+      await this.sendPushNotification(
+        userId,
+        'MILESTONE_UNLOCKED',
+        milestoneTitle,
+        milestoneBody,
+        {
+          route: 'AchievementsCenter',
+        }
+      );
+
+      console.log(`✅ Sent milestone notification to ${userId}`);
+    } catch (error) {
+      console.error('Error sending milestone notification:', error);
     }
   }
 

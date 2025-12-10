@@ -1,6 +1,7 @@
 
 import { supabase } from '@/app/integrations/supabase/client';
 import { notificationService } from './notificationService';
+import { pushNotificationService } from './pushNotificationService';
 
 export interface LiveComment {
   id: string;
@@ -45,6 +46,45 @@ export interface StoryComment {
 }
 
 class CommentService {
+  /**
+   * Extract @mentions from comment text
+   */
+  private extractMentions(text: string): string[] {
+    const mentionRegex = /@(\w+)/g;
+    const mentions: string[] = [];
+    let match;
+    
+    while ((match = mentionRegex.exec(text)) !== null) {
+      mentions.push(match[1]);
+    }
+    
+    return mentions;
+  }
+
+  /**
+   * Get user IDs from usernames
+   */
+  private async getUserIdsByUsernames(usernames: string[]): Promise<string[]> {
+    if (usernames.length === 0) return [];
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id')
+        .in('username', usernames);
+
+      if (error) {
+        console.error('Error fetching user IDs by usernames:', error);
+        return [];
+      }
+
+      return data?.map(u => u.id) || [];
+    } catch (error) {
+      console.error('Error in getUserIdsByUsernames:', error);
+      return [];
+    }
+  }
+
   // Save a live comment to the database
   async saveComment(
     streamId: string,
@@ -168,6 +208,7 @@ class CommentService {
         .single();
 
       if (post && post.user_id !== userId) {
+        // Create in-app notification
         await notificationService.createNotification(
           userId,
           post.user_id,
@@ -178,6 +219,50 @@ class CommentService {
           undefined,
           'social'
         );
+
+        // Get commenter profile
+        const { data: commenterProfile } = await supabase
+          .from('profiles')
+          .select('display_name, username')
+          .eq('id', userId)
+          .single();
+
+        const commenterName = commenterProfile?.display_name || commenterProfile?.username || 'Someone';
+
+        // Send push notification
+        await pushNotificationService.sendNewCommentNotification(
+          post.user_id,
+          userId,
+          commenterName,
+          postId
+        );
+      }
+
+      // Check for @mentions
+      const mentions = this.extractMentions(comment);
+      if (mentions.length > 0) {
+        const mentionedUserIds = await this.getUserIdsByUsernames(mentions);
+        
+        // Get commenter profile
+        const { data: commenterProfile } = await supabase
+          .from('profiles')
+          .select('display_name, username')
+          .eq('id', userId)
+          .single();
+
+        const commenterName = commenterProfile?.display_name || commenterProfile?.username || 'Someone';
+
+        // Send mention notifications
+        for (const mentionedUserId of mentionedUserIds) {
+          if (mentionedUserId !== userId) {
+            await pushNotificationService.sendMentionNotification(
+              mentionedUserId,
+              userId,
+              commenterName,
+              postId
+            );
+          }
+        }
       }
 
       return { success: true, data: data as PostComment };
@@ -229,6 +314,33 @@ class CommentService {
         );
       }
 
+      // Check for @mentions
+      const mentions = this.extractMentions(comment);
+      if (mentions.length > 0) {
+        const mentionedUserIds = await this.getUserIdsByUsernames(mentions);
+        
+        // Get commenter profile
+        const { data: commenterProfile } = await supabase
+          .from('profiles')
+          .select('display_name, username')
+          .eq('id', userId)
+          .single();
+
+        const commenterName = commenterProfile?.display_name || commenterProfile?.username || 'Someone';
+
+        // Send mention notifications (using postId as storyId for routing)
+        for (const mentionedUserId of mentionedUserIds) {
+          if (mentionedUserId !== userId) {
+            await pushNotificationService.sendMentionNotification(
+              mentionedUserId,
+              userId,
+              commenterName,
+              storyId
+            );
+          }
+        }
+      }
+
       return { success: true, data: data as StoryComment };
     } catch (error) {
       console.error('Error in addStoryComment:', error);
@@ -259,11 +371,12 @@ class CommentService {
       // Get parent comment owner to send notification
       const { data: parentComment } = await supabase
         .from('post_comments')
-        .select('user_id')
+        .select('user_id, post_id')
         .eq('id', parentCommentId)
         .single();
 
       if (parentComment && parentComment.user_id !== userId) {
+        // Create in-app notification
         await notificationService.createNotification(
           userId,
           parentComment.user_id,
@@ -274,6 +387,50 @@ class CommentService {
           undefined,
           'social'
         );
+
+        // Get replier profile
+        const { data: replierProfile } = await supabase
+          .from('profiles')
+          .select('display_name, username')
+          .eq('id', userId)
+          .single();
+
+        const replierName = replierProfile?.display_name || replierProfile?.username || 'Someone';
+
+        // Send push notification
+        await pushNotificationService.sendCommentReplyNotification(
+          parentComment.user_id,
+          userId,
+          replierName,
+          parentComment.post_id
+        );
+      }
+
+      // Check for @mentions
+      const mentions = this.extractMentions(comment);
+      if (mentions.length > 0 && parentComment) {
+        const mentionedUserIds = await this.getUserIdsByUsernames(mentions);
+        
+        // Get replier profile
+        const { data: replierProfile } = await supabase
+          .from('profiles')
+          .select('display_name, username')
+          .eq('id', userId)
+          .single();
+
+        const replierName = replierProfile?.display_name || replierProfile?.username || 'Someone';
+
+        // Send mention notifications
+        for (const mentionedUserId of mentionedUserIds) {
+          if (mentionedUserId !== userId) {
+            await pushNotificationService.sendMentionNotification(
+              mentionedUserId,
+              userId,
+              replierName,
+              parentComment.post_id
+            );
+          }
+        }
       }
 
       return { success: true };
@@ -306,7 +463,7 @@ class CommentService {
       // Get parent comment owner to send notification
       const { data: parentComment } = await supabase
         .from('story_comments')
-        .select('user_id')
+        .select('user_id, story_id')
         .eq('id', parentCommentId)
         .single();
 
@@ -321,6 +478,33 @@ class CommentService {
           undefined,
           'social'
         );
+      }
+
+      // Check for @mentions
+      const mentions = this.extractMentions(comment);
+      if (mentions.length > 0 && parentComment) {
+        const mentionedUserIds = await this.getUserIdsByUsernames(mentions);
+        
+        // Get replier profile
+        const { data: replierProfile } = await supabase
+          .from('profiles')
+          .select('display_name, username')
+          .eq('id', userId)
+          .single();
+
+        const replierName = replierProfile?.display_name || replierProfile?.username || 'Someone';
+
+        // Send mention notifications (using storyId as postId for routing)
+        for (const mentionedUserId of mentionedUserIds) {
+          if (mentionedUserId !== userId) {
+            await pushNotificationService.sendMentionNotification(
+              mentionedUserId,
+              userId,
+              replierName,
+              parentComment.story_id
+            );
+          }
+        }
       }
 
       return { success: true };

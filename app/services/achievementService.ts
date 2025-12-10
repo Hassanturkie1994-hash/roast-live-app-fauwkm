@@ -149,12 +149,10 @@ class AchievementService {
       console.log(`✅ Achievement unlocked: ${achievementKey} for user ${userId}`);
 
       // Send push notification
-      await pushNotificationService.sendNotification(
+      await pushNotificationService.sendMilestoneNotification(
         userId,
-        'new_follower', // Using existing type, ideally we'd add 'achievement_unlocked'
         '🎉 Achievement Unlocked!',
-        `${achievement.emoji} ${achievement.name}: ${achievement.description}`,
-        { achievement_key: achievementKey }
+        `${achievement.emoji} ${achievement.name}: ${achievement.description}`
       );
 
       // Create notification
@@ -375,6 +373,94 @@ class AchievementService {
       }
     } catch (error) {
       console.error('Error in checkStreamAchievements:', error);
+    }
+  }
+
+  /**
+   * PROMPT 7: Check for follower milestones
+   */
+  async checkFollowerMilestones(userId: string): Promise<void> {
+    try {
+      // Get follower count
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('followers_count')
+        .eq('id', userId)
+        .single();
+
+      if (!profile) return;
+
+      const followerCount = profile.followers_count || 0;
+
+      // Check for 10 followers in a day milestone
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const { count: recentFollowers } = await supabase
+        .from('followers')
+        .select('*', { count: 'exact', head: true })
+        .eq('following_id', userId)
+        .gte('created_at', oneDayAgo.toISOString());
+
+      if (recentFollowers && recentFollowers >= 10) {
+        await pushNotificationService.sendMilestoneNotification(
+          userId,
+          "You're growing fast!",
+          `You gained ${recentFollowers} followers today!`
+        );
+      }
+    } catch (error) {
+      console.error('Error checking follower milestones:', error);
+    }
+  }
+
+  /**
+   * PROMPT 7: Check for gift value milestones
+   */
+  async checkGiftValueMilestones(userId: string): Promise<void> {
+    try {
+      // Get total gift value received
+      const { data: gifts } = await supabase
+        .from('gift_events')
+        .select('price_sek')
+        .eq('receiver_user_id', userId);
+
+      if (!gifts) return;
+
+      const totalValue = gifts.reduce((sum, gift) => sum + gift.price_sek, 0);
+
+      // Check for 100 kr milestone
+      if (totalValue >= 100 && totalValue < 200) {
+        await pushNotificationService.sendMilestoneNotification(
+          userId,
+          'Milestone unlocked!',
+          `You reached ${totalValue} kr gifted total.`
+        );
+      }
+    } catch (error) {
+      console.error('Error checking gift value milestones:', error);
+    }
+  }
+
+  /**
+   * PROMPT 7: Check for first coin purchase milestone
+   */
+  async checkFirstCoinPurchase(userId: string): Promise<void> {
+    try {
+      // Check if this is the first coin purchase
+      const { count } = await supabase
+        .from('transactions')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('type', 'wallet_topup');
+
+      if (count === 1) {
+        await pushNotificationService.sendMilestoneNotification(
+          userId,
+          'First purchase!',
+          'Thank you for your first coin purchase!'
+        );
+      }
+    } catch (error) {
+      console.error('Error checking first coin purchase:', error);
     }
   }
 }

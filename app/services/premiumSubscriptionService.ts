@@ -2,6 +2,7 @@
 import { supabase } from '@/app/integrations/supabase/client';
 import { notificationService } from './notificationService';
 import { inboxService } from './inboxService';
+import { pushNotificationService } from './pushNotificationService';
 
 export interface PremiumSubscription {
   id: string;
@@ -127,6 +128,9 @@ class PremiumSubscriptionService {
         category: 'wallet',
       });
 
+      // Send push notification
+      await pushNotificationService.sendPremiumActivatedNotification(userId);
+
       console.log('✅ Premium subscription created successfully');
       return { success: true, data: subscription };
     } catch (error) {
@@ -202,6 +206,9 @@ class PremiumSubscriptionService {
         category: 'wallet',
       });
 
+      // Send push notification
+      await pushNotificationService.sendPremiumRenewedNotification(subscription.user_id);
+
       console.log('✅ Premium subscription renewed successfully');
       return { success: true };
     } catch (error) {
@@ -248,6 +255,9 @@ class PremiumSubscriptionService {
         message: `Your PREMIUM subscription has been canceled. You'll retain access until ${new Date(subscription.renewed_at).toLocaleDateString()}.`,
         category: 'wallet',
       });
+
+      // Send push notification
+      await pushNotificationService.sendPremiumCanceledNotification(userId);
 
       console.log('✅ Premium subscription canceled successfully');
       return { success: true };
@@ -308,6 +318,37 @@ class PremiumSubscriptionService {
   }
 
   /**
+   * Check for subscriptions expiring in 48 hours and send notifications
+   */
+  async notifyExpiringSubscriptions(): Promise<void> {
+    try {
+      const now = new Date();
+      const fortyEightHoursFromNow = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+
+      // Find subscriptions expiring in 48 hours
+      const { data: expiringSubs, error } = await supabase
+        .from('premium_subscriptions')
+        .select('user_id, renewed_at')
+        .eq('status', 'canceled')
+        .gte('renewed_at', now.toISOString())
+        .lte('renewed_at', fortyEightHoursFromNow.toISOString());
+
+      if (error || !expiringSubs || expiringSubs.length === 0) {
+        return;
+      }
+
+      // Send expiring notifications
+      for (const sub of expiringSubs) {
+        await pushNotificationService.sendPremiumExpiringNotification(sub.user_id);
+      }
+
+      console.log(`✅ Sent expiring notifications to ${expiringSubs.length} users`);
+    } catch (error) {
+      console.error('Error notifying expiring subscriptions:', error);
+    }
+  }
+
+  /**
    * Handle failed payment
    */
   async handlePaymentFailed(
@@ -341,6 +382,9 @@ class PremiumSubscriptionService {
         message: 'Your PREMIUM subscription payment failed. Please update your payment method to continue.',
         category: 'wallet',
       });
+
+      // Send push notification
+      await pushNotificationService.sendPaymentFailedNotification(subscription.user_id);
 
       console.log('✅ Payment failure handled');
       return { success: true };
