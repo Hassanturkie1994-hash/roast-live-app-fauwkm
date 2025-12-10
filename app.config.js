@@ -82,8 +82,7 @@ module.exports = ({ config }) => {
           color: "#E30052",
           sounds: []
         }
-      ],
-      "react-native-reanimated/plugin"
+      ]
     ],
     scheme: "roastlive",
     experiments: {
