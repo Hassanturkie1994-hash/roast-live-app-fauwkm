@@ -62,6 +62,26 @@ import PlayIcon from './svg/PlayIcon';
 import PauseIcon from './svg/PauseIcon';
 import StopIcon from './svg/StopIcon';
 
+// Import new Roast-Theme icons
+import FlameHomeIcon from './svg/FlameHomeIcon';
+import RoastCompassIcon from './svg/RoastCompassIcon';
+import FireCameraIcon from './svg/FireCameraIcon';
+import SmokeMessageIcon from './svg/SmokeMessageIcon';
+import RoastBadgeIcon from './svg/RoastBadgeIcon';
+import ShockwaveBellIcon from './svg/ShockwaveBellIcon';
+import CrowdFlameIcon from './svg/CrowdFlameIcon';
+import SpotlightPersonIcon from './svg/SpotlightPersonIcon';
+import BurnedPhotoIcon from './svg/BurnedPhotoIcon';
+import HotCircleIcon from './svg/HotCircleIcon';
+import LavaWalletIcon from './svg/LavaWalletIcon';
+import HeatedGearIcon from './svg/HeatedGearIcon';
+import RoastGiftBoxIcon from './svg/RoastGiftBoxIcon';
+import FireInfoIcon from './svg/FireInfoIcon';
+import ShieldFlameIcon from './svg/ShieldFlameIcon';
+import CrownFlameIcon from './svg/CrownFlameIcon';
+import VIPDiamondFlameIcon from './svg/VIPDiamondFlameIcon';
+import PremiumStarFlameIcon from './svg/PremiumStarFlameIcon';
+
 export type RoastIconName =
   | 'account-security'
   | 'password'
@@ -119,7 +139,26 @@ export type RoastIconName =
   | 'close'
   | 'play'
   | 'pause'
-  | 'stop';
+  | 'stop'
+  // New Roast-Theme icons
+  | 'flame-home'
+  | 'roast-compass'
+  | 'fire-camera'
+  | 'smoke-message'
+  | 'roast-badge'
+  | 'shockwave-bell'
+  | 'crowd-flame'
+  | 'spotlight-person'
+  | 'burned-photo'
+  | 'hot-circle'
+  | 'lava-wallet'
+  | 'heated-gear'
+  | 'roast-gift-box'
+  | 'fire-info'
+  | 'shield-flame'
+  | 'crown-flame'
+  | 'vip-diamond-flame'
+  | 'premium-star-flame';
 
 interface RoastIconProps {
   name: RoastIconName;
@@ -128,16 +167,36 @@ interface RoastIconProps {
   style?: any;
 }
 
-const iconMap: Record<RoastIconName, React.ComponentType<{ size: number; color: string }>> = {
+const iconMap: Record<RoastIconName, React.ComponentType<{ size: number; color: string; theme?: 'light' | 'dark' }>> = {
+  // Map old icons to new Roast-Theme equivalents
+  'home': FlameHomeIcon,
+  'explore': RoastCompassIcon,
+  'camera': FireCameraIcon,
+  'inbox': SmokeMessageIcon,
+  'profile': RoastBadgeIcon,
+  'notifications': ShockwaveBellIcon,
+  'bell': ShockwaveBellIcon,
+  'people': CrowdFlameIcon,
+  'follow': SpotlightPersonIcon,
+  'person': SpotlightPersonIcon,
+  'grid': BurnedPhotoIcon,
+  'video': HotCircleIcon,
+  'wallet': LavaWalletIcon,
+  'settings': HeatedGearIcon,
+  'gifts': RoastGiftBoxIcon,
+  'gift': RoastGiftBoxIcon,
+  'warning': FireInfoIcon,
+  'shield': ShieldFlameIcon,
+  'crown': CrownFlameIcon,
+  'premium': PremiumStarFlameIcon,
+  
+  // Keep specific icons that don't have Roast-Theme equivalents yet
   'account-security': AccountSecurityIcon,
   'password': PasswordIcon,
   'blocked-users': BlockedUsersIcon,
   'stream-dashboard': StreamDashboardIcon,
   'saved-streams': SavedStreamsIcon,
   'stream-history': StreamHistoryIcon,
-  'premium': PremiumIcon,
-  'wallet': WalletIcon,
-  'gifts': GiftsIcon,
   'subscriptions': SubscriptionsIcon,
   'withdraw': WithdrawIcon,
   'transactions': TransactionsIcon,
@@ -145,40 +204,23 @@ const iconMap: Record<RoastIconName, React.ComponentType<{ size: number; color: 
   'appeals': AppealsIcon,
   'terms': TermsIcon,
   'privacy': PrivacyIcon,
-  'profile': ProfileIcon,
   'comment': CommentIcon,
-  'notifications': NotificationsIcon,
   'achievements': AchievementsIcon,
   'admin-dashboard': AdminDashboardIcon,
   'appearance': AppearanceIcon,
   'logout': LogoutIcon,
-  'home': HomeIcon,
-  'explore': ExploreIcon,
-  'inbox': InboxIcon,
   'live': LiveIcon,
-  'settings': SettingsIcon,
   'edit': EditIcon,
   'share': ShareIcon,
   'bookmark': BookmarkIcon,
-  'video': VideoIcon,
-  'grid': GridIcon,
   'history': HistoryIcon,
   'add': AddIcon,
   'heart': HeartIcon,
   'like': LikeIcon,
-  'follow': FollowIcon,
-  'bell': BellIcon,
-  'gift': GiftIcon,
-  'warning': WarningIcon,
   'check': CheckIcon,
   'chevron-right': ChevronRightIcon,
   'chevron-left': ChevronLeftIcon,
   'search': SearchIcon,
-  'person': PersonIcon,
-  'people': PeopleIcon,
-  'shield': ShieldIcon,
-  'crown': CrownIcon,
-  'camera': CameraIcon,
   'mic': MicIcon,
   'send': SendIcon,
   'more': MoreIcon,
@@ -186,9 +228,29 @@ const iconMap: Record<RoastIconName, React.ComponentType<{ size: number; color: 
   'play': PlayIcon,
   'pause': PauseIcon,
   'stop': StopIcon,
+  
+  // New Roast-Theme icons (direct mapping)
+  'flame-home': FlameHomeIcon,
+  'roast-compass': RoastCompassIcon,
+  'fire-camera': FireCameraIcon,
+  'smoke-message': SmokeMessageIcon,
+  'roast-badge': RoastBadgeIcon,
+  'shockwave-bell': ShockwaveBellIcon,
+  'crowd-flame': CrowdFlameIcon,
+  'spotlight-person': SpotlightPersonIcon,
+  'burned-photo': BurnedPhotoIcon,
+  'hot-circle': HotCircleIcon,
+  'lava-wallet': LavaWalletIcon,
+  'heated-gear': HeatedGearIcon,
+  'roast-gift-box': RoastGiftBoxIcon,
+  'fire-info': FireInfoIcon,
+  'shield-flame': ShieldFlameIcon,
+  'crown-flame': CrownFlameIcon,
+  'vip-diamond-flame': VIPDiamondFlameIcon,
+  'premium-star-flame': PremiumStarFlameIcon,
 };
 
-export default function RoastIcon({ name, size = 24, color, style }: RoastIconProps) {
+export default function RoastIcon({ name, size = 28, color, style }: RoastIconProps) {
   const { colors, theme } = useTheme();
 
   // Determine color based on theme if not provided
@@ -205,7 +267,7 @@ export default function RoastIcon({ name, size = 24, color, style }: RoastIconPr
 
   return (
     <View style={[styles.container, { width: size, height: size }, style]}>
-      <IconComponent size={size} color={iconColor} />
+      <IconComponent size={size} color={iconColor} theme={theme} />
     </View>
   );
 }

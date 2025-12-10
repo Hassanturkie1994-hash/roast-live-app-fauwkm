@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
-import { IconSymbol } from '@/components/IconSymbol';
+import RoastIcon from '@/components/icons/RoastIcon';
 import GradientButton from '@/components/GradientButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/app/integrations/supabase/client';
@@ -77,20 +77,20 @@ export default function WalletScreen() {
     router.push('/screens/TransactionHistoryScreen');
   };
 
-  const getTransactionIcon = (type: string) => {
+  const getTransactionIcon = (type: string): 'roast-gift-box' | 'lava-wallet' | 'fire-info' | 'heart' => {
     switch (type) {
       case 'add_balance':
       case 'wallet_topup':
-        return { ios: 'plus.circle.fill', android: 'add_circle', color: colors.brandPrimary };
+        return 'lava-wallet';
       case 'withdraw':
       case 'withdrawal':
-        return { ios: 'arrow.down.circle.fill', android: 'download', color: colors.text };
+        return 'lava-wallet';
       case 'gift_purchase':
-        return { ios: 'gift.fill', android: 'card_giftcard', color: colors.brandPrimary };
+        return 'roast-gift-box';
       case 'creator_tip':
-        return { ios: 'heart.fill', android: 'favorite', color: colors.brandPrimary };
+        return 'heart';
       default:
-        return { ios: 'circle.fill', android: 'circle', color: colors.text };
+        return 'fire-info';
     }
   };
 
@@ -127,9 +127,8 @@ export default function WalletScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <IconSymbol
-            ios_icon_name="chevron.left"
-            android_material_icon_name="arrow_back"
+          <RoastIcon
+            name="chevron-left"
             size={24}
             color={colors.text}
           />
@@ -150,6 +149,7 @@ export default function WalletScreen() {
         >
           {/* Balance Card */}
           <View style={[styles.balanceCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <RoastIcon name="lava-wallet" size={48} color={colors.brandPrimary} />
             <Text style={[styles.balanceLabel, { color: colors.textSecondary }]}>Current Balance</Text>
             <Text style={[styles.balanceAmount, { color: colors.text }]}>{walletBalance.toFixed(2)} SEK</Text>
             <View style={styles.balanceActions}>
@@ -174,9 +174,8 @@ export default function WalletScreen() {
 
             {transactions.length === 0 ? (
               <View style={styles.emptyState}>
-                <IconSymbol
-                  ios_icon_name="tray"
-                  android_material_icon_name="inbox"
+                <RoastIcon
+                  name="fire-info"
                   size={48}
                   color={colors.textSecondary}
                 />
@@ -188,16 +187,15 @@ export default function WalletScreen() {
             ) : (
               <View style={styles.transactionsList}>
                 {transactions.slice(0, 5).map((transaction, index) => {
-                  const icon = getTransactionIcon(transaction.type);
+                  const iconName = getTransactionIcon(transaction.type);
                   return (
                     <View key={index} style={[styles.transactionItem, { borderBottomColor: colors.divider }]}>
                       <View style={styles.transactionLeft}>
-                        <View style={[styles.iconContainer, { backgroundColor: `${icon.color}20` }]}>
-                          <IconSymbol
-                            ios_icon_name={icon.ios}
-                            android_material_icon_name={icon.android}
-                            size={20}
-                            color={icon.color}
+                        <View style={[styles.iconContainer, { backgroundColor: `${colors.brandPrimary}20` }]}>
+                          <RoastIcon
+                            name={iconName}
+                            size={24}
+                            color={colors.brandPrimary}
                           />
                         </View>
                         <View style={styles.transactionInfo}>
@@ -227,10 +225,9 @@ export default function WalletScreen() {
 
           {/* Info Card */}
           <View style={[styles.infoCard, { backgroundColor: colors.backgroundAlt }]}>
-            <IconSymbol
-              ios_icon_name="info.circle.fill"
-              android_material_icon_name="info"
-              size={20}
+            <RoastIcon
+              name="fire-info"
+              size={24}
               color={colors.brandPrimary}
             />
             <Text style={[styles.infoText, { color: colors.textSecondary }]}>
@@ -291,6 +288,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     marginBottom: 8,
+    marginTop: 12,
   },
   balanceAmount: {
     fontSize: 42,
@@ -351,9 +349,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },

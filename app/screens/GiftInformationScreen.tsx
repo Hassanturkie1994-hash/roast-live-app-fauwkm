@@ -10,11 +10,11 @@ import {
   Dimensions,
   Modal,
   ScrollView,
-} from 'react-native';
+} from 'react';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/contexts/ThemeContext';
-import { IconSymbol } from '@/components/IconSymbol';
+import RoastIcon from '@/components/icons/RoastIcon';
 import { fetchGifts, Gift, GiftTier } from '@/app/services/giftService';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -147,9 +147,8 @@ export default function GiftInformationScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <IconSymbol
-            ios_icon_name="chevron.left"
-            android_material_icon_name="arrow_back"
+          <RoastIcon
+            name="chevron-left"
             size={24}
             color={colors.text}
           />
@@ -193,9 +192,8 @@ export default function GiftInformationScreen() {
               <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
                 <Text style={[styles.modalTitle, { color: colors.text }]}>Gift Details</Text>
                 <TouchableOpacity onPress={() => setSelectedGift(null)}>
-                  <IconSymbol
-                    ios_icon_name="xmark.circle.fill"
-                    android_material_icon_name="cancel"
+                  <RoastIcon
+                    name="close"
                     size={28}
                     color={colors.textSecondary}
                   />
@@ -232,9 +230,8 @@ export default function GiftInformationScreen() {
                   <View style={styles.modalSection}>
                     <Text style={[styles.modalSectionTitle, { color: colors.text }]}>Popularity</Text>
                     <View style={styles.popularityRow}>
-                      <IconSymbol
-                        ios_icon_name="flame.fill"
-                        android_material_icon_name="local_fire_department"
+                      <RoastIcon
+                        name="flame-home"
                         size={20}
                         color={colors.brandPrimary}
                       />
@@ -246,9 +243,8 @@ export default function GiftInformationScreen() {
                 )}
 
                 <View style={[styles.infoCard, { backgroundColor: colors.backgroundAlt }]}>
-                  <IconSymbol
-                    ios_icon_name="info.circle.fill"
-                    android_material_icon_name="info"
+                  <RoastIcon
+                    name="fire-info"
                     size={18}
                     color={colors.brandPrimary}
                   />

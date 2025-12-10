@@ -11,8 +11,7 @@ import {
   Alert,
 } from 'react-native';
 import { router } from 'expo-router';
-import { IconSymbol } from '@/components/IconSymbol';
-import ThemedEmoji from '@/components/ThemedEmoji';
+import RoastIcon from '@/components/icons/RoastIcon';
 import GradientButton from '@/components/GradientButton';
 import RoastLiveLogo from '@/components/RoastLiveLogo';
 import { useAuth } from '@/contexts/AuthContext';
@@ -135,9 +134,8 @@ export default function ProfileScreen() {
     if (activeTab === 'replays') {
       return (
         <View style={styles.emptyState}>
-          <IconSymbol
-            ios_icon_name="video.fill"
-            android_material_icon_name="videocam"
+          <RoastIcon
+            name="video"
             size={48}
             color={colors.textSecondary}
           />
@@ -156,9 +154,8 @@ export default function ProfileScreen() {
       if (posts.length === 0) {
         return (
           <View style={styles.emptyState}>
-            <IconSymbol
-              ios_icon_name="photo.on.rectangle"
-              android_material_icon_name="photo_library"
+            <RoastIcon
+              name="burned-photo"
               size={48}
               color={colors.textSecondary}
             />
@@ -185,18 +182,16 @@ export default function ProfileScreen() {
               <View style={styles.postOverlay}>
                 <View style={styles.postStats}>
                   <View style={styles.postStat}>
-                    <IconSymbol
-                      ios_icon_name="heart.fill"
-                      android_material_icon_name="favorite"
+                    <RoastIcon
+                      name="heart"
                       size={16}
                       color="#FFFFFF"
                     />
                     <Text style={styles.postStatText}>{post.likes_count}</Text>
                   </View>
                   <View style={styles.postStat}>
-                    <IconSymbol
-                      ios_icon_name="bubble.left.fill"
-                      android_material_icon_name="comment"
+                    <RoastIcon
+                      name="comment"
                       size={16}
                       color="#FFFFFF"
                     />
@@ -213,9 +208,8 @@ export default function ProfileScreen() {
     // Stories tab
     return (
       <View style={styles.emptyState}>
-        <IconSymbol
-          ios_icon_name="clock.fill"
-          android_material_icon_name="history"
+        <RoastIcon
+          name="hot-circle"
           size={48}
           color={colors.textSecondary}
         />
@@ -248,10 +242,9 @@ export default function ProfileScreen() {
         <View style={[styles.logoHeader, { borderBottomColor: colors.border }]}>
           <View style={styles.logoPlaceholder} />
           <TouchableOpacity onPress={handleSettings} style={styles.settingsButton}>
-            <IconSymbol
-              ios_icon_name="gearshape.fill"
-              android_material_icon_name="settings"
-              size={24}
+            <RoastIcon
+              name="heated-gear"
+              size={28}
               color={colors.text}
             />
           </TouchableOpacity>
@@ -307,14 +300,13 @@ export default function ProfileScreen() {
             activeOpacity={0.7}
           >
             <View style={styles.walletLeft}>
-              <ThemedEmoji emoji="💰" size={20} />
+              <RoastIcon name="lava-wallet" size={24} />
               <Text style={[styles.walletLabel, { color: colors.text }]}>Saldo Balance</Text>
             </View>
             <View style={styles.walletRight}>
               <Text style={[styles.walletAmount, { color: colors.brandPrimary }]}>{walletBalance.toFixed(2)} SEK</Text>
-              <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="chevron_right"
+              <RoastIcon
+                name="chevron-right"
                 size={16}
                 color={colors.textSecondary}
               />
@@ -328,12 +320,11 @@ export default function ProfileScreen() {
             activeOpacity={0.7}
           >
             <View style={styles.savedStreamsLeft}>
-              <ThemedEmoji emoji="🎞️" size={20} />
+              <RoastIcon name="video" size={24} />
               <Text style={[styles.savedStreamsLabel, { color: colors.text }]}>Saved Streams</Text>
             </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
+            <RoastIcon
+              name="chevron-right"
               size={16}
               color={colors.textSecondary}
             />
@@ -346,12 +337,11 @@ export default function ProfileScreen() {
             activeOpacity={0.7}
           >
             <View style={styles.savedStreamsLeft}>
-              <ThemedEmoji emoji="📺" size={20} />
+              <RoastIcon name="history" size={24} />
               <Text style={[styles.savedStreamsLabel, { color: colors.text }]}>Stream History</Text>
             </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
+            <RoastIcon
+              name="chevron-right"
               size={16}
               color={colors.textSecondary}
             />
@@ -365,9 +355,8 @@ export default function ProfileScreen() {
               style={[styles.iconButton, { backgroundColor: colors.card, borderColor: colors.border }]} 
               onPress={handleShare}
             >
-              <IconSymbol
-                ios_icon_name="square.and.arrow.up"
-                android_material_icon_name="share"
+              <RoastIcon
+                name="share"
                 size={20}
                 color={colors.text}
               />
@@ -379,14 +368,14 @@ export default function ProfileScreen() {
               style={[styles.actionButton, { backgroundColor: colors.backgroundAlt, borderColor: colors.border }]} 
               onPress={handleCreatePost}
             >
-              <ThemedEmoji emoji="📝" size={20} />
+              <RoastIcon name="burned-photo" size={24} />
               <Text style={[styles.actionButtonText, { color: colors.text }]}>Post</Text>
             </TouchableOpacity>
             <TouchableOpacity 
               style={[styles.actionButton, { backgroundColor: colors.backgroundAlt, borderColor: colors.border }]} 
               onPress={handleCreateStory}
             >
-              <ThemedEmoji emoji="📷" size={20} />
+              <RoastIcon name="hot-circle" size={24} />
               <Text style={[styles.actionButtonText, { color: colors.text }]}>Story</Text>
             </TouchableOpacity>
           </View>
@@ -398,9 +387,8 @@ export default function ProfileScreen() {
             style={[styles.tab, activeTab === 'replays' && { borderBottomColor: colors.brandPrimary }]}
             onPress={() => setActiveTab('replays')}
           >
-            <IconSymbol
-              ios_icon_name="video.fill"
-              android_material_icon_name="videocam"
+            <RoastIcon
+              name="video"
               size={20}
               color={activeTab === 'replays' ? colors.brandPrimary : colors.textSecondary}
             />
@@ -413,9 +401,8 @@ export default function ProfileScreen() {
             style={[styles.tab, activeTab === 'posts' && { borderBottomColor: colors.brandPrimary }]}
             onPress={() => setActiveTab('posts')}
           >
-            <IconSymbol
-              ios_icon_name="square.grid.3x3.fill"
-              android_material_icon_name="grid_on"
+            <RoastIcon
+              name="burned-photo"
               size={20}
               color={activeTab === 'posts' ? colors.brandPrimary : colors.textSecondary}
             />
@@ -428,9 +415,8 @@ export default function ProfileScreen() {
             style={[styles.tab, activeTab === 'stories' && { borderBottomColor: colors.brandPrimary }]}
             onPress={() => setActiveTab('stories')}
           >
-            <IconSymbol
-              ios_icon_name="clock.fill"
-              android_material_icon_name="history"
+            <RoastIcon
+              name="hot-circle"
               size={20}
               color={activeTab === 'stories' ? colors.brandPrimary : colors.textSecondary}
             />

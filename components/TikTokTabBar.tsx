@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { IconSymbol } from '@/components/IconSymbol';
+import RoastIcon from '@/components/icons/RoastIcon';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -114,10 +114,9 @@ export default function TikTokTabBar({ isStreaming = false }: TikTokTabBarProps)
               onPress={() => handleTabPress('/(tabs)/(home)/')}
               activeOpacity={0.7}
             >
-              <IconSymbol
-                ios_icon_name={isActive('/(tabs)/(home)') ? 'house.fill' : 'house'}
-                android_material_icon_name={isActive('/(tabs)/(home)') ? 'home' : 'home-outline'}
-                size={28}
+              <RoastIcon
+                name="flame-home"
+                size={32}
                 color={isActive('/(tabs)/(home)') ? colors.tabIconActiveColor : colors.tabIconColor}
               />
               <Text style={[styles.tabLabel, { color: isActive('/(tabs)/(home)') ? colors.tabIconActiveColor : colors.tabIconColor }]}>
@@ -130,10 +129,9 @@ export default function TikTokTabBar({ isStreaming = false }: TikTokTabBarProps)
               onPress={() => handleTabPress('/(tabs)/explore')}
               activeOpacity={0.7}
             >
-              <IconSymbol
-                ios_icon_name={isActive('/explore') ? 'magnifyingglass.circle.fill' : 'magnifyingglass'}
-                android_material_icon_name={isActive('/explore') ? 'search' : 'search-outline'}
-                size={28}
+              <RoastIcon
+                name="roast-compass"
+                size={32}
                 color={isActive('/explore') ? colors.tabIconActiveColor : colors.tabIconColor}
               />
               <Text style={[styles.tabLabel, { color: isActive('/explore') ? colors.tabIconActiveColor : colors.tabIconColor }]}>
@@ -152,10 +150,9 @@ export default function TikTokTabBar({ isStreaming = false }: TikTokTabBarProps)
                 end={{ x: 1, y: 0 }}
                 style={styles.centerButtonGradient}
               >
-                <IconSymbol
-                  ios_icon_name="plus"
-                  android_material_icon_name="add"
-                  size={24}
+                <RoastIcon
+                  name="fire-camera"
+                  size={28}
                   color="#FFFFFF"
                 />
                 <Text style={styles.centerButtonText}>Go Live</Text>
@@ -168,10 +165,9 @@ export default function TikTokTabBar({ isStreaming = false }: TikTokTabBarProps)
               activeOpacity={0.7}
             >
               <View style={styles.iconContainer}>
-                <IconSymbol
-                  ios_icon_name={isActive('/inbox') ? 'tray.fill' : 'tray'}
-                  android_material_icon_name={isActive('/inbox') ? 'mail' : 'mail-outline'}
-                  size={28}
+                <RoastIcon
+                  name="smoke-message"
+                  size={32}
                   color={isActive('/inbox') ? colors.tabIconActiveColor : colors.tabIconColor}
                 />
                 {unreadCount > 0 && (
@@ -190,10 +186,9 @@ export default function TikTokTabBar({ isStreaming = false }: TikTokTabBarProps)
               onPress={() => handleTabPress('/(tabs)/profile')}
               activeOpacity={0.7}
             >
-              <IconSymbol
-                ios_icon_name={isActive('/profile') ? 'person.fill' : 'person'}
-                android_material_icon_name={isActive('/profile') ? 'person' : 'person-outline'}
-                size={28}
+              <RoastIcon
+                name="roast-badge"
+                size={32}
                 color={isActive('/profile') ? colors.tabIconActiveColor : colors.tabIconColor}
               />
               <Text style={[styles.tabLabel, { color: isActive('/profile') ? colors.tabIconActiveColor : colors.tabIconColor }]}>

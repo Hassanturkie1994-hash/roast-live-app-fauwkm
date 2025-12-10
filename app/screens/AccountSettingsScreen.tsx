@@ -11,8 +11,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
-import { IconSymbol } from '@/components/IconSymbol';
-import ThemedEmoji from '@/components/ThemedEmoji';
+import RoastIcon from '@/components/icons/RoastIcon';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { supabase } from '@/app/integrations/supabase/client';
@@ -152,9 +151,8 @@ export default function AccountSettingsScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <IconSymbol
-            ios_icon_name="chevron.left"
-            android_material_icon_name="arrow_back"
+          <RoastIcon
+            name="chevron-left"
             size={24}
             color={colors.text}
           />
@@ -176,7 +174,7 @@ export default function AccountSettingsScreen() {
         ) : userRole ? (
           <View style={[styles.section, { borderBottomColor: colors.border }]}>
             <View style={styles.sectionTitleRow}>
-              <ThemedEmoji emoji="🧩" size={20} />
+              <RoastIcon name="admin-dashboard" size={20} />
               <Text style={[styles.sectionTitle, { color: colors.text }]}>Dashboard & Tools</Text>
             </View>
 
@@ -185,9 +183,8 @@ export default function AccountSettingsScreen() {
               onPress={handleDashboard}
             >
               <View style={styles.settingLeft}>
-                <IconSymbol
-                  ios_icon_name="chart.bar.fill"
-                  android_material_icon_name="dashboard"
+                <RoastIcon
+                  name="admin-dashboard"
                   size={20}
                   color={colors.brandPrimary}
                 />
@@ -200,9 +197,8 @@ export default function AccountSettingsScreen() {
                   </Text>
                 </View>
               </View>
-              <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="chevron_right"
+              <RoastIcon
+                name="chevron-right"
                 size={20}
                 color={colors.textSecondary}
               />
@@ -213,7 +209,7 @@ export default function AccountSettingsScreen() {
         {/* General Section */}
         <View style={[styles.section, { borderBottomColor: colors.border }]}>
           <View style={styles.sectionTitleRow}>
-            <ThemedEmoji emoji="🎨" size={20} />
+            <RoastIcon name="appearance" size={20} />
             <Text style={[styles.sectionTitle, { color: colors.text }]}>General</Text>
           </View>
 
@@ -222,17 +218,15 @@ export default function AccountSettingsScreen() {
             onPress={() => router.push('/screens/AppearanceSettingsScreen')}
           >
             <View style={styles.settingLeft}>
-              <IconSymbol
-                ios_icon_name="paintbrush.fill"
-                android_material_icon_name="palette"
+              <RoastIcon
+                name="appearance"
                 size={20}
                 color={colors.text}
               />
               <Text style={[styles.settingText, { color: colors.text }]}>Appearance</Text>
             </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
+            <RoastIcon
+              name="chevron-right"
               size={20}
               color={colors.textSecondary}
             />
@@ -243,17 +237,15 @@ export default function AccountSettingsScreen() {
             onPress={() => router.push('/screens/EditProfileScreen')}
           >
             <View style={styles.settingLeft}>
-              <IconSymbol
-                ios_icon_name="person.fill"
-                android_material_icon_name="person"
+              <RoastIcon
+                name="profile"
                 size={20}
                 color={colors.text}
               />
               <Text style={[styles.settingText, { color: colors.text }]}>Profile Settings</Text>
             </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
+            <RoastIcon
+              name="chevron-right"
               size={20}
               color={colors.textSecondary}
             />
@@ -264,12 +256,11 @@ export default function AccountSettingsScreen() {
             onPress={() => router.push('/screens/NotificationSettingsScreen' as any)}
           >
             <View style={styles.settingLeft}>
-              <ThemedEmoji emoji="🔔" size={20} />
+              <RoastIcon name="notifications" size={20} />
               <Text style={[styles.settingText, { color: colors.text }]}>Notifications</Text>
             </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
+            <RoastIcon
+              name="chevron-right"
               size={20}
               color={colors.textSecondary}
             />
@@ -280,12 +271,11 @@ export default function AccountSettingsScreen() {
             onPress={() => router.push('/screens/SavedStreamsScreen')}
           >
             <View style={styles.settingLeft}>
-              <ThemedEmoji emoji="📁" size={20} />
+              <RoastIcon name="saved-streams" size={20} />
               <Text style={[styles.settingText, { color: colors.text }]}>Saved Streams</Text>
             </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
+            <RoastIcon
+              name="chevron-right"
               size={20}
               color={colors.textSecondary}
             />
@@ -296,12 +286,11 @@ export default function AccountSettingsScreen() {
             onPress={() => router.push('/screens/AchievementsScreen')}
           >
             <View style={styles.settingLeft}>
-              <ThemedEmoji emoji="🏆" size={20} />
+              <RoastIcon name="achievements" size={20} />
               <Text style={[styles.settingText, { color: colors.text }]}>Achievements</Text>
             </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
+            <RoastIcon
+              name="chevron-right"
               size={20}
               color={colors.textSecondary}
             />
@@ -311,7 +300,7 @@ export default function AccountSettingsScreen() {
         {/* Account & Security Section */}
         <View style={[styles.section, { borderBottomColor: colors.border }]}>
           <View style={styles.sectionTitleRow}>
-            <ThemedEmoji emoji="🛡️" size={20} />
+            <RoastIcon name="shield" size={20} />
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Account & Security</Text>
           </View>
 
@@ -320,17 +309,15 @@ export default function AccountSettingsScreen() {
             onPress={() => router.push('/screens/AccountSecurityScreen')}
           >
             <View style={styles.settingLeft}>
-              <IconSymbol
-                ios_icon_name="shield.fill"
-                android_material_icon_name="security"
+              <RoastIcon
+                name="account-security"
                 size={20}
                 color={colors.text}
               />
               <Text style={[styles.settingText, { color: colors.text }]}>Account Security</Text>
             </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
+            <RoastIcon
+              name="chevron-right"
               size={20}
               color={colors.textSecondary}
             />
@@ -341,12 +328,11 @@ export default function AccountSettingsScreen() {
             onPress={handleChangePassword}
           >
             <View style={styles.settingLeft}>
-              <ThemedEmoji emoji="🔐" size={20} />
+              <RoastIcon name="password" size={20} />
               <Text style={[styles.settingText, { color: colors.text }]}>Change Password</Text>
             </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
+            <RoastIcon
+              name="chevron-right"
               size={20}
               color={colors.textSecondary}
             />
@@ -357,12 +343,11 @@ export default function AccountSettingsScreen() {
             onPress={() => router.push('/screens/BlockedUsersScreen')}
           >
             <View style={styles.settingLeft}>
-              <ThemedEmoji emoji="🚫" size={20} />
+              <RoastIcon name="blocked-users" size={20} />
               <Text style={[styles.settingText, { color: colors.text }]}>Blocked Users</Text>
             </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
+            <RoastIcon
+              name="chevron-right"
               size={20}
               color={colors.textSecondary}
             />
@@ -372,7 +357,7 @@ export default function AccountSettingsScreen() {
         {/* Streaming Section */}
         <View style={[styles.section, { borderBottomColor: colors.border }]}>
           <View style={styles.sectionTitleRow}>
-            <ThemedEmoji emoji="🎥" size={20} />
+            <RoastIcon name="fire-camera" size={20} />
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Streaming</Text>
           </View>
 
@@ -381,9 +366,8 @@ export default function AccountSettingsScreen() {
             onPress={() => router.push('/screens/StreamDashboardScreen')}
           >
             <View style={styles.settingLeft}>
-              <IconSymbol
-                ios_icon_name="shield.fill"
-                android_material_icon_name="shield"
+              <RoastIcon
+                name="stream-dashboard"
                 size={20}
                 color={colors.brandPrimary}
               />
@@ -394,9 +378,8 @@ export default function AccountSettingsScreen() {
                 </Text>
               </View>
             </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
+            <RoastIcon
+              name="chevron-right"
               size={20}
               color={colors.textSecondary}
             />
@@ -407,12 +390,11 @@ export default function AccountSettingsScreen() {
             onPress={() => router.push('/screens/SavedStreamsScreen')}
           >
             <View style={styles.settingLeft}>
-              <ThemedEmoji emoji="🎞️" size={20} />
+              <RoastIcon name="saved-streams" size={20} />
               <Text style={[styles.settingText, { color: colors.text }]}>Saved Streams</Text>
             </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
+            <RoastIcon
+              name="chevron-right"
               size={20}
               color={colors.textSecondary}
             />
@@ -423,12 +405,11 @@ export default function AccountSettingsScreen() {
             onPress={() => router.push('/screens/ArchivedStreamsScreen')}
           >
             <View style={styles.settingLeft}>
-              <ThemedEmoji emoji="📺" size={20} />
+              <RoastIcon name="stream-history" size={20} />
               <Text style={[styles.settingText, { color: colors.text }]}>Stream History</Text>
             </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
+            <RoastIcon
+              name="chevron-right"
               size={20}
               color={colors.textSecondary}
             />
@@ -438,7 +419,7 @@ export default function AccountSettingsScreen() {
         {/* Wallet & Gifts Section */}
         <View style={[styles.section, { borderBottomColor: colors.border }]}>
           <View style={styles.sectionTitleRow}>
-            <ThemedEmoji emoji="💰" size={20} />
+            <RoastIcon name="lava-wallet" size={20} />
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Wallet & Gifts</Text>
           </View>
 
@@ -447,7 +428,7 @@ export default function AccountSettingsScreen() {
             onPress={() => router.push('/screens/PremiumMembershipScreen' as any)}
           >
             <View style={styles.settingLeft}>
-              <ThemedEmoji emoji="⭐" size={20} />
+              <RoastIcon name="premium-star-flame" size={20} />
               <View>
                 <Text style={[styles.settingText, { color: colors.text }]}>PREMIUM Membership</Text>
                 <Text style={[styles.settingSubtext, { color: colors.textSecondary }]}>
@@ -455,9 +436,8 @@ export default function AccountSettingsScreen() {
                 </Text>
               </View>
             </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
+            <RoastIcon
+              name="chevron-right"
               size={20}
               color={colors.textSecondary}
             />
@@ -468,12 +448,11 @@ export default function AccountSettingsScreen() {
             onPress={() => router.push('/screens/WalletScreen')}
           >
             <View style={styles.settingLeft}>
-              <ThemedEmoji emoji="💰" size={20} />
+              <RoastIcon name="lava-wallet" size={20} />
               <Text style={[styles.settingText, { color: colors.text }]}>Saldo</Text>
             </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
+            <RoastIcon
+              name="chevron-right"
               size={20}
               color={colors.textSecondary}
             />
@@ -484,12 +463,11 @@ export default function AccountSettingsScreen() {
             onPress={() => router.push('/screens/GiftInformationScreen')}
           >
             <View style={styles.settingLeft}>
-              <ThemedEmoji emoji="🎁" size={20} />
+              <RoastIcon name="roast-gift-box" size={20} />
               <Text style={[styles.settingText, { color: colors.text }]}>Gift Information</Text>
             </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
+            <RoastIcon
+              name="chevron-right"
               size={20}
               color={colors.textSecondary}
             />
@@ -500,12 +478,11 @@ export default function AccountSettingsScreen() {
             onPress={() => router.push('/screens/ManageSubscriptionsScreen')}
           >
             <View style={styles.settingLeft}>
-              <ThemedEmoji emoji="💳" size={20} />
+              <RoastIcon name="subscriptions" size={20} />
               <Text style={[styles.settingText, { color: colors.text }]}>Manage Subscriptions</Text>
             </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
+            <RoastIcon
+              name="chevron-right"
               size={20}
               color={colors.textSecondary}
             />
@@ -516,12 +493,11 @@ export default function AccountSettingsScreen() {
             onPress={handleWithdrawEarnings}
           >
             <View style={styles.settingLeft}>
-              <ThemedEmoji emoji="⬇️" size={20} />
+              <RoastIcon name="withdraw" size={20} />
               <Text style={[styles.settingText, { color: colors.text }]}>Withdraw Earnings</Text>
             </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
+            <RoastIcon
+              name="chevron-right"
               size={20}
               color={colors.textSecondary}
             />
@@ -532,12 +508,11 @@ export default function AccountSettingsScreen() {
             onPress={handleTransactionHistory}
           >
             <View style={styles.settingLeft}>
-              <ThemedEmoji emoji="📜" size={20} />
+              <RoastIcon name="transactions" size={20} />
               <Text style={[styles.settingText, { color: colors.text }]}>Transaction History</Text>
             </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
+            <RoastIcon
+              name="chevron-right"
               size={20}
               color={colors.textSecondary}
             />
@@ -547,7 +522,7 @@ export default function AccountSettingsScreen() {
         {/* Safety & Rules Section */}
         <View style={[styles.section, { borderBottomColor: colors.border }]}>
           <View style={styles.sectionTitleRow}>
-            <ThemedEmoji emoji="🛟" size={20} />
+            <RoastIcon name="shield-flame" size={20} />
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Safety & Rules</Text>
           </View>
 
@@ -556,17 +531,15 @@ export default function AccountSettingsScreen() {
             onPress={() => router.push('/screens/SafetyCommunityRulesScreen' as any)}
           >
             <View style={styles.settingLeft}>
-              <IconSymbol
-                ios_icon_name="shield.checkered"
-                android_material_icon_name="verified_user"
+              <RoastIcon
+                name="shield-flame"
                 size={20}
                 color={colors.brandPrimary}
               />
               <Text style={[styles.settingText, { color: colors.text }]}>Safety & Community Rules</Text>
             </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
+            <RoastIcon
+              name="chevron-right"
               size={20}
               color={colors.textSecondary}
             />
@@ -577,12 +550,11 @@ export default function AccountSettingsScreen() {
             onPress={() => router.push('/screens/AppealsViolationsScreen')}
           >
             <View style={styles.settingLeft}>
-              <ThemedEmoji emoji="📄" size={20} />
+              <RoastIcon name="appeals" size={20} />
               <Text style={[styles.settingText, { color: colors.text }]}>Appeals & Violations</Text>
             </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
+            <RoastIcon
+              name="chevron-right"
               size={20}
               color={colors.textSecondary}
             />
@@ -593,12 +565,11 @@ export default function AccountSettingsScreen() {
             onPress={() => router.push('/screens/TermsOfServiceScreen')}
           >
             <View style={styles.settingLeft}>
-              <ThemedEmoji emoji="📘" size={20} />
+              <RoastIcon name="terms" size={20} />
               <Text style={[styles.settingText, { color: colors.text }]}>Terms of Service</Text>
             </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
+            <RoastIcon
+              name="chevron-right"
               size={20}
               color={colors.textSecondary}
             />
@@ -609,12 +580,11 @@ export default function AccountSettingsScreen() {
             onPress={() => router.push('/screens/PrivacyPolicyScreen')}
           >
             <View style={styles.settingLeft}>
-              <ThemedEmoji emoji="🔒" size={20} />
+              <RoastIcon name="privacy" size={20} />
               <Text style={[styles.settingText, { color: colors.text }]}>Privacy Policy</Text>
             </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
+            <RoastIcon
+              name="chevron-right"
               size={20}
               color={colors.textSecondary}
             />
@@ -624,15 +594,14 @@ export default function AccountSettingsScreen() {
         {/* Profile Preferences Section */}
         <View style={[styles.section, { borderBottomColor: colors.border }]}>
           <View style={styles.sectionTitleRow}>
-            <ThemedEmoji emoji="🙈" size={20} />
+            <RoastIcon name="profile" size={20} />
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Profile Preferences</Text>
           </View>
 
           <View style={[styles.settingItem, { borderBottomColor: colors.divider }]}>
             <View style={styles.settingLeft}>
-              <IconSymbol
-                ios_icon_name="eye.slash.fill"
-                android_material_icon_name="visibility_off"
+              <RoastIcon
+                name="profile"
                 size={20}
                 color={colors.text}
               />
@@ -648,7 +617,7 @@ export default function AccountSettingsScreen() {
 
           <View style={[styles.settingItem, { borderBottomColor: colors.divider }]}>
             <View style={styles.settingLeft}>
-              <ThemedEmoji emoji="💬" size={20} />
+              <RoastIcon name="comment" size={20} />
               <View>
                 <Text style={[styles.settingText, { color: colors.text }]}>Who Can Comment</Text>
                 <Text style={[styles.settingSubtext, { color: colors.textSecondary }]}>{commentPermission}</Text>
@@ -664,9 +633,8 @@ export default function AccountSettingsScreen() {
                 ]);
               }}
             >
-              <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="chevron_right"
+              <RoastIcon
+                name="chevron-right"
                 size={20}
                 color={colors.textSecondary}
               />
@@ -681,9 +649,8 @@ export default function AccountSettingsScreen() {
             onPress={handleSignOut}
           >
             <View style={styles.settingLeft}>
-              <IconSymbol
-                ios_icon_name="rectangle.portrait.and.arrow.right"
-                android_material_icon_name="logout"
+              <RoastIcon
+                name="logout"
                 size={20}
                 color={colors.brandPrimary}
               />
@@ -696,9 +663,8 @@ export default function AccountSettingsScreen() {
                 )}
               </View>
             </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
+            <RoastIcon
+              name="chevron-right"
               size={20}
               color={colors.textSecondary}
             />
