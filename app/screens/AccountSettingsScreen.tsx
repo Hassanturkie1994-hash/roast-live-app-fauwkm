@@ -254,6 +254,27 @@ export default function AccountSettingsScreen() {
 
           <TouchableOpacity 
             style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
+            onPress={() => router.push('/screens/NotificationSettingsScreen' as any)}
+          >
+            <View style={styles.settingLeft}>
+              <IconSymbol
+                ios_icon_name="bell.fill"
+                android_material_icon_name="notifications"
+                size={20}
+                color={colors.brandPrimary}
+              />
+              <Text style={[styles.settingText, { color: colors.text }]}>Notifications</Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="chevron_right"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
             onPress={() => router.push('/screens/SavedStreamsScreen')}
           >
             <View style={styles.settingLeft}>

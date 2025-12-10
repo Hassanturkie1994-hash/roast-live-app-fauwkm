@@ -14,6 +14,10 @@ export type PushNotificationType =
   | 'APPEAL_DENIED'
   | 'ADMIN_ANNOUNCEMENT'
   | 'SAFETY_REMINDER'
+  | 'STREAM_STARTED'
+  | 'GIFT_RECEIVED'
+  | 'NEW_FOLLOWER'
+  | 'FOLLOWERS_BATCH'
   | 'stream_started'
   | 'moderator_role_updated'
   | 'gift_received'
@@ -51,6 +55,11 @@ export interface NotificationPreferences {
   gift_received: boolean;
   new_follower: boolean;
   new_message: boolean;
+  safety_moderation_alerts: boolean;
+  admin_announcements: boolean;
+  quiet_hours_start: string | null;
+  quiet_hours_end: string | null;
+  notify_when_followed_goes_live: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -150,13 +159,144 @@ class PushNotificationService {
   }
 
   /**
+   * PROMPT 4: Check if user is in quiet hours
+   */
+  private async isInQuietHours(userId: string): Promise<boolean> {
+    try {
+      const prefs = await this.getPreferences(userId);
+      if (!prefs || !prefs.quiet_hours_start || !prefs.quiet_hours_end) {
+        return false;
+      }
+
+      const now = new Date();
+      const currentTime = now.getHours() * 60 + now.getMinutes();
+
+      const [startHour, startMin] = prefs.quiet_hours_start.split(':').map(Number);
+      const [endHour, endMin] = prefs.quiet_hours_end.split(':').map(Number);
+
+      const startTime = startHour * 60 + startMin;
+      const endTime = endHour * 60 + endMin;
+
+      // Handle overnight quiet hours (e.g., 22:00 to 08:00)
+      if (startTime > endTime) {
+        return currentTime >= startTime || currentTime <= endTime;
+      }
+
+      return currentTime >= startTime && currentTime <= endTime;
+    } catch (error) {
+      console.error('Error checking quiet hours:', error);
+      return false;
+    }
+  }
+
+  /**
+   * PROMPT 4: Check if notification type is critical (always send during quiet hours)
+   */
+  private isCriticalNotification(type: PushNotificationType): boolean {
+    const criticalTypes = [
+      'BAN_APPLIED',
+      'TIMEOUT_APPLIED',
+      'APPEAL_APPROVED',
+      'APPEAL_DENIED',
+    ];
+    return criticalTypes.includes(type);
+  }
+
+  /**
+   * PROMPT 4: Check and update rate limiting
+   * Max 5 moderation-related pushes per 30 minutes per user
+   */
+  private async checkRateLimit(userId: string, type: PushNotificationType): Promise<boolean> {
+    try {
+      const moderationTypes = [
+        'MODERATION_WARNING',
+        'TIMEOUT_APPLIED',
+        'BAN_APPLIED',
+        'BAN_EXPIRED',
+        'SAFETY_REMINDER',
+      ];
+
+      if (!moderationTypes.includes(type)) {
+        return true; // Not a moderation notification, no rate limit
+      }
+
+      const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+
+      // Get or create rate limit record
+      const { data: rateLimit, error: fetchError } = await supabase
+        .from('push_notification_rate_limits')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('notification_type', 'moderation')
+        .gte('window_start', thirtyMinutesAgo.toISOString())
+        .maybeSingle();
+
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        console.error('Error fetching rate limit:', fetchError);
+        return true; // Allow on error
+      }
+
+      if (!rateLimit) {
+        // Create new rate limit record
+        await supabase.from('push_notification_rate_limits').insert({
+          user_id: userId,
+          notification_type: 'moderation',
+          sent_count: 1,
+          window_start: new Date().toISOString(),
+        });
+        return true;
+      }
+
+      // Check if limit exceeded
+      if (rateLimit.sent_count >= 5) {
+        console.log(`⚠️ Rate limit exceeded for user ${userId}`);
+        return false;
+      }
+
+      // Increment count
+      await supabase
+        .from('push_notification_rate_limits')
+        .update({
+          sent_count: rateLimit.sent_count + 1,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', rateLimit.id);
+
+      return true;
+    } catch (error) {
+      console.error('Error checking rate limit:', error);
+      return true; // Allow on error
+    }
+  }
+
+  /**
+   * PROMPT 4: Send batched notification for rate-limited moderation events
+   */
+  async sendBatchedModerationNotification(userId: string): Promise<void> {
+    try {
+      await this.sendPushNotification(
+        userId,
+        'SYSTEM_WARNING',
+        'Multiple account updates',
+        'Several moderation events occurred. Check your Notifications.',
+        { route: 'Notifications' }
+      );
+    } catch (error) {
+      console.error('Error sending batched moderation notification:', error);
+    }
+  }
+
+  /**
    * PROMPT 1: Core push notification sender
    * Wrap this behind a single backend function: sendPushNotification(userId, type, title, body, payload)
    * 
    * This function:
-   * 1. Logs the notification in push_notifications_log
-   * 2. Creates an in-app notification in the notifications table
-   * 3. Sends the actual push notification via FCM/APNs (via edge function)
+   * 1. Checks user preferences
+   * 2. Checks quiet hours (Prompt 4)
+   * 3. Checks rate limiting (Prompt 4)
+   * 4. Logs the notification in push_notifications_log
+   * 5. Creates an in-app notification in the notifications table
+   * 6. Sends the actual push notification via FCM/APNs (via edge function)
    */
   async sendPushNotification(
     userId: string,
@@ -166,12 +306,65 @@ class PushNotificationService {
     payload?: Record<string, any>
   ): Promise<{ success: boolean; error?: string }> {
     try {
+      // Check user preferences
+      const prefs = await this.getPreferences(userId);
+      if (!prefs) {
+        console.log(`No preferences found for user ${userId}, using defaults`);
+      }
+
+      // Check if user has disabled this notification type
+      if (prefs) {
+        if (type === 'ADMIN_ANNOUNCEMENT' && !prefs.admin_announcements) {
+          console.log(`User ${userId} has disabled admin announcements`);
+          return { success: true }; // Silently skip
+        }
+
+        const moderationTypes = ['MODERATION_WARNING', 'TIMEOUT_APPLIED', 'BAN_APPLIED', 'SAFETY_REMINDER'];
+        if (moderationTypes.includes(type) && !prefs.safety_moderation_alerts) {
+          console.log(`User ${userId} has disabled safety/moderation alerts`);
+          return { success: true }; // Silently skip
+        }
+
+        if (type === 'STREAM_STARTED' && !prefs.notify_when_followed_goes_live) {
+          console.log(`User ${userId} has disabled live stream notifications`);
+          return { success: true }; // Silently skip
+        }
+
+        if (type === 'GIFT_RECEIVED' && !prefs.gift_received) {
+          console.log(`User ${userId} has disabled gift notifications`);
+          return { success: true }; // Silently skip
+        }
+
+        if (type === 'NEW_FOLLOWER' && !prefs.new_follower) {
+          console.log(`User ${userId} has disabled follower notifications`);
+          return { success: true }; // Silently skip
+        }
+      }
+
+      // PROMPT 4: Check quiet hours
+      const inQuietHours = await this.isInQuietHours(userId);
+      if (inQuietHours && !this.isCriticalNotification(type)) {
+        console.log(`User ${userId} is in quiet hours, skipping non-critical notification`);
+        // Still create in-app notification
+        await this.createInAppNotification(userId, type, title, body, payload);
+        return { success: true };
+      }
+
+      // PROMPT 4: Check rate limiting
+      const withinRateLimit = await this.checkRateLimit(userId, type);
+      if (!withinRateLimit) {
+        console.log(`Rate limit exceeded for user ${userId}, will batch notifications`);
+        // Still create in-app notification
+        await this.createInAppNotification(userId, type, title, body, payload);
+        return { success: true };
+      }
+
       // Get active device tokens
       const tokens = await this.getActiveDeviceTokens(userId);
 
       if (tokens.length === 0) {
         console.log(`No active device tokens for user ${userId}`);
-        // Still log the notification even if no tokens
+        // Still log and create in-app notification
       }
 
       // Log the push notification
@@ -281,14 +474,18 @@ class PushNotificationService {
           notificationType = 'admin_announcement';
           category = 'admin';
           break;
+        case 'STREAM_STARTED':
         case 'stream_started':
           notificationType = 'stream_started';
           category = 'social';
           break;
+        case 'GIFT_RECEIVED':
         case 'gift_received':
           notificationType = 'gift_received';
           category = 'gifts';
           break;
+        case 'NEW_FOLLOWER':
+        case 'FOLLOWERS_BATCH':
         case 'new_follower':
           notificationType = 'follow';
           category = 'social';
@@ -304,7 +501,7 @@ class PushNotificationService {
         sender_id: payload?.sender_id || null,
         receiver_id: userId,
         message: `${title}\n\n${body}`,
-        ref_stream_id: payload?.stream_id || null,
+        ref_stream_id: payload?.stream_id || payload?.streamId || null,
         ref_post_id: payload?.post_id || null,
         ref_story_id: payload?.story_id || null,
         category,
@@ -344,6 +541,9 @@ class PushNotificationService {
             gift_received: true,
             new_follower: true,
             new_message: true,
+            safety_moderation_alerts: true,
+            admin_announcements: true,
+            notify_when_followed_goes_live: true,
           })
           .select()
           .single();
@@ -462,6 +662,270 @@ class PushNotificationService {
     } catch (error) {
       console.error('Error in getAllPushNotificationLogs:', error);
       return [];
+    }
+  }
+
+  /**
+   * PROMPT 3: Send notification for new follower (with batching)
+   */
+  async sendNewFollowerNotification(followedUserId: string, followerUserId: string, followerName: string): Promise<void> {
+    try {
+      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+
+      // Check for existing batch
+      const { data: batch, error: fetchError } = await supabase
+        .from('follower_notification_batch')
+        .select('*')
+        .eq('user_id', followedUserId)
+        .gte('window_start', tenMinutesAgo.toISOString())
+        .maybeSingle();
+
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        console.error('Error fetching follower batch:', fetchError);
+      }
+
+      if (!batch) {
+        // First follower in this window - send individual notification
+        await this.sendPushNotification(
+          followedUserId,
+          'NEW_FOLLOWER',
+          'New follower!',
+          `${followerName} just followed you.`,
+          {
+            route: 'Profile',
+            userId: followerUserId,
+            sender_id: followerUserId,
+          }
+        );
+
+        // Create batch record
+        await supabase.from('follower_notification_batch').insert({
+          user_id: followedUserId,
+          follower_ids: [followerUserId],
+          batch_count: 1,
+          window_start: new Date().toISOString(),
+        });
+      } else {
+        // Add to existing batch
+        const newFollowerIds = [...(batch.follower_ids || []), followerUserId];
+        const newCount = batch.batch_count + 1;
+
+        await supabase
+          .from('follower_notification_batch')
+          .update({
+            follower_ids: newFollowerIds,
+            batch_count: newCount,
+          })
+          .eq('id', batch.id);
+
+        // If > 3 followers, send batched notification
+        if (newCount > 3) {
+          await this.sendPushNotification(
+            followedUserId,
+            'FOLLOWERS_BATCH',
+            "You're gaining followers!",
+            `You gained ${newCount} new followers recently.`,
+            {
+              route: 'Profile',
+              userId: followedUserId,
+            }
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Error sending new follower notification:', error);
+    }
+  }
+
+  /**
+   * PROMPT 1: Send notification when followed creator goes live
+   */
+  async sendLiveStreamNotification(streamId: string, creatorId: string, creatorName: string): Promise<void> {
+    try {
+      // Get all followers of the creator
+      const { data: followers, error } = await supabase
+        .from('followers')
+        .select('follower_id')
+        .eq('following_id', creatorId);
+
+      if (error) {
+        console.error('Error fetching followers:', error);
+        return;
+      }
+
+      if (!followers || followers.length === 0) {
+        console.log(`No followers found for creator ${creatorId}`);
+        return;
+      }
+
+      // Send notification to each follower
+      for (const follower of followers) {
+        await this.sendPushNotification(
+          follower.follower_id,
+          'STREAM_STARTED',
+          `${creatorName} is LIVE now!`,
+          'Join the stream before it fills up!',
+          {
+            route: 'LiveStream',
+            streamId: streamId,
+            stream_id: streamId,
+            sender_id: creatorId,
+          }
+        );
+      }
+
+      console.log(`✅ Sent live stream notifications to ${followers.length} followers`);
+    } catch (error) {
+      console.error('Error sending live stream notifications:', error);
+    }
+  }
+
+  /**
+   * PROMPT 2: Send notification for high-value gift received
+   */
+  async sendGiftReceivedNotification(
+    receiverId: string,
+    senderName: string,
+    giftName: string,
+    giftValue: number,
+    giftId: string
+  ): Promise<void> {
+    try {
+      // Check if gift meets threshold (50 kr+)
+      if (giftValue < 50) {
+        console.log(`Gift value ${giftValue} kr is below threshold, skipping notification`);
+        return;
+      }
+
+      await this.sendPushNotification(
+        receiverId,
+        'GIFT_RECEIVED',
+        'You received a gift!',
+        `${senderName} sent you a ${giftName} worth ${giftValue} kr.`,
+        {
+          route: 'GiftActivity',
+          giftId: giftId,
+        }
+      );
+
+      console.log(`✅ Sent gift received notification to ${receiverId}`);
+    } catch (error) {
+      console.error('Error sending gift received notification:', error);
+    }
+  }
+
+  /**
+   * PROMPT 5: Send admin announcement to all users or specific segment
+   */
+  async sendAdminAnnouncement(
+    announcementId: string,
+    title: string,
+    body: string,
+    segmentType: string,
+    issuedBy: string
+  ): Promise<{ success: boolean; sentCount: number; error?: string }> {
+    try {
+      // Get users based on segment type
+      let userIds: string[] = [];
+
+      switch (segmentType) {
+        case 'all_users':
+          const { data: allUsers } = await supabase.from('profiles').select('id');
+          userIds = allUsers?.map(u => u.id) || [];
+          break;
+
+        case 'creators_only':
+          // Users who have created at least one stream
+          const { data: creators } = await supabase
+            .from('streams')
+            .select('broadcaster_id')
+            .not('broadcaster_id', 'is', null);
+          userIds = [...new Set(creators?.map(s => s.broadcaster_id) || [])];
+          break;
+
+        case 'premium_only':
+          const { data: premiumUsers } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('premium_active', true);
+          userIds = premiumUsers?.map(u => u.id) || [];
+          break;
+
+        case 'recently_banned':
+          const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+          const { data: bannedUsers } = await supabase
+            .from('admin_penalties')
+            .select('user_id')
+            .eq('is_active', true)
+            .gte('issued_at', sevenDaysAgo.toISOString());
+          userIds = [...new Set(bannedUsers?.map(b => b.user_id) || [])];
+          break;
+
+        case 'heavy_gifters':
+          // Users who have sent gifts worth > 500 kr in the last 30 days
+          const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+          const { data: gifters } = await supabase
+            .from('gift_events')
+            .select('sender_user_id, price_sek')
+            .gte('created_at', thirtyDaysAgo.toISOString());
+          
+          const gifterTotals = new Map<string, number>();
+          gifters?.forEach(g => {
+            const current = gifterTotals.get(g.sender_user_id) || 0;
+            gifterTotals.set(g.sender_user_id, current + g.price_sek);
+          });
+          
+          userIds = Array.from(gifterTotals.entries())
+            .filter(([_, total]) => total > 500)
+            .map(([userId, _]) => userId);
+          break;
+
+        case 'new_users':
+          const sevenDaysAgoNew = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+          const { data: newUsers } = await supabase
+            .from('profiles')
+            .select('id')
+            .gte('created_at', sevenDaysAgoNew.toISOString());
+          userIds = newUsers?.map(u => u.id) || [];
+          break;
+
+        default:
+          console.error(`Unknown segment type: ${segmentType}`);
+          return { success: false, sentCount: 0, error: 'Unknown segment type' };
+      }
+
+      console.log(`Sending announcement to ${userIds.length} users in segment ${segmentType}`);
+
+      // Send notification to each user
+      let sentCount = 0;
+      for (const userId of userIds) {
+        const result = await this.sendPushNotification(
+          userId,
+          'ADMIN_ANNOUNCEMENT',
+          'Roast Live Update',
+          body.substring(0, 80) + (body.length > 80 ? '...' : ''),
+          {
+            route: 'Notifications',
+            announcementId: announcementId,
+          }
+        );
+
+        if (result.success) {
+          sentCount++;
+        }
+      }
+
+      // Update announcement as sent
+      await supabase
+        .from('admin_announcements')
+        .update({ sent_at: new Date().toISOString() })
+        .eq('id', announcementId);
+
+      console.log(`✅ Sent admin announcement to ${sentCount}/${userIds.length} users`);
+      return { success: true, sentCount };
+    } catch (error: any) {
+      console.error('Error sending admin announcement:', error);
+      return { success: false, sentCount: 0, error: error.message };
     }
   }
 }

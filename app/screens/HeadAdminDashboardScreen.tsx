@@ -480,15 +480,28 @@ export default function HeadAdminDashboardScreen() {
           
           <TouchableOpacity
             style={[styles.actionButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => router.push('/screens/AdminAnnouncementsScreen' as any)}
+          >
+            <IconSymbol
+              ios_icon_name="bell.badge.fill"
+              android_material_icon_name="notifications_active"
+              size={20}
+              color={colors.brandPrimary}
+            />
+            <Text style={[styles.actionButtonText, { color: colors.text }]}>Send Push Announcement</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: colors.card, borderColor: colors.border }]}
             onPress={() => setShowAnnouncementModal(true)}
           >
             <IconSymbol
               ios_icon_name="megaphone.fill"
               android_material_icon_name="campaign"
               size={20}
-              color={colors.brandPrimary}
+              color={colors.text}
             />
-            <Text style={[styles.actionButtonText, { color: colors.text }]}>Send App-Wide Announcement</Text>
+            <Text style={[styles.actionButtonText, { color: colors.text }]}>Send In-App Announcement</Text>
           </TouchableOpacity>
 
           <TouchableOpacity

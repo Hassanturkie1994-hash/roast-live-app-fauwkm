@@ -225,17 +225,14 @@ export async function purchaseGift(
       console.error('Error incrementing gift usage:', usageError);
     }
 
-    // Send push notification to receiver
-    await pushNotificationService.sendNotification(
+    // PROMPT 2: Send push notification to receiver for high-value gifts (50 kr+)
+    const senderName = senderInfo?.display_name || senderInfo?.username || 'Someone';
+    await pushNotificationService.sendGiftReceivedNotification(
       receiverId,
-      'gift_received',
-      'Gift Received!',
-      `${senderInfo?.display_name || 'Someone'} sent you ${gift.name}!`,
-      {
-        sender_id: senderId,
-        gift_id: giftId,
-        amount: giftPrice,
-      }
+      senderName,
+      gift.name,
+      giftPrice,
+      giftId
     );
 
     // Track gift in analytics if it's during a livestream

@@ -1,6 +1,7 @@
 
 import { supabase } from '@/app/integrations/supabase/client';
 import { notificationService } from './notificationService';
+import { pushNotificationService } from './pushNotificationService';
 
 export const followService = {
   async followUser(followerId: string, followingId: string) {
@@ -36,6 +37,16 @@ export const followService = {
         undefined,
         'social'
       );
+
+      // PROMPT 3: Send push notification for new follower (with batching)
+      const { data: followerProfile } = await supabase
+        .from('profiles')
+        .select('display_name, username')
+        .eq('id', followerId)
+        .single();
+
+      const followerName = followerProfile?.display_name || followerProfile?.username || 'Someone';
+      await pushNotificationService.sendNewFollowerNotification(followingId, followerId, followerName);
 
       return { success: true, isMutual: !!mutualFollow };
     } catch (error) {

@@ -119,6 +119,85 @@ Deno.serve(async (req) => {
 
     console.log(`✅ Stream started with ${moderatorsArray.length} moderators`);
 
+    // PROMPT 1: Send push notifications to followers when creator goes live
+    try {
+      // Get creator info
+      const { data: creatorProfile } = await supabase
+        .from('profiles')
+        .select('display_name, username')
+        .eq('id', user_id)
+        .single();
+
+      const creatorName = creatorProfile?.display_name || creatorProfile?.username || 'A creator';
+
+      // Get all followers of the creator
+      const { data: followers, error: followersError } = await supabase
+        .from('followers')
+        .select('follower_id')
+        .eq('following_id', user_id);
+
+      if (!followersError && followers && followers.length > 0) {
+        console.log(`Sending live notifications to ${followers.length} followers`);
+
+        // Send notification to each follower
+        for (const follower of followers) {
+          // Check if user has enabled live notifications
+          const { data: prefs } = await supabase
+            .from('notification_preferences')
+            .select('notify_when_followed_goes_live')
+            .eq('user_id', follower.follower_id)
+            .maybeSingle();
+
+          if (prefs && prefs.notify_when_followed_goes_live === false) {
+            continue; // Skip if user disabled live notifications
+          }
+
+          // Get active device tokens
+          const { data: tokens } = await supabase
+            .from('push_device_tokens')
+            .select('device_token, platform')
+            .eq('user_id', follower.follower_id)
+            .eq('is_active', true);
+
+          if (tokens && tokens.length > 0) {
+            // Send push notification via edge function
+            await supabase.functions.invoke('send-push-notification', {
+              body: {
+                userId: follower.follower_id,
+                tokens: tokens.map(t => ({ token: t.device_token, platform: t.platform })),
+                notification: {
+                  title: `${creatorName} is LIVE now!`,
+                  body: 'Join the stream before it fills up!',
+                  data: {
+                    route: 'LiveStream',
+                    streamId: uid,
+                    stream_id: uid,
+                    sender_id: user_id,
+                  },
+                },
+              },
+            });
+          }
+
+          // Create in-app notification
+          await supabase.from('notifications').insert({
+            type: 'stream_started',
+            sender_id: user_id,
+            receiver_id: follower.follower_id,
+            message: `${creatorName} is LIVE now!\n\nJoin the stream before it fills up!`,
+            ref_stream_id: uid,
+            category: 'social',
+            read: false,
+          });
+        }
+
+        console.log(`✅ Sent live notifications to ${followers.length} followers`);
+      }
+    } catch (notifError) {
+      console.error('Error sending live notifications:', notifError);
+      // Don't fail the stream start if notifications fail
+    }
+
     return new Response(
       JSON.stringify(response),
       {
