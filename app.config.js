@@ -44,7 +44,8 @@ module.exports = ({ config }) => {
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.VIBRATE"
-      ]
+      ],
+      googleServicesFile: process.env.GOOGLE_SERVICES_JSON || "./google-services.json"
     },
     web: {
       favicon: "./assets/images/final_quest_240x240.png",
@@ -80,7 +81,9 @@ module.exports = ({ config }) => {
         {
           icon: "./assets/images/natively-dark.png",
           color: "#E30052",
-          sounds: []
+          sounds: [],
+          androidMode: "default",
+          androidCollapsedTitle: "{{unread_count}} new notifications"
         }
       ]
     ],
@@ -92,7 +95,13 @@ module.exports = ({ config }) => {
       router: {},
       eas: {
         projectId: process.env.EXPO_PUBLIC_PROJECT_ID || "your-expo-project-id-here"
-      }
+      },
+      // Runtime environment variables (accessible via Constants.expoConfig.extra)
+      EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+      CLOUDFLARE_R2_PUBLIC_BASE_URL: process.env.CLOUDFLARE_R2_PUBLIC_BASE_URL || "https://pub-YOUR_ACCOUNT_ID.r2.dev",
+      CLOUDFLARE_ACCOUNT_ID: process.env.CLOUDFLARE_ACCOUNT_ID,
+      SUPABASE_FUNCTIONS_URL: process.env.SUPABASE_FUNCTIONS_URL || process.env.EXPO_PUBLIC_SUPABASE_URL + "/functions/v1"
     },
     autolinking: {
       exclude: [

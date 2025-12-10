@@ -4,7 +4,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-user-id',
 };
 
 interface PushNotificationRequest {
@@ -28,7 +28,15 @@ serve(async (req) => {
 
     if (!userId || !tokens || tokens.length === 0 || !notification) {
       return new Response(
-        JSON.stringify({ error: 'Missing required fields' }),
+        JSON.stringify({ error: 'Missing required fields: userId, tokens, notification' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Validate notification structure
+    if (!notification.title || !notification.body) {
+      return new Response(
+        JSON.stringify({ error: 'Notification must have title and body' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -56,22 +64,27 @@ serve(async (req) => {
       try {
         if (platform === 'ios' || platform === 'android') {
           // Send via FCM (works for both iOS and Android)
+          const fcmPayload = {
+            to: token,
+            notification: {
+              title: notification.title,
+              body: notification.body,
+              sound: 'default',
+              badge: '1',
+              priority: 'high',
+            },
+            data: notification.data || {},
+            priority: 'high',
+            content_available: true,
+          };
+
           const fcmResponse = await fetch('https://fcm.googleapis.com/fcm/send', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `key=${fcmServerKey}`,
             },
-            body: JSON.stringify({
-              to: token,
-              notification: {
-                title: notification.title,
-                body: notification.body,
-                sound: 'default',
-              },
-              data: notification.data || {},
-              priority: 'high',
-            }),
+            body: JSON.stringify(fcmPayload),
           });
 
           const fcmResult = await fcmResponse.json();
@@ -84,13 +97,15 @@ serve(async (req) => {
             console.error(`❌ Failed to send push notification to ${platform} device:`, fcmResult);
             
             // If token is invalid, deactivate it
-            if (fcmResult.results?.[0]?.error === 'InvalidRegistration' || 
-                fcmResult.results?.[0]?.error === 'NotRegistered') {
+            const errorCode = fcmResult.results?.[0]?.error;
+            if (errorCode === 'InvalidRegistration' || 
+                errorCode === 'NotRegistered' ||
+                errorCode === 'MismatchSenderId') {
               await supabase
                 .from('push_device_tokens')
                 .update({ is_active: false })
                 .eq('device_token', token);
-              console.log(`🗑️ Deactivated invalid token for ${platform} device`);
+              console.log(`🗑️ Deactivated invalid token for ${platform} device (error: ${errorCode})`);
             }
           }
         } else if (platform === 'web') {
@@ -108,11 +123,14 @@ serve(async (req) => {
     const successCount = results.filter(r => r.status === 'sent').length;
     const failedCount = results.filter(r => r.status === 'failed').length;
 
+    console.log(`📊 Push notification summary: ${successCount} sent, ${failedCount} failed out of ${tokens.length} total`);
+
     return new Response(
       JSON.stringify({
         success: true,
         sent: successCount,
         failed: failedCount,
+        total: tokens.length,
         results,
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -120,7 +138,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in send-push-notification function:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error.message || 'Internal server error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
