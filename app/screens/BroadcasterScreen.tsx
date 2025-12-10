@@ -27,6 +27,8 @@ import ContentLabelBadge from '@/components/ContentLabelBadge';
 import CreatorRulesModal from '@/components/CreatorRulesModal';
 import SafetyAcknowledgementModal from '@/components/SafetyAcknowledgementModal';
 import ForcedReviewLockModal from '@/components/ForcedReviewLockModal';
+import HostControlDashboard from '@/components/HostControlDashboard';
+import HostControlButton from '@/components/HostControlButton';
 import { moderationService } from '@/app/services/moderationService';
 import { viewerTrackingService } from '@/app/services/viewerTrackingService';
 import { liveStreamArchiveService } from '@/app/services/liveStreamArchiveService';
@@ -90,6 +92,9 @@ export default function BroadcasterScreen() {
   const [showForcedReviewLock, setShowForcedReviewLock] = useState(false);
   const [forcedReviewReportCount, setForcedReviewReportCount] = useState(0);
   const [isCheckingSafety, setIsCheckingSafety] = useState(true);
+  
+  // Host Control Dashboard state
+  const [showHostControlDashboard, setShowHostControlDashboard] = useState(false);
   
   const realtimeChannelRef = useRef<any>(null);
   const giftChannelRef = useRef<any>(null);
@@ -831,6 +836,9 @@ export default function BroadcasterScreen() {
               />
             </TouchableOpacity>
 
+            {/* Host Control Dashboard Button */}
+            <HostControlButton onPress={() => setShowHostControlDashboard(true)} />
+
             {/* Filter Selector */}
             <CameraFilterSelector
               selectedFilter={selectedFilter}
@@ -930,6 +938,16 @@ export default function BroadcasterScreen() {
           visible={showModerationHistory}
           onClose={() => setShowModerationHistory(false)}
           streamerId={user.id}
+        />
+      )}
+
+      {/* Host Control Dashboard */}
+      {currentStream && user && (
+        <HostControlDashboard
+          streamId={currentStream.id}
+          hostId={user.id}
+          visible={showHostControlDashboard}
+          onClose={() => setShowHostControlDashboard(false)}
         />
       )}
 
