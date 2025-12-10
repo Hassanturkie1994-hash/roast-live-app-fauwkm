@@ -1,6 +1,7 @@
 
 import { supabase } from '@/app/integrations/supabase/client';
 import { notificationService } from './notificationService';
+import { inboxService } from './inboxService';
 
 export interface PremiumSubscription {
   id: string;
@@ -115,7 +116,10 @@ class PremiumSubscriptionService {
         return { success: false, error: profileError.message };
       }
 
-      // Send welcome notification
+      // Send welcome notification via inbox
+      await this.sendPremiumWelcomeNotification(userId);
+
+      // Also send a system notification
       await notificationService.createNotification({
         type: 'subscription_renewed',
         receiver_id: userId,
@@ -128,6 +132,25 @@ class PremiumSubscriptionService {
     } catch (error) {
       console.error('Error in createPremiumSubscription:', error);
       return { success: false, error: 'Failed to create premium subscription' };
+    }
+  }
+
+  /**
+   * Send premium welcome notification to inbox
+   */
+  private async sendPremiumWelcomeNotification(userId: string): Promise<void> {
+    try {
+      // Create inbox message
+      await inboxService.createSystemMessage({
+        receiver_id: userId,
+        title: '🎉 Welcome to PREMIUM!',
+        message: 'You are now Premium! Your benefits are active.\n\n✨ Enjoy:\n- Priority placement in Explore\n- Premium badge everywhere\n- Ad-free experience\n- Double profile reach\n- Premium filters\n- Profile customization\n- 20% off VIP clubs\n- Reduced platform fees',
+        category: 'wallet',
+      });
+
+      console.log('✅ Premium welcome notification sent');
+    } catch (error) {
+      console.error('Error sending premium welcome notification:', error);
     }
   }
 

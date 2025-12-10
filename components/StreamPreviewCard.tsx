@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import LiveBadge from '@/components/LiveBadge';
+import PremiumBadge from '@/components/PremiumBadge';
 import { Tables } from '@/app/integrations/supabase/types';
 
 type Stream = Tables<'streams'> & {
@@ -79,6 +80,7 @@ export default function StreamPreviewCard({ stream, onPress }: StreamPreviewCard
                 color={colors.brandPrimary}
               />
             )}
+            <PremiumBadge userId={stream.broadcaster_id} size="small" />
           </View>
         </View>
       </View>

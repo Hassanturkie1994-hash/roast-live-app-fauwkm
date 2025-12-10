@@ -2,6 +2,40 @@
 import { supabase } from '@/app/integrations/supabase/client';
 
 /**
+ * Create a system message (notification) for a user
+ */
+export async function createSystemMessage(params: {
+  receiver_id: string;
+  title: string;
+  message: string;
+  category?: 'social' | 'gifts' | 'safety' | 'wallet' | 'admin';
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { receiver_id, title, message, category = 'wallet' } = params;
+
+    const { error } = await supabase
+      .from('notifications')
+      .insert({
+        type: 'system_update',
+        receiver_id,
+        message: `${title}\n\n${message}`,
+        category,
+        read: false,
+      });
+
+    if (error) {
+      console.error('Error creating system message:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error in createSystemMessage:', error);
+    return { success: false, error: 'An unexpected error occurred' };
+  }
+}
+
+/**
  * Mark all messages in a conversation as read
  */
 export async function markConversationAsRead(
@@ -92,6 +126,7 @@ export async function markAllNotificationsAsRead(
 }
 
 export const inboxService = {
+  createSystemMessage,
   markConversationAsRead,
   getUnreadMessageCount,
   markAllNotificationsAsRead,

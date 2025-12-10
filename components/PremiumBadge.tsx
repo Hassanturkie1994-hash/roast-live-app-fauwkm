@@ -2,21 +2,43 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 import { IconSymbol } from './IconSymbol';
 import { premiumSubscriptionService } from '@/app/services/premiumSubscriptionService';
 
 interface PremiumBadgeProps {
   userId: string;
   size?: 'small' | 'medium' | 'large';
+  showAnimation?: boolean;
 }
 
-export default function PremiumBadge({ userId, size = 'medium' }: PremiumBadgeProps) {
+export default function PremiumBadge({ userId, size = 'medium', showAnimation = true }: PremiumBadgeProps) {
   const [isPremium, setIsPremium] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const glowOpacity = useSharedValue(0.5);
 
   useEffect(() => {
     checkPremiumStatus();
   }, [userId]);
+
+  useEffect(() => {
+    if (showAnimation && isPremium) {
+      glowOpacity.value = withRepeat(
+        withSequence(
+          withTiming(1, { duration: 1500 }),
+          withTiming(0.5, { duration: 1500 })
+        ),
+        -1,
+        true
+      );
+    }
+  }, [isPremium, showAnimation]);
 
   const checkPremiumStatus = async () => {
     setIsLoading(true);
@@ -31,6 +53,12 @@ export default function PremiumBadge({ userId, size = 'medium' }: PremiumBadgePr
     }
   };
 
+  const animatedGlowStyle = useAnimatedStyle(() => {
+    return {
+      opacity: glowOpacity.value,
+    };
+  });
+
   if (isLoading || !isPremium) {
     return null;
   }
@@ -42,6 +70,7 @@ export default function PremiumBadge({ userId, size = 'medium' }: PremiumBadgePr
       fontSize: 9,
       iconSize: 10,
       borderRadius: 6,
+      glowRadius: 6,
     },
     medium: {
       paddingHorizontal: 8,
@@ -49,6 +78,7 @@ export default function PremiumBadge({ userId, size = 'medium' }: PremiumBadgePr
       fontSize: 11,
       iconSize: 12,
       borderRadius: 8,
+      glowRadius: 8,
     },
     large: {
       paddingHorizontal: 10,
@@ -56,53 +86,67 @@ export default function PremiumBadge({ userId, size = 'medium' }: PremiumBadgePr
       fontSize: 13,
       iconSize: 14,
       borderRadius: 10,
+      glowRadius: 10,
     },
   };
 
   const currentSize = sizeStyles[size];
 
   return (
-    <LinearGradient
-      colors={['#FFD700', '#FFA500', '#FF8C00']}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={[
-        styles.badge,
-        {
-          paddingHorizontal: currentSize.paddingHorizontal,
-          paddingVertical: currentSize.paddingVertical,
-          borderRadius: currentSize.borderRadius,
-        },
-      ]}
-    >
-      <View style={styles.glowEffect} />
-      <IconSymbol
-        ios_icon_name="crown.fill"
-        android_material_icon_name="workspace_premium"
-        size={currentSize.iconSize}
-        color="#FFFFFF"
-      />
-      <Text
+    <View style={styles.container}>
+      {showAnimation && (
+        <Animated.View
+          style={[
+            styles.glowEffect,
+            {
+              borderRadius: currentSize.glowRadius,
+            },
+            animatedGlowStyle,
+          ]}
+        />
+      )}
+      <LinearGradient
+        colors={['#FFD700', '#FFA500', '#FF8C00']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
         style={[
-          styles.badgeText,
+          styles.badge,
           {
-            fontSize: currentSize.fontSize,
+            paddingHorizontal: currentSize.paddingHorizontal,
+            paddingVertical: currentSize.paddingVertical,
+            borderRadius: currentSize.borderRadius,
           },
         ]}
       >
-        PREMIUM
-      </Text>
-    </LinearGradient>
+        <IconSymbol
+          ios_icon_name="crown.fill"
+          android_material_icon_name="workspace_premium"
+          size={currentSize.iconSize}
+          color="#FFFFFF"
+        />
+        <Text
+          style={[
+            styles.badgeText,
+            {
+              fontSize: currentSize.fontSize,
+            },
+          ]}
+        >
+          PREMIUM
+        </Text>
+      </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    position: 'relative',
+  },
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    position: 'relative',
-    overflow: 'visible',
     shadowColor: '#FFD700',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.8,
@@ -115,11 +159,9 @@ const styles = StyleSheet.create({
     left: -2,
     right: -2,
     bottom: -2,
-    borderRadius: 10,
     backgroundColor: 'transparent',
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: '#FFD700',
-    opacity: 0.5,
   },
   badgeText: {
     fontWeight: '800',

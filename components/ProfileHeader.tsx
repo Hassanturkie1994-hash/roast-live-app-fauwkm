@@ -3,8 +3,10 @@ import React from 'react';
 import { View, Text, Image, StyleSheet } from 'react-native';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import FollowButton from './FollowButton';
+import PremiumBadge from './PremiumBadge';
 
 interface ProfileHeaderProps {
+  userId: string;
   avatar: string;
   name: string;
   username: string;
@@ -16,6 +18,7 @@ interface ProfileHeaderProps {
 }
 
 export default function ProfileHeader({
+  userId,
   avatar,
   name,
   username,
@@ -27,8 +30,18 @@ export default function ProfileHeader({
 }: ProfileHeaderProps) {
   return (
     <View style={styles.container}>
-      <Image source={{ uri: avatar }} style={styles.avatar} />
-      <Text style={styles.name}>{name}</Text>
+      <View style={styles.avatarContainer}>
+        <Image source={{ uri: avatar }} style={styles.avatar} />
+        <View style={styles.premiumBadgeOverlay}>
+          <PremiumBadge userId={userId} size="small" showAnimation={true} />
+        </View>
+      </View>
+      
+      <View style={styles.nameContainer}>
+        <Text style={styles.name}>{name}</Text>
+        <PremiumBadge userId={userId} size="medium" showAnimation={true} />
+      </View>
+      
       <Text style={styles.username}>@{username}</Text>
       
       <View style={styles.statsContainer}>
@@ -68,20 +81,33 @@ const styles = StyleSheet.create({
     paddingVertical: 24,
     paddingHorizontal: 20,
   },
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: 16,
+  },
   avatar: {
     width: 100,
     height: 100,
     borderRadius: 50,
     backgroundColor: colors.backgroundAlt,
-    marginBottom: 16,
     borderWidth: 3,
     borderColor: colors.border,
+  },
+  premiumBadgeOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+  },
+  nameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
   },
   name: {
     fontSize: 24,
     fontWeight: '800',
     color: colors.text,
-    marginBottom: 4,
   },
   username: {
     fontSize: 16,

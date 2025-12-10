@@ -3,9 +3,11 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import { colors } from '@/styles/commonStyles';
+import PremiumBadge from '@/components/PremiumBadge';
 
 export interface ChatMessage {
   id: string;
+  user_id: string;
   username: string;
   message: string;
   timestamp: number;
@@ -24,12 +26,13 @@ export default function ChatBubble({ message, index }: ChatBubbleProps) {
       entering={FadeInUp.delay(index * 50).duration(300)}
       style={styles.container}
     >
-      <Text style={styles.message}>
+      <View style={styles.headerRow}>
         <Text style={[styles.username, { color: usernameColor }]}>
           {message.username}
         </Text>
-        <Text style={styles.messageText}> {message.message}</Text>
-      </Text>
+        <PremiumBadge userId={message.user_id} size="small" />
+      </View>
+      <Text style={styles.messageText}>{message.message}</Text>
     </Animated.View>
   );
 }
@@ -55,9 +58,11 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     maxWidth: '80%',
   },
-  message: {
+  headerRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
   },
   username: {
     fontSize: 14,
