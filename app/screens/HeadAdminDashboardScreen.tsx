@@ -249,7 +249,7 @@ export default function HeadAdminDashboardScreen() {
 
           <TouchableOpacity
             style={[styles.actionButton, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={() => Alert.alert('Assign Role', 'Admin assignment feature coming soon.')}
+            onPress={() => router.push('/screens/RoleManagementScreen' as any)}
           >
             <IconSymbol
               ios_icon_name="person.badge.plus.fill"
@@ -257,7 +257,7 @@ export default function HeadAdminDashboardScreen() {
               size={20}
               color={colors.brandPrimary}
             />
-            <Text style={[styles.actionButtonText, { color: colors.text }]}>Assign Admin/Support Role</Text>
+            <Text style={[styles.actionButtonText, { color: colors.text }]}>Manage Roles & Users</Text>
           </TouchableOpacity>
         </View>
 
