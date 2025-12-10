@@ -46,8 +46,10 @@ const ParticipantCell = React.memo(({
   totalParticipants: number;
   onLongPress: () => void;
 }) => {
-  const scaleAnim = useRef(new Animated.Value(0)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnimRef = useRef(new Animated.Value(0));
+  const fadeAnimRef = useRef(new Animated.Value(0));
+  const scaleAnim = scaleAnimRef.current;
+  const fadeAnim = fadeAnimRef.current;
 
   useEffect(() => {
     // Animate in

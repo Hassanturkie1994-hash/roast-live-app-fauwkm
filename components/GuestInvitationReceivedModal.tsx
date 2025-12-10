@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -38,6 +38,21 @@ export default function GuestInvitationReceivedModal({
   const [permission, requestPermission] = useCameraPermissions();
   const autoDeclineTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  const handleAutoDeclineCallback = useCallback(async () => {
+    if (!invitation) return;
+    
+    console.log('⏰ Auto-declining invitation after 20 seconds');
+    
+    try {
+      await streamGuestService.declineInvitation(invitation.id, invitation.invitee_id);
+      Alert.alert('Invitation Expired', 'The invitation has expired.');
+      onClose();
+    } catch (error) {
+      console.error('Error auto-declining invitation:', error);
+      onClose();
+    }
+  }, [invitation, onClose]);
+
   useEffect(() => {
     if (!visible || !invitation) {
       setTimeRemaining(20);
@@ -65,13 +80,13 @@ export default function GuestInvitationReceivedModal({
 
       if (remaining === 0) {
         clearInterval(interval);
-        handleAutoDecline();
+        handleAutoDeclineCallback();
       }
     }, 1000);
 
     // Set auto-decline timer for 20 seconds
     autoDeclineTimerRef.current = setTimeout(() => {
-      handleAutoDecline();
+      handleAutoDeclineCallback();
     }, 20000);
 
     return () => {
@@ -81,22 +96,7 @@ export default function GuestInvitationReceivedModal({
         autoDeclineTimerRef.current = null;
       }
     };
-  }, [visible, invitation]);
-
-  const handleAutoDecline = async () => {
-    if (!invitation) return;
-    
-    console.log('⏰ Auto-declining invitation after 20 seconds');
-    
-    try {
-      await streamGuestService.declineInvitation(invitation.id, invitation.invitee_id);
-      Alert.alert('Invitation Expired', 'The invitation has expired.');
-      onClose();
-    } catch (error) {
-      console.error('Error auto-declining invitation:', error);
-      onClose();
-    }
-  };
+  }, [visible, invitation, handleAutoDeclineCallback]);
 
   const handleAccept = async () => {
     if (!invitation) return;
