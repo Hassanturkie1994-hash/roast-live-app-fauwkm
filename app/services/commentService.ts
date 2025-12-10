@@ -1,5 +1,6 @@
 
 import { supabase } from '@/app/integrations/supabase/client';
+import { notificationService } from './notificationService';
 
 export interface LiveComment {
   id: string;
@@ -15,8 +16,36 @@ export interface LiveComment {
   };
 }
 
+export interface PostComment {
+  id: string;
+  post_id: string;
+  user_id: string;
+  comment: string;
+  created_at: string;
+  profiles?: {
+    id: string;
+    username: string;
+    display_name: string;
+    avatar_url: string | null;
+  };
+}
+
+export interface StoryComment {
+  id: string;
+  story_id: string;
+  user_id: string;
+  comment: string;
+  created_at: string;
+  profiles?: {
+    id: string;
+    username: string;
+    display_name: string;
+    avatar_url: string | null;
+  };
+}
+
 class CommentService {
-  // Save a comment to the database
+  // Save a live comment to the database
   async saveComment(
     streamId: string,
     userId: string,
@@ -61,7 +90,7 @@ class CommentService {
         return [];
       }
 
-      return (data as LiveComment[]).reverse(); // Reverse to show oldest first
+      return (data as LiveComment[]).reverse();
     } catch (error) {
       console.error('Error in getComments:', error);
       return [];
@@ -106,6 +135,238 @@ class CommentService {
     } catch (error) {
       console.error('Error in getCommentCount:', error);
       return 0;
+    }
+  }
+
+  // Add comment to post
+  async addPostComment(
+    postId: string,
+    userId: string,
+    comment: string
+  ): Promise<{ success: boolean; data?: PostComment; error?: string }> {
+    try {
+      const { data, error } = await supabase
+        .from('post_comments')
+        .insert({
+          post_id: postId,
+          user_id: userId,
+          comment,
+        })
+        .select('*, profiles(*)')
+        .single();
+
+      if (error) {
+        console.error('Error adding post comment:', error);
+        return { success: false, error: error.message };
+      }
+
+      // Get post owner to send notification
+      const { data: post } = await supabase
+        .from('posts')
+        .select('user_id')
+        .eq('id', postId)
+        .single();
+
+      if (post && post.user_id !== userId) {
+        await notificationService.createNotification(
+          userId,
+          post.user_id,
+          'comment',
+          'commented on your post',
+          postId,
+          undefined,
+          undefined,
+          'social'
+        );
+      }
+
+      return { success: true, data: data as PostComment };
+    } catch (error) {
+      console.error('Error in addPostComment:', error);
+      return { success: false, error: 'Failed to add comment' };
+    }
+  }
+
+  // Add comment to story
+  async addStoryComment(
+    storyId: string,
+    userId: string,
+    comment: string
+  ): Promise<{ success: boolean; data?: StoryComment; error?: string }> {
+    try {
+      const { data, error } = await supabase
+        .from('story_comments')
+        .insert({
+          story_id: storyId,
+          user_id: userId,
+          comment,
+        })
+        .select('*, profiles(*)')
+        .single();
+
+      if (error) {
+        console.error('Error adding story comment:', error);
+        return { success: false, error: error.message };
+      }
+
+      // Get story owner to send notification
+      const { data: story } = await supabase
+        .from('stories')
+        .select('user_id')
+        .eq('id', storyId)
+        .single();
+
+      if (story && story.user_id !== userId) {
+        await notificationService.createNotification(
+          userId,
+          story.user_id,
+          'comment',
+          'commented on your story',
+          undefined,
+          storyId,
+          undefined,
+          'social'
+        );
+      }
+
+      return { success: true, data: data as StoryComment };
+    } catch (error) {
+      console.error('Error in addStoryComment:', error);
+      return { success: false, error: 'Failed to add comment' };
+    }
+  }
+
+  // Add reply to post comment
+  async addPostCommentReply(
+    parentCommentId: string,
+    userId: string,
+    comment: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const { error } = await supabase
+        .from('comment_replies')
+        .insert({
+          parent_comment_id: parentCommentId,
+          user_id: userId,
+          comment,
+        });
+
+      if (error) {
+        console.error('Error adding comment reply:', error);
+        return { success: false, error: error.message };
+      }
+
+      // Get parent comment owner to send notification
+      const { data: parentComment } = await supabase
+        .from('post_comments')
+        .select('user_id')
+        .eq('id', parentCommentId)
+        .single();
+
+      if (parentComment && parentComment.user_id !== userId) {
+        await notificationService.createNotification(
+          userId,
+          parentComment.user_id,
+          'comment',
+          'replied to your comment',
+          undefined,
+          undefined,
+          undefined,
+          'social'
+        );
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error in addPostCommentReply:', error);
+      return { success: false, error: 'Failed to add reply' };
+    }
+  }
+
+  // Add reply to story comment
+  async addStoryCommentReply(
+    parentCommentId: string,
+    userId: string,
+    comment: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const { error } = await supabase
+        .from('story_comment_replies')
+        .insert({
+          parent_comment_id: parentCommentId,
+          user_id: userId,
+          comment,
+        });
+
+      if (error) {
+        console.error('Error adding story comment reply:', error);
+        return { success: false, error: error.message };
+      }
+
+      // Get parent comment owner to send notification
+      const { data: parentComment } = await supabase
+        .from('story_comments')
+        .select('user_id')
+        .eq('id', parentCommentId)
+        .single();
+
+      if (parentComment && parentComment.user_id !== userId) {
+        await notificationService.createNotification(
+          userId,
+          parentComment.user_id,
+          'comment',
+          'replied to your comment',
+          undefined,
+          undefined,
+          undefined,
+          'social'
+        );
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error in addStoryCommentReply:', error);
+      return { success: false, error: 'Failed to add reply' };
+    }
+  }
+
+  // Delete post comment
+  async deletePostComment(commentId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const { error } = await supabase
+        .from('post_comments')
+        .delete()
+        .eq('id', commentId);
+
+      if (error) {
+        console.error('Error deleting post comment:', error);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error in deletePostComment:', error);
+      return { success: false, error: 'Failed to delete comment' };
+    }
+  }
+
+  // Delete story comment
+  async deleteStoryComment(commentId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const { error } = await supabase
+        .from('story_comments')
+        .delete()
+        .eq('id', commentId);
+
+      if (error) {
+        console.error('Error deleting story comment:', error);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error in deleteStoryComment:', error);
+      return { success: false, error: 'Failed to delete comment' };
     }
   }
 }

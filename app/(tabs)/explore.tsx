@@ -14,63 +14,36 @@ import { router } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { IconSymbol } from '@/components/IconSymbol';
 import LiveBadge from '@/components/LiveBadge';
-import { supabase } from '@/app/integrations/supabase/client';
-import { Tables } from '@/app/integrations/supabase/types';
+import { recommendationService } from '@/app/services/recommendationService';
 
 const { width: screenWidth } = Dimensions.get('window');
 const cardWidth = (screenWidth - 6) / 2;
 
-type Stream = Tables<'streams'> & {
-  users: Tables<'users'>;
-};
-
-type Post = Tables<'posts'> & {
-  profiles: Tables<'profiles'>;
-};
-
-interface ExploreItem {
-  type: 'post' | 'stream';
-  data: Post | Stream;
-  id: string;
-}
-
 export default function ExploreScreen() {
   const { colors } = useTheme();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [items, setItems] = useState<ExploreItem[]>([]);
+  const [trendingCreators, setTrendingCreators] = useState<any[]>([]);
+  const [growingFast, setGrowingFast] = useState<any[]>([]);
+  const [mostSupported, setMostSupported] = useState<any[]>([]);
+  const [mostGifted, setMostGifted] = useState<any[]>([]);
+  const [liveStreams, setLiveStreams] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchExploreContent = useCallback(async () => {
     try {
-      const [postsResult, streamsResult] = await Promise.all([
-        supabase
-          .from('posts')
-          .select('*, profiles(*)')
-          .order('created_at', { ascending: false })
-          .limit(20),
-        supabase
-          .from('streams')
-          .select('*, users(*)')
-          .eq('status', 'live')
-          .order('viewer_count', { ascending: false })
-          .limit(10),
+      const [trending, growing, supported, gifted, live] = await Promise.all([
+        recommendationService.getTrendingCreators(10),
+        recommendationService.getGrowingFastCreators(10),
+        recommendationService.getMostSupportedCreators(10),
+        recommendationService.getMostGiftedStreams(10),
+        recommendationService.getRecommendedLiveStreams(20),
       ]);
 
-      const posts: ExploreItem[] = (postsResult.data || []).map((post) => ({
-        type: 'post' as const,
-        data: post as Post,
-        id: `post-${post.id}`,
-      }));
-
-      const streams: ExploreItem[] = (streamsResult.data || []).map((stream) => ({
-        type: 'stream' as const,
-        data: stream as Stream,
-        id: `stream-${stream.id}`,
-      }));
-
-      const mixed = [...streams, ...posts].sort(() => Math.random() - 0.5);
-      setItems(mixed);
+      setTrendingCreators(trending);
+      setGrowingFast(growing);
+      setMostSupported(supported);
+      setMostGifted(gifted);
+      setLiveStreams(live);
     } catch (error) {
       console.error('Error fetching explore content:', error);
     } finally {
@@ -88,40 +61,59 @@ export default function ExploreScreen() {
     fetchExploreContent();
   };
 
-  const handleItemPress = (item: ExploreItem) => {
-    if (item.type === 'stream') {
-      const stream = item.data as Stream;
-      router.push({
-        pathname: '/live-player',
-        params: { streamId: stream.id },
-      });
-    } else {
-      const post = item.data as Post;
-      router.push(`/screens/PostDetailScreen?postId=${post.id}`);
-    }
-  };
-
   const handleSearchPress = () => {
     router.push('/screens/SearchScreen');
   };
 
-  const filteredItems = searchQuery
-    ? items.filter((item) => {
-        if (item.type === 'post') {
-          const post = item.data as Post;
-          return (
-            post.caption?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            post.profiles?.username?.toLowerCase().includes(searchQuery.toLowerCase())
-          );
-        } else {
-          const stream = item.data as Stream;
-          return (
-            stream.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            stream.users?.display_name?.toLowerCase().includes(searchQuery.toLowerCase())
-          );
-        }
-      })
-    : items;
+  const handleStreamPress = (streamId: string) => {
+    router.push({
+      pathname: '/live-player',
+      params: { streamId },
+    });
+  };
+
+  const handleCreatorPress = (userId: string) => {
+    router.push(`/screens/PublicProfileScreen?userId=${userId}`);
+  };
+
+  const renderCreatorRow = (title: string, emoji: string, creators: any[]) => {
+    if (creators.length === 0) return null;
+
+    return (
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          {emoji} {title}
+        </Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.horizontalScroll}
+        >
+          {creators.map((creator) => (
+            <TouchableOpacity
+              key={creator.id}
+              style={[styles.creatorCard, { backgroundColor: colors.card }]}
+              onPress={() => handleCreatorPress(creator.id)}
+              activeOpacity={0.7}
+            >
+              <Image
+                source={{
+                  uri: creator.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
+                }}
+                style={styles.creatorAvatar}
+              />
+              <Text style={[styles.creatorName, { color: colors.text }]} numberOfLines={1}>
+                {creator.display_name || creator.username}
+              </Text>
+              <Text style={[styles.creatorStats, { color: colors.textSecondary }]}>
+                {creator.followers_count || 0} followers
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+    );
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -158,95 +150,103 @@ export default function ExploreScreen() {
           <View style={styles.centerContent}>
             <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading content...</Text>
           </View>
-        ) : filteredItems.length === 0 ? (
-          <View style={styles.emptyState}>
-            <IconSymbol
-              ios_icon_name="photo.on.rectangle"
-              android_material_icon_name="photo_library"
-              size={64}
-              color={colors.textSecondary}
-            />
-            <Text style={[styles.emptyText, { color: colors.text }]}>No content available</Text>
-            <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>Check back later for new posts and streams!</Text>
-          </View>
         ) : (
-          <View style={styles.grid}>
-            {filteredItems.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                style={[styles.card, { backgroundColor: colors.card }]}
-                onPress={() => handleItemPress(item)}
-                activeOpacity={0.9}
-              >
-                {item.type === 'stream' ? (
-                  <>
-                    <Image
-                      source={{
-                        uri:
-                          (item.data as Stream).users?.avatar ||
-                          'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400',
-                      }}
-                      style={styles.cardImage}
-                    />
-                    <View style={styles.cardOverlay}>
-                      <View style={styles.cardTopBar}>
-                        <LiveBadge size="small" />
-                        <View style={styles.viewerBadge}>
-                          <IconSymbol
-                            ios_icon_name="eye.fill"
-                            android_material_icon_name="visibility"
-                            size={12}
-                            color="#FFFFFF"
-                          />
-                          <Text style={styles.viewerCount}>{(item.data as Stream).viewer_count || 0}</Text>
+          <>
+            {/* Live Streams Grid */}
+            {liveStreams.length > 0 && (
+              <View style={styles.section}>
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>🔴 Live Now</Text>
+                <View style={styles.grid}>
+                  {liveStreams.slice(0, 6).map((stream) => (
+                    <TouchableOpacity
+                      key={stream.id}
+                      style={[styles.card, { backgroundColor: colors.card }]}
+                      onPress={() => handleStreamPress(stream.id)}
+                      activeOpacity={0.9}
+                    >
+                      <Image
+                        source={{
+                          uri: stream.users?.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400',
+                        }}
+                        style={styles.cardImage}
+                      />
+                      <View style={styles.cardOverlay}>
+                        <View style={styles.cardTopBar}>
+                          <LiveBadge size="small" />
+                          <View style={styles.viewerBadge}>
+                            <IconSymbol
+                              ios_icon_name="eye.fill"
+                              android_material_icon_name="visibility"
+                              size={12}
+                              color="#FFFFFF"
+                            />
+                            <Text style={styles.viewerCount}>{stream.viewer_count || 0}</Text>
+                          </View>
                         </View>
-                      </View>
 
-                      <View style={styles.cardInfo}>
-                        <Text style={styles.cardTitle} numberOfLines={2}>
-                          {(item.data as Stream).title}
-                        </Text>
-                        <Text style={styles.cardSubtitle} numberOfLines={1}>
-                          {(item.data as Stream).users?.display_name}
-                        </Text>
-                      </View>
-                    </View>
-                  </>
-                ) : (
-                  <>
-                    <Image source={{ uri: (item.data as Post).media_url }} style={styles.cardImage} />
-                    <View style={styles.cardOverlay}>
-                      <View style={styles.cardInfo}>
-                        <View style={styles.postStats}>
-                          <View style={styles.postStat}>
-                            <IconSymbol
-                              ios_icon_name="heart.fill"
-                              android_material_icon_name="favorite"
-                              size={14}
-                              color="#FFFFFF"
-                            />
-                            <Text style={styles.postStatText}>{(item.data as Post).likes_count || 0}</Text>
-                          </View>
-                          <View style={styles.postStat}>
-                            <IconSymbol
-                              ios_icon_name="bubble.left.fill"
-                              android_material_icon_name="comment"
-                              size={14}
-                              color="#FFFFFF"
-                            />
-                            <Text style={styles.postStatText}>{(item.data as Post).comments_count || 0}</Text>
-                          </View>
+                        <View style={styles.cardInfo}>
+                          <Text style={styles.cardTitle} numberOfLines={2}>
+                            {stream.title}
+                          </Text>
+                          <Text style={styles.cardSubtitle} numberOfLines={1}>
+                            {stream.users?.display_name}
+                          </Text>
                         </View>
-                        <Text style={styles.cardSubtitle} numberOfLines={1}>
-                          @{(item.data as Post).profiles?.username}
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {/* Trending Creators */}
+            {renderCreatorRow('Trending Creators', '🔥', trendingCreators)}
+
+            {/* Growing Fast */}
+            {renderCreatorRow('Growing Fast', '✨', growingFast)}
+
+            {/* Most Supported */}
+            {renderCreatorRow('Most Supported', '🎁', mostSupported)}
+
+            {/* Most Gifted Streams */}
+            {mostGifted.length > 0 && (
+              <View style={styles.section}>
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>📈 Most Gifted Streams</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.horizontalScroll}
+                >
+                  {mostGifted.map((stream) => (
+                    <TouchableOpacity
+                      key={stream.id}
+                      style={[styles.streamCard, { backgroundColor: colors.card }]}
+                      onPress={() => handleStreamPress(stream.id)}
+                      activeOpacity={0.7}
+                    >
+                      <Image
+                        source={{
+                          uri: stream.users?.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400',
+                        }}
+                        style={styles.streamCardImage}
+                      />
+                      <View style={styles.streamCardOverlay}>
+                        <LiveBadge size="small" />
+                      </View>
+                      <View style={styles.streamCardInfo}>
+                        <Text style={[styles.streamCardTitle, { color: colors.text }]} numberOfLines={1}>
+                          {stream.title}
+                        </Text>
+                        <Text style={[styles.streamCardSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
+                          {stream.users?.display_name}
                         </Text>
                       </View>
-                    </View>
-                  </>
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+          </>
         )}
       </ScrollView>
     </View>
@@ -295,29 +295,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 80,
-    paddingHorizontal: 40,
+  section: {
+    marginTop: 24,
   },
-  emptyText: {
-    fontSize: 18,
+  sectionTitle: {
+    fontSize: 20,
     fontWeight: '700',
-    marginTop: 20,
-    textAlign: 'center',
-  },
-  emptySubtext: {
-    fontSize: 14,
-    fontWeight: '400',
-    marginTop: 8,
-    textAlign: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 12,
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: 1,
-    paddingTop: 2,
     gap: 2,
   },
   card: {
@@ -369,19 +359,56 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: '#FFFFFF',
   },
-  postStats: {
-    flexDirection: 'row',
+  horizontalScroll: {
+    paddingHorizontal: 20,
     gap: 12,
-    marginBottom: 4,
   },
-  postStat: {
-    flexDirection: 'row',
+  creatorCard: {
+    width: 120,
+    padding: 12,
+    borderRadius: 12,
     alignItems: 'center',
+    gap: 8,
+  },
+  creatorAvatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+  },
+  creatorName: {
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  creatorStats: {
+    fontSize: 12,
+    fontWeight: '400',
+    textAlign: 'center',
+  },
+  streamCard: {
+    width: 200,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  streamCardImage: {
+    width: '100%',
+    height: 120,
+  },
+  streamCardOverlay: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+  },
+  streamCardInfo: {
+    padding: 12,
     gap: 4,
   },
-  postStatText: {
-    fontSize: 12,
+  streamCardTitle: {
+    fontSize: 14,
     fontWeight: '700',
-    color: '#FFFFFF',
+  },
+  streamCardSubtitle: {
+    fontSize: 12,
+    fontWeight: '400',
   },
 });

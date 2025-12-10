@@ -13,64 +13,134 @@ import { router } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useAuth } from '@/contexts/AuthContext';
-import { messagingService, Conversation } from '@/app/services/messagingService';
+import { notificationService, NotificationCategory } from '@/app/services/notificationService';
+
+interface Notification {
+  id: string;
+  type: string;
+  message: string;
+  category: NotificationCategory;
+  read: boolean;
+  created_at: string;
+  sender?: {
+    id: string;
+    username: string;
+    display_name: string;
+    avatar_url: string;
+  };
+  ref_post_id?: string;
+  ref_story_id?: string;
+  ref_stream_id?: string;
+}
+
+const CATEGORY_CONFIG = {
+  social: {
+    title: '🔔 Social',
+    icon: 'person.2.fill' as const,
+    androidIcon: 'people' as const,
+  },
+  gifts: {
+    title: '🎁 Gifts',
+    icon: 'gift.fill' as const,
+    androidIcon: 'card_giftcard' as const,
+  },
+  safety: {
+    title: '🛡️ Safety',
+    icon: 'shield.fill' as const,
+    androidIcon: 'security' as const,
+  },
+  wallet: {
+    title: '💰 Wallet & Earnings',
+    icon: 'dollarsign.circle.fill' as const,
+    androidIcon: 'account_balance_wallet' as const,
+  },
+  admin: {
+    title: '📢 Admin & System',
+    icon: 'megaphone.fill' as const,
+    androidIcon: 'campaign' as const,
+  },
+};
 
 export default function InboxScreen() {
   const { user } = useAuth();
   const { colors } = useTheme();
-  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<NotificationCategory | 'all'>('all');
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [totalUnread, setTotalUnread] = useState(0);
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
 
-  const fetchConversations = useCallback(async () => {
+  const fetchNotifications = useCallback(async () => {
     if (!user) return;
 
     try {
-      const result = await messagingService.getConversations(user.id);
+      const category = selectedCategory === 'all' ? undefined : selectedCategory;
+      const result = await notificationService.getNotificationsByCategory(user.id, category);
       
-      if (result.success && result.conversations) {
-        setConversations(result.conversations);
-        
-        const unreadTotal = result.conversations.reduce((sum, conv) => sum + (conv.unread_count || 0), 0);
-        setTotalUnread(unreadTotal);
+      if (result.success && result.notifications) {
+        setNotifications(result.notifications as Notification[]);
       }
+
+      // Fetch unread counts for each category
+      const counts: Record<string, number> = {};
+      for (const cat of Object.keys(CATEGORY_CONFIG)) {
+        const countResult = await notificationService.getUnreadCountByCategory(
+          user.id,
+          cat as NotificationCategory
+        );
+        if (countResult.success) {
+          counts[cat] = countResult.count;
+        }
+      }
+      setUnreadCounts(counts);
     } catch (error) {
-      console.error('Error in fetchConversations:', error);
+      console.error('Error in fetchNotifications:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [user]);
+  }, [user, selectedCategory]);
 
   useEffect(() => {
     if (!user) {
       router.replace('/auth/login');
     } else {
-      fetchConversations();
+      fetchNotifications();
       
-      const interval = setInterval(fetchConversations, 10000);
+      const interval = setInterval(fetchNotifications, 10000);
       return () => clearInterval(interval);
     }
-  }, [user, fetchConversations]);
+  }, [user, fetchNotifications]);
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchConversations();
+    fetchNotifications();
   };
 
-  const handleConversationPress = (conversation: Conversation) => {
-    if (!conversation.other_user) return;
+  const handleMarkAllAsRead = async () => {
+    if (!user) return;
 
-    router.push({
-      pathname: '/screens/ChatScreen',
-      params: {
-        conversationId: conversation.id,
-        otherUserId: conversation.other_user.id,
-        otherUsername: conversation.other_user.display_name || conversation.other_user.username,
-        otherAvatar: conversation.other_user.avatar_url || '',
-      },
-    });
+    const category = selectedCategory === 'all' ? undefined : selectedCategory;
+    await notificationService.markAllAsRead(user.id, category);
+    fetchNotifications();
+  };
+
+  const handleNotificationPress = async (notification: Notification) => {
+    // Mark as read
+    await notificationService.markAsRead(notification.id);
+
+    // Navigate to relevant page
+    if (notification.ref_post_id) {
+      router.push(`/screens/PostDetailScreen?postId=${notification.ref_post_id}`);
+    } else if (notification.ref_story_id) {
+      router.push(`/screens/StoryViewerScreen?storyId=${notification.ref_story_id}`);
+    } else if (notification.ref_stream_id) {
+      router.push(`/live-player?streamId=${notification.ref_stream_id}`);
+    } else if (notification.sender) {
+      router.push(`/screens/PublicProfileScreen?userId=${notification.sender.id}`);
+    }
+
+    fetchNotifications();
   };
 
   const formatTime = (timestamp: string) => {
@@ -87,17 +157,100 @@ export default function InboxScreen() {
     return 'Just now';
   };
 
+  const getNotificationIcon = (type: string) => {
+    switch (type) {
+      case 'like':
+        return { ios: 'heart.fill', android: 'favorite' };
+      case 'comment':
+        return { ios: 'bubble.left.fill', android: 'comment' };
+      case 'follow':
+        return { ios: 'person.badge.plus.fill', android: 'person_add' };
+      case 'gift_received':
+        return { ios: 'gift.fill', android: 'card_giftcard' };
+      case 'payout_completed':
+        return { ios: 'checkmark.circle.fill', android: 'check_circle' };
+      case 'warning':
+        return { ios: 'exclamationmark.triangle.fill', android: 'warning' };
+      default:
+        return { ios: 'bell.fill', android: 'notifications' };
+    }
+  };
+
+  const totalUnread = Object.values(unreadCounts).reduce((sum, count) => sum + count, 0);
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <View style={styles.headerTop}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Messages</Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Inbox & Notifications</Text>
           {totalUnread > 0 && (
-            <View style={[styles.unreadBadge, { backgroundColor: colors.brandPrimary }]}>
-              <Text style={styles.unreadText}>{totalUnread > 99 ? '99+' : totalUnread}</Text>
-            </View>
+            <TouchableOpacity
+              style={[styles.markAllButton, { backgroundColor: colors.brandPrimary }]}
+              onPress={handleMarkAllAsRead}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.markAllText}>Mark All Read</Text>
+            </TouchableOpacity>
           )}
         </View>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.categoryScroll}
+          contentContainerStyle={styles.categoryScrollContent}
+        >
+          <TouchableOpacity
+            style={[
+              styles.categoryChip,
+              {
+                backgroundColor: selectedCategory === 'all' ? colors.brandPrimary : colors.backgroundAlt,
+              },
+            ]}
+            onPress={() => setSelectedCategory('all')}
+            activeOpacity={0.7}
+          >
+            <Text
+              style={[
+                styles.categoryChipText,
+                { color: selectedCategory === 'all' ? '#FFFFFF' : colors.text },
+              ]}
+            >
+              All
+            </Text>
+          </TouchableOpacity>
+
+          {Object.entries(CATEGORY_CONFIG).map(([key, config]) => (
+            <TouchableOpacity
+              key={key}
+              style={[
+                styles.categoryChip,
+                {
+                  backgroundColor:
+                    selectedCategory === key ? colors.brandPrimary : colors.backgroundAlt,
+                },
+              ]}
+              onPress={() => setSelectedCategory(key as NotificationCategory)}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[
+                  styles.categoryChipText,
+                  { color: selectedCategory === key ? '#FFFFFF' : colors.text },
+                ]}
+              >
+                {config.title}
+              </Text>
+              {unreadCounts[key] > 0 && (
+                <View style={styles.categoryBadge}>
+                  <Text style={styles.categoryBadgeText}>
+                    {unreadCounts[key] > 99 ? '99+' : unreadCounts[key]}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
 
       <ScrollView
@@ -114,86 +267,68 @@ export default function InboxScreen() {
       >
         {loading ? (
           <View style={styles.centerContent}>
-            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading messages...</Text>
+            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+              Loading notifications...
+            </Text>
           </View>
-        ) : conversations.length === 0 ? (
+        ) : notifications.length === 0 ? (
           <View style={styles.emptyState}>
             <IconSymbol
-              ios_icon_name="bubble.left.and.bubble.right"
-              android_material_icon_name="chat"
+              ios_icon_name="bell.slash"
+              android_material_icon_name="notifications_off"
               size={64}
               color={colors.textSecondary}
             />
-            <Text style={[styles.emptyText, { color: colors.text }]}>No messages yet</Text>
+            <Text style={[styles.emptyText, { color: colors.text }]}>No notifications yet</Text>
             <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>
-              Start a conversation from someone&apos;s profile or during a live stream
+              You&apos;ll see notifications here when you get likes, comments, and more
             </Text>
           </View>
         ) : (
-          conversations.map((conversation) => {
-            if (!conversation.other_user) return null;
-
-            const hasUnread = (conversation.unread_count || 0) > 0;
-
+          notifications.map((notification) => {
+            const icon = getNotificationIcon(notification.type);
             return (
               <TouchableOpacity
-                key={conversation.id}
+                key={notification.id}
                 style={[
-                  styles.conversationCard,
-                  { 
-                    backgroundColor: hasUnread ? colors.backgroundAlt : colors.background,
-                    borderBottomColor: colors.border 
+                  styles.notificationCard,
+                  {
+                    backgroundColor: notification.read ? colors.background : colors.backgroundAlt,
+                    borderBottomColor: colors.border,
                   },
                 ]}
-                onPress={() => handleConversationPress(conversation)}
+                onPress={() => handleNotificationPress(notification)}
                 activeOpacity={0.7}
               >
-                <Image
-                  source={{
-                    uri: conversation.other_user.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
-                  }}
-                  style={[styles.avatar, { backgroundColor: colors.card }]}
-                />
+                {notification.sender?.avatar_url ? (
+                  <Image
+                    source={{ uri: notification.sender.avatar_url }}
+                    style={[styles.avatar, { backgroundColor: colors.card }]}
+                  />
+                ) : (
+                  <View style={[styles.iconContainer, { backgroundColor: colors.card }]}>
+                    <IconSymbol
+                      ios_icon_name={icon.ios}
+                      android_material_icon_name={icon.android}
+                      size={24}
+                      color={colors.brandPrimary}
+                    />
+                  </View>
+                )}
 
-                <View style={styles.conversationContent}>
-                  <View style={styles.conversationHeader}>
-                    <Text style={[styles.username, { color: colors.text }]} numberOfLines={1}>
-                      {conversation.other_user.display_name || conversation.other_user.username}
+                <View style={styles.notificationContent}>
+                  <View style={styles.notificationHeader}>
+                    <Text style={[styles.notificationText, { color: colors.text }]} numberOfLines={2}>
+                      {notification.sender?.display_name || notification.sender?.username || 'System'}{' '}
+                      {notification.message}
                     </Text>
-                    {conversation.last_message && (
-                      <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
-                        {formatTime(conversation.last_message.created_at)}
-                      </Text>
+                    {!notification.read && (
+                      <View style={[styles.unreadDot, { backgroundColor: colors.brandPrimary }]} />
                     )}
                   </View>
-
-                  <View style={styles.conversationFooter}>
-                    {conversation.last_message ? (
-                      <Text
-                        style={[
-                          styles.lastMessage,
-                          { color: hasUnread ? colors.text : colors.textSecondary },
-                          hasUnread && styles.lastMessageUnread,
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {conversation.last_message.sender_id === user?.id ? 'You: ' : ''}
-                        {conversation.last_message.content}
-                      </Text>
-                    ) : (
-                      <Text style={[styles.lastMessage, { color: colors.textSecondary }]}>
-                        No messages yet
-                      </Text>
-                    )}
-
-                    {hasUnread && (
-                      <View style={[styles.unreadCountBadge, { backgroundColor: colors.brandPrimary }]}>
-                        <Text style={styles.unreadCountText}>
-                          {conversation.unread_count! > 99 ? '99+' : conversation.unread_count}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
+                  <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
+                    {formatTime(notification.created_at)}
+                  </Text>
                 </View>
               </TouchableOpacity>
             );
@@ -217,21 +352,54 @@ const styles = StyleSheet.create({
   headerTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    justifyContent: 'space-between',
+    marginBottom: 16,
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: '800',
   },
-  unreadBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
+  markAllButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
   },
-  unreadText: {
+  markAllText: {
     fontSize: 12,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  categoryScroll: {
+    marginHorizontal: -20,
+  },
+  categoryScrollContent: {
+    paddingHorizontal: 20,
+    gap: 8,
+  },
+  categoryChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  categoryChipText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  categoryBadge: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    minWidth: 20,
+    alignItems: 'center',
+  },
+  categoryBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#A40028',
   },
   scrollView: {
     flex: 1,
@@ -266,60 +434,48 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
   },
-  conversationCard: {
+  notificationCard: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
-    gap: 16,
+    gap: 12,
   },
   avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
   },
-  conversationContent: {
-    flex: 1,
-    gap: 6,
-  },
-  conversationHeader: {
-    flexDirection: 'row',
+  iconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
   },
-  username: {
-    fontSize: 16,
-    fontWeight: '700',
+  notificationContent: {
     flex: 1,
+    gap: 4,
+  },
+  notificationHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  notificationText: {
+    fontSize: 14,
+    fontWeight: '400',
+    flex: 1,
+    lineHeight: 20,
+  },
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginTop: 6,
   },
   timestamp: {
     fontSize: 12,
     fontWeight: '400',
-  },
-  conversationFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  lastMessage: {
-    fontSize: 14,
-    fontWeight: '400',
-    flex: 1,
-  },
-  lastMessageUnread: {
-    fontWeight: '600',
-  },
-  unreadCountBadge: {
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 6,
-  },
-  unreadCountText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#FFFFFF',
   },
 });

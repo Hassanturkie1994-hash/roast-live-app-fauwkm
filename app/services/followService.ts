@@ -1,5 +1,6 @@
 
 import { supabase } from '@/app/integrations/supabase/client';
+import { notificationService } from './notificationService';
 
 export const followService = {
   async followUser(followerId: string, followingId: string) {
@@ -14,7 +15,29 @@ export const followService = {
         return { success: false, error };
       }
 
-      return { success: true };
+      // Check if it's mutual follow
+      const { data: mutualFollow } = await supabase
+        .from('followers')
+        .select('id')
+        .eq('follower_id', followingId)
+        .eq('following_id', followerId)
+        .maybeSingle();
+
+      const message = mutualFollow ? 'is now following you back' : 'started following you';
+
+      // Send notification
+      await notificationService.createNotification(
+        followerId,
+        followingId,
+        'follow',
+        message,
+        undefined,
+        undefined,
+        undefined,
+        'social'
+      );
+
+      return { success: true, isMutual: !!mutualFollow };
     } catch (error) {
       console.error('Error in followUser:', error);
       return { success: false, error };
@@ -58,6 +81,20 @@ export const followService = {
       return !!data;
     } catch (error) {
       console.error('Error in isFollowing:', error);
+      return false;
+    }
+  },
+
+  async isMutualFollow(userId1: string, userId2: string): Promise<boolean> {
+    try {
+      const [follow1, follow2] = await Promise.all([
+        this.isFollowing(userId1, userId2),
+        this.isFollowing(userId2, userId1),
+      ]);
+
+      return follow1 && follow2;
+    } catch (error) {
+      console.error('Error in isMutualFollow:', error);
       return false;
     }
   },
