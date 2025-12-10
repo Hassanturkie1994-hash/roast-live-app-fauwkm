@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
+import ThemedEmoji from '@/components/ThemedEmoji';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { supabase } from '@/app/integrations/supabase/client';
@@ -174,7 +175,10 @@ export default function AccountSettingsScreen() {
           </View>
         ) : userRole ? (
           <View style={[styles.section, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>🎛️ Dashboard & Tools</Text>
+            <View style={styles.sectionTitleRow}>
+              <ThemedEmoji emoji="🧩" size={20} />
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Dashboard & Tools</Text>
+            </View>
 
             <TouchableOpacity 
               style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
@@ -208,7 +212,10 @@ export default function AccountSettingsScreen() {
 
         {/* General Section */}
         <View style={[styles.section, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>⚙️ General</Text>
+          <View style={styles.sectionTitleRow}>
+            <ThemedEmoji emoji="🎨" size={20} />
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>General</Text>
+          </View>
 
           <TouchableOpacity 
             style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
@@ -257,12 +264,7 @@ export default function AccountSettingsScreen() {
             onPress={() => router.push('/screens/NotificationSettingsScreen' as any)}
           >
             <View style={styles.settingLeft}>
-              <IconSymbol
-                ios_icon_name="bell.fill"
-                android_material_icon_name="notifications"
-                size={20}
-                color={colors.brandPrimary}
-              />
+              <ThemedEmoji emoji="🔔" size={20} />
               <Text style={[styles.settingText, { color: colors.text }]}>Notifications</Text>
             </View>
             <IconSymbol
@@ -278,12 +280,7 @@ export default function AccountSettingsScreen() {
             onPress={() => router.push('/screens/SavedStreamsScreen')}
           >
             <View style={styles.settingLeft}>
-              <IconSymbol
-                ios_icon_name="bookmark.fill"
-                android_material_icon_name="bookmark"
-                size={20}
-                color={colors.text}
-              />
+              <ThemedEmoji emoji="📁" size={20} />
               <Text style={[styles.settingText, { color: colors.text }]}>Saved Streams</Text>
             </View>
             <IconSymbol
@@ -299,12 +296,7 @@ export default function AccountSettingsScreen() {
             onPress={() => router.push('/screens/AchievementsScreen')}
           >
             <View style={styles.settingLeft}>
-              <IconSymbol
-                ios_icon_name="star.fill"
-                android_material_icon_name="star"
-                size={20}
-                color="#FFD700"
-              />
+              <ThemedEmoji emoji="🏆" size={20} />
               <Text style={[styles.settingText, { color: colors.text }]}>Achievements</Text>
             </View>
             <IconSymbol
@@ -318,7 +310,10 @@ export default function AccountSettingsScreen() {
 
         {/* Account & Security Section */}
         <View style={[styles.section, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>🔐 Account & Security</Text>
+          <View style={styles.sectionTitleRow}>
+            <ThemedEmoji emoji="🛡️" size={20} />
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Account & Security</Text>
+          </View>
 
           <TouchableOpacity 
             style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
@@ -346,12 +341,7 @@ export default function AccountSettingsScreen() {
             onPress={handleChangePassword}
           >
             <View style={styles.settingLeft}>
-              <IconSymbol
-                ios_icon_name="lock.fill"
-                android_material_icon_name="lock"
-                size={20}
-                color={colors.text}
-              />
+              <ThemedEmoji emoji="🔐" size={20} />
               <Text style={[styles.settingText, { color: colors.text }]}>Change Password</Text>
             </View>
             <IconSymbol
@@ -367,12 +357,7 @@ export default function AccountSettingsScreen() {
             onPress={() => router.push('/screens/BlockedUsersScreen')}
           >
             <View style={styles.settingLeft}>
-              <IconSymbol
-                ios_icon_name="hand.raised.fill"
-                android_material_icon_name="block"
-                size={20}
-                color={colors.brandPrimary}
-              />
+              <ThemedEmoji emoji="🚫" size={20} />
               <Text style={[styles.settingText, { color: colors.text }]}>Blocked Users</Text>
             </View>
             <IconSymbol
@@ -386,7 +371,10 @@ export default function AccountSettingsScreen() {
 
         {/* Streaming Section */}
         <View style={[styles.section, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>📹 Streaming</Text>
+          <View style={styles.sectionTitleRow}>
+            <ThemedEmoji emoji="🎥" size={20} />
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Streaming</Text>
+          </View>
 
           <TouchableOpacity 
             style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
@@ -413,23 +401,53 @@ export default function AccountSettingsScreen() {
               color={colors.textSecondary}
             />
           </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
+            onPress={() => router.push('/screens/SavedStreamsScreen')}
+          >
+            <View style={styles.settingLeft}>
+              <ThemedEmoji emoji="🎞️" size={20} />
+              <Text style={[styles.settingText, { color: colors.text }]}>Saved Streams</Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="chevron_right"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
+            onPress={() => router.push('/screens/ArchivedStreamsScreen')}
+          >
+            <View style={styles.settingLeft}>
+              <ThemedEmoji emoji="📺" size={20} />
+              <Text style={[styles.settingText, { color: colors.text }]}>Stream History</Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="chevron_right"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
         </View>
 
         {/* Wallet & Gifts Section */}
         <View style={[styles.section, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>💰 Wallet & Gifts</Text>
+          <View style={styles.sectionTitleRow}>
+            <ThemedEmoji emoji="💰" size={20} />
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Wallet & Gifts</Text>
+          </View>
 
           <TouchableOpacity 
             style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
             onPress={() => router.push('/screens/PremiumMembershipScreen' as any)}
           >
             <View style={styles.settingLeft}>
-              <IconSymbol
-                ios_icon_name="crown.fill"
-                android_material_icon_name="workspace_premium"
-                size={20}
-                color="#FFD700"
-              />
+              <ThemedEmoji emoji="⭐" size={20} />
               <View>
                 <Text style={[styles.settingText, { color: colors.text }]}>PREMIUM Membership</Text>
                 <Text style={[styles.settingSubtext, { color: colors.textSecondary }]}>
@@ -450,12 +468,7 @@ export default function AccountSettingsScreen() {
             onPress={() => router.push('/screens/WalletScreen')}
           >
             <View style={styles.settingLeft}>
-              <IconSymbol
-                ios_icon_name="wallet.pass.fill"
-                android_material_icon_name="account_balance_wallet"
-                size={20}
-                color={colors.brandPrimary}
-              />
+              <ThemedEmoji emoji="💰" size={20} />
               <Text style={[styles.settingText, { color: colors.text }]}>Saldo</Text>
             </View>
             <IconSymbol
@@ -471,12 +484,7 @@ export default function AccountSettingsScreen() {
             onPress={() => router.push('/screens/GiftInformationScreen')}
           >
             <View style={styles.settingLeft}>
-              <IconSymbol
-                ios_icon_name="gift.fill"
-                android_material_icon_name="card_giftcard"
-                size={20}
-                color={colors.brandPrimary}
-              />
+              <ThemedEmoji emoji="🎁" size={20} />
               <Text style={[styles.settingText, { color: colors.text }]}>Gift Information</Text>
             </View>
             <IconSymbol
@@ -492,12 +500,7 @@ export default function AccountSettingsScreen() {
             onPress={() => router.push('/screens/ManageSubscriptionsScreen')}
           >
             <View style={styles.settingLeft}>
-              <IconSymbol
-                ios_icon_name="creditcard.fill"
-                android_material_icon_name="credit_card"
-                size={20}
-                color={colors.text}
-              />
+              <ThemedEmoji emoji="💳" size={20} />
               <Text style={[styles.settingText, { color: colors.text }]}>Manage Subscriptions</Text>
             </View>
             <IconSymbol
@@ -513,12 +516,7 @@ export default function AccountSettingsScreen() {
             onPress={handleWithdrawEarnings}
           >
             <View style={styles.settingLeft}>
-              <IconSymbol
-                ios_icon_name="arrow.down.circle.fill"
-                android_material_icon_name="download"
-                size={20}
-                color={colors.text}
-              />
+              <ThemedEmoji emoji="⬇️" size={20} />
               <Text style={[styles.settingText, { color: colors.text }]}>Withdraw Earnings</Text>
             </View>
             <IconSymbol
@@ -534,12 +532,7 @@ export default function AccountSettingsScreen() {
             onPress={handleTransactionHistory}
           >
             <View style={styles.settingLeft}>
-              <IconSymbol
-                ios_icon_name="list.bullet"
-                android_material_icon_name="history"
-                size={20}
-                color={colors.text}
-              />
+              <ThemedEmoji emoji="📜" size={20} />
               <Text style={[styles.settingText, { color: colors.text }]}>Transaction History</Text>
             </View>
             <IconSymbol
@@ -553,7 +546,10 @@ export default function AccountSettingsScreen() {
 
         {/* Safety & Rules Section */}
         <View style={[styles.section, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>🛡️ Safety & Rules</Text>
+          <View style={styles.sectionTitleRow}>
+            <ThemedEmoji emoji="🛟" size={20} />
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Safety & Rules</Text>
+          </View>
 
           <TouchableOpacity 
             style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
@@ -581,12 +577,7 @@ export default function AccountSettingsScreen() {
             onPress={() => router.push('/screens/AppealsViolationsScreen')}
           >
             <View style={styles.settingLeft}>
-              <IconSymbol
-                ios_icon_name="doc.text.fill"
-                android_material_icon_name="description"
-                size={20}
-                color={colors.text}
-              />
+              <ThemedEmoji emoji="📄" size={20} />
               <Text style={[styles.settingText, { color: colors.text }]}>Appeals & Violations</Text>
             </View>
             <IconSymbol
@@ -602,12 +593,7 @@ export default function AccountSettingsScreen() {
             onPress={() => router.push('/screens/TermsOfServiceScreen')}
           >
             <View style={styles.settingLeft}>
-              <IconSymbol
-                ios_icon_name="doc.text.fill"
-                android_material_icon_name="description"
-                size={20}
-                color={colors.text}
-              />
+              <ThemedEmoji emoji="📘" size={20} />
               <Text style={[styles.settingText, { color: colors.text }]}>Terms of Service</Text>
             </View>
             <IconSymbol
@@ -623,12 +609,7 @@ export default function AccountSettingsScreen() {
             onPress={() => router.push('/screens/PrivacyPolicyScreen')}
           >
             <View style={styles.settingLeft}>
-              <IconSymbol
-                ios_icon_name="hand.raised.fill"
-                android_material_icon_name="privacy_tip"
-                size={20}
-                color={colors.text}
-              />
+              <ThemedEmoji emoji="🔒" size={20} />
               <Text style={[styles.settingText, { color: colors.text }]}>Privacy Policy</Text>
             </View>
             <IconSymbol
@@ -642,7 +623,10 @@ export default function AccountSettingsScreen() {
 
         {/* Profile Preferences Section */}
         <View style={[styles.section, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>👤 Profile Preferences</Text>
+          <View style={styles.sectionTitleRow}>
+            <ThemedEmoji emoji="🙈" size={20} />
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Profile Preferences</Text>
+          </View>
 
           <View style={[styles.settingItem, { borderBottomColor: colors.divider }]}>
             <View style={styles.settingLeft}>
@@ -664,12 +648,7 @@ export default function AccountSettingsScreen() {
 
           <View style={[styles.settingItem, { borderBottomColor: colors.divider }]}>
             <View style={styles.settingLeft}>
-              <IconSymbol
-                ios_icon_name="bubble.left.fill"
-                android_material_icon_name="comment"
-                size={20}
-                color={colors.text}
-              />
+              <ThemedEmoji emoji="💬" size={20} />
               <View>
                 <Text style={[styles.settingText, { color: colors.text }]}>Who Can Comment</Text>
                 <Text style={[styles.settingSubtext, { color: colors.textSecondary }]}>{commentPermission}</Text>
@@ -767,10 +746,15 @@ const styles = StyleSheet.create({
     paddingVertical: 24,
     borderBottomWidth: 1,
   },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    marginBottom: 16,
   },
   settingItem: {
     flexDirection: 'row',

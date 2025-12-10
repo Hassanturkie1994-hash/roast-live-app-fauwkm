@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
+import ThemedEmoji from '@/components/ThemedEmoji';
 import GradientButton from '@/components/GradientButton';
 import RoastLiveLogo from '@/components/RoastLiveLogo';
 import { useAuth } from '@/contexts/AuthContext';
@@ -306,12 +307,7 @@ export default function ProfileScreen() {
             activeOpacity={0.7}
           >
             <View style={styles.walletLeft}>
-              <IconSymbol
-                ios_icon_name="wallet.pass.fill"
-                android_material_icon_name="account_balance_wallet"
-                size={20}
-                color={colors.brandPrimary}
-              />
+              <ThemedEmoji emoji="💰" size={20} />
               <Text style={[styles.walletLabel, { color: colors.text }]}>Saldo Balance</Text>
             </View>
             <View style={styles.walletRight}>
@@ -332,12 +328,7 @@ export default function ProfileScreen() {
             activeOpacity={0.7}
           >
             <View style={styles.savedStreamsLeft}>
-              <IconSymbol
-                ios_icon_name="bookmark.fill"
-                android_material_icon_name="bookmark"
-                size={20}
-                color={colors.brandPrimary}
-              />
+              <ThemedEmoji emoji="🎞️" size={20} />
               <Text style={[styles.savedStreamsLabel, { color: colors.text }]}>Saved Streams</Text>
             </View>
             <IconSymbol
@@ -355,12 +346,7 @@ export default function ProfileScreen() {
             activeOpacity={0.7}
           >
             <View style={styles.savedStreamsLeft}>
-              <IconSymbol
-                ios_icon_name="video.fill"
-                android_material_icon_name="videocam"
-                size={20}
-                color={colors.brandPrimary}
-              />
+              <ThemedEmoji emoji="📺" size={20} />
               <Text style={[styles.savedStreamsLabel, { color: colors.text }]}>Stream History</Text>
             </View>
             <IconSymbol
@@ -393,24 +379,14 @@ export default function ProfileScreen() {
               style={[styles.actionButton, { backgroundColor: colors.backgroundAlt, borderColor: colors.border }]} 
               onPress={handleCreatePost}
             >
-              <IconSymbol
-                ios_icon_name="plus.square.fill"
-                android_material_icon_name="add_box"
-                size={20}
-                color={colors.text}
-              />
+              <ThemedEmoji emoji="📝" size={20} />
               <Text style={[styles.actionButtonText, { color: colors.text }]}>Post</Text>
             </TouchableOpacity>
             <TouchableOpacity 
               style={[styles.actionButton, { backgroundColor: colors.backgroundAlt, borderColor: colors.border }]} 
               onPress={handleCreateStory}
             >
-              <IconSymbol
-                ios_icon_name="plus.circle.fill"
-                android_material_icon_name="add_circle"
-                size={20}
-                color={colors.text}
-              />
+              <ThemedEmoji emoji="📷" size={20} />
               <Text style={[styles.actionButtonText, { color: colors.text }]}>Story</Text>
             </TouchableOpacity>
           </View>
