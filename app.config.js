@@ -1,19 +1,22 @@
-
 module.exports = ({ config }) => {
+config._internalSkipAppJson = true;
   return {
     ...config,
     name: "Roast Live",
-    slug: "roast-live-app-fauwkm",
+    slug: "roast-live",
+    owner: "hasselite",
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/images/natively-dark.png",
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
+
     splash: {
       image: "./assets/images/natively-dark.png",
       resizeMode: "contain",
       backgroundColor: "#000000"
     },
+
     ios: {
       supportsTablet: true,
       bundleIdentifier: "com.roastlive.roastlive",
@@ -27,6 +30,7 @@ module.exports = ({ config }) => {
       },
       bitcode: false
     },
+
     android: {
       adaptiveIcon: {
         foregroundImage: "./assets/images/natively-dark.png",
@@ -47,14 +51,18 @@ module.exports = ({ config }) => {
       ],
       googleServicesFile: process.env.GOOGLE_SERVICES_JSON || "./google-services.json"
     },
+
     web: {
       favicon: "./assets/images/final_quest_240x240.png",
       bundler: "metro"
     },
+
+    // ALLA PLUGINS HÄR
     plugins: [
       "expo-font",
       "expo-router",
       "expo-web-browser",
+
       [
         "expo-camera",
         {
@@ -63,6 +71,7 @@ module.exports = ({ config }) => {
           recordAudioAndroid: true
         }
       ],
+
       [
         "expo-image-picker",
         {
@@ -70,43 +79,56 @@ module.exports = ({ config }) => {
           cameraPermission: "Allow Roast Live to access your camera to take photos."
         }
       ],
+
       [
         "expo-av",
         {
           microphonePermission: "Allow Roast Live to access your microphone for audio recording."
         }
       ],
+
       [
         "expo-notifications",
         {
-          icon: "./assets/images/natively-dark.png",
-          color: "#E30052",
-          sounds: [],
+          icon: "./assets/images/notification-icon.png",
+          color: "#A40028",
+          sounds: ["./assets/sounds/notification.wav"],
           androidMode: "default",
           androidCollapsedTitle: "{{unread_count}} new notifications"
         }
       ]
     ],
+
+    // DEEPLINK SCHEME
     scheme: "roastlive",
+
+    // ROUTER EXPERIMENT
     experiments: {
       typedRoutes: true
     },
+
+    // 🔥 EXTRA VARIABLER + EAS PROJECT ID
     extra: {
-      router: {},
       eas: {
         projectId: "b1994843-ea99-4a51-8db1-d1049a44b5b7"
       },
-      // Runtime environment variables (accessible via Constants.expoConfig.extra)
+
       EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
       EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
-      CLOUDFLARE_R2_PUBLIC_BASE_URL: process.env.CLOUDFLARE_R2_PUBLIC_BASE_URL || "https://pub-YOUR_ACCOUNT_ID.r2.dev",
+
+      CLOUDFLARE_R2_PUBLIC_BASE_URL:
+        process.env.CLOUDFLARE_R2_PUBLIC_BASE_URL ||
+        "https://pub-YOUR_ACCOUNT_ID.r2.dev",
+
       CLOUDFLARE_ACCOUNT_ID: process.env.CLOUDFLARE_ACCOUNT_ID,
-      SUPABASE_FUNCTIONS_URL: process.env.SUPABASE_FUNCTIONS_URL || process.env.EXPO_PUBLIC_SUPABASE_URL + "/functions/v1"
+
+      SUPABASE_FUNCTIONS_URL:
+        process.env.SUPABASE_FUNCTIONS_URL ||
+        process.env.EXPO_PUBLIC_SUPABASE_URL + "/functions/v1"
     },
+
     autolinking: {
-      exclude: [
-        "react-native-nodemediaclient"
-      ]
+      exclude: ["react-native-nodemediaclient"]
     }
   };
 };
