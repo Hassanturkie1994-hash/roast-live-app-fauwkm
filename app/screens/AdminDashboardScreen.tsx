@@ -25,6 +25,8 @@ export default function AdminDashboardScreen() {
     openReports: 0,
     liveStreams: 0,
     usersUnderPenalty: 0,
+    activeStrikes: 0,
+    pendingAppeals: 0,
     vipSubscribers: 0,
     dailyVolume: 0,
   });
@@ -84,6 +86,8 @@ export default function AdminDashboardScreen() {
         openReports,
         liveStreams,
         usersUnderPenalty,
+        activeStrikes: 0, // Will be fetched separately
+        pendingAppeals: 0, // Will be fetched separately
         vipSubscribers,
         dailyVolume,
       });
@@ -181,7 +185,7 @@ export default function AdminDashboardScreen() {
 
           <TouchableOpacity
             style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={() => router.push('/screens/AdminPenaltiesScreen' as any)}
+            onPress={() => router.push('/screens/AdminStrikesScreen' as any)}
             activeOpacity={0.7}
           >
             <IconSymbol
@@ -190,8 +194,38 @@ export default function AdminDashboardScreen() {
               size={32}
               color="#FFA500"
             />
+            <Text style={[styles.statValue, { color: colors.text }]}>{stats.activeStrikes}</Text>
+            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Active Strikes</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => router.push('/screens/AdminSuspensionsScreen' as any)}
+            activeOpacity={0.7}
+          >
+            <IconSymbol
+              ios_icon_name="hand.raised.fill"
+              android_material_icon_name="block"
+              size={32}
+              color="#DC143C"
+            />
             <Text style={[styles.statValue, { color: colors.text }]}>{stats.usersUnderPenalty}</Text>
-            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Under Penalty</Text>
+            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Suspensions</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => router.push('/screens/AdminBanAppealsScreen' as any)}
+            activeOpacity={0.7}
+          >
+            <IconSymbol
+              ios_icon_name="doc.text.fill"
+              android_material_icon_name="description"
+              size={32}
+              color="#4ECDC4"
+            />
+            <Text style={[styles.statValue, { color: colors.text }]}>{stats.pendingAppeals}</Text>
+            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Pending Appeals</Text>
           </TouchableOpacity>
 
           <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -203,17 +237,6 @@ export default function AdminDashboardScreen() {
             />
             <Text style={[styles.statValue, { color: colors.text }]}>{stats.vipSubscribers}</Text>
             <Text style={[styles.statLabel, { color: colors.textSecondary }]}>VIP Subscribers</Text>
-          </View>
-
-          <View style={[styles.statCard, styles.wideCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <IconSymbol
-              ios_icon_name="dollarsign.circle.fill"
-              android_material_icon_name="attach_money"
-              size={32}
-              color="#4ECDC4"
-            />
-            <Text style={[styles.statValue, { color: colors.text }]}>{stats.dailyVolume} kr</Text>
-            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Daily Volume</Text>
           </View>
         </View>
 
@@ -239,6 +262,93 @@ export default function AdminDashboardScreen() {
                 </Text>
                 <Text style={[styles.actionButtonSubtitle, { color: colors.textSecondary }]}>
                   Review and resolve user reports
+                </Text>
+              </View>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="chevron_right"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => router.push('/screens/AdminStrikesScreen' as any)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.actionButtonContent}>
+              <IconSymbol
+                ios_icon_name="exclamationmark.triangle.fill"
+                android_material_icon_name="warning"
+                size={24}
+                color="#FFA500"
+              />
+              <View style={styles.actionButtonText}>
+                <Text style={[styles.actionButtonTitle, { color: colors.text }]}>
+                  Active Strikes
+                </Text>
+                <Text style={[styles.actionButtonSubtitle, { color: colors.textSecondary }]}>
+                  View and manage user strikes
+                </Text>
+              </View>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="chevron_right"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => router.push('/screens/AdminSuspensionsScreen' as any)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.actionButtonContent}>
+              <IconSymbol
+                ios_icon_name="hand.raised.fill"
+                android_material_icon_name="block"
+                size={24}
+                color="#DC143C"
+              />
+              <View style={styles.actionButtonText}>
+                <Text style={[styles.actionButtonTitle, { color: colors.text }]}>
+                  Active Suspensions
+                </Text>
+                <Text style={[styles.actionButtonSubtitle, { color: colors.textSecondary }]}>
+                  Manage suspended users
+                </Text>
+              </View>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="chevron_right"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => router.push('/screens/AdminBanAppealsScreen' as any)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.actionButtonContent}>
+              <IconSymbol
+                ios_icon_name="doc.text.fill"
+                android_material_icon_name="description"
+                size={24}
+                color="#4ECDC4"
+              />
+              <View style={styles.actionButtonText}>
+                <Text style={[styles.actionButtonTitle, { color: colors.text }]}>
+                  Ban Appeals
+                </Text>
+                <Text style={[styles.actionButtonSubtitle, { color: colors.textSecondary }]}>
+                  Review reinstatement requests
                 </Text>
               </View>
             </View>
@@ -289,7 +399,7 @@ export default function AdminDashboardScreen() {
                 ios_icon_name="envelope.fill"
                 android_material_icon_name="mail"
                 size={24}
-                color="#4ECDC4"
+                color="#9B59B6"
               />
               <View style={styles.actionButtonText}>
                 <Text style={[styles.actionButtonTitle, { color: colors.text }]}>
@@ -297,35 +407,6 @@ export default function AdminDashboardScreen() {
                 </Text>
                 <Text style={[styles.actionButtonSubtitle, { color: colors.textSecondary }]}>
                   Send warnings and notices to users
-                </Text>
-              </View>
-            </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
-              size={20}
-              color={colors.textSecondary}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={() => router.push('/screens/AdminPenaltiesScreen' as any)}
-            activeOpacity={0.7}
-          >
-            <View style={styles.actionButtonContent}>
-              <IconSymbol
-                ios_icon_name="exclamationmark.triangle.fill"
-                android_material_icon_name="warning"
-                size={24}
-                color="#FFA500"
-              />
-              <View style={styles.actionButtonText}>
-                <Text style={[styles.actionButtonTitle, { color: colors.text }]}>
-                  Users Under Penalty
-                </Text>
-                <Text style={[styles.actionButtonSubtitle, { color: colors.textSecondary }]}>
-                  View banned and suspended users
                 </Text>
               </View>
             </View>
