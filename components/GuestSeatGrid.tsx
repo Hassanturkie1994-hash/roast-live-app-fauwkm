@@ -1,5 +1,5 @@
 
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -12,14 +12,16 @@ import {
 import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import { StreamGuestSeat } from '@/app/services/streamGuestService';
+import GuestActionMenuModal from '@/components/GuestActionMenuModal';
 
 interface GuestSeatGridProps {
   hostName: string;
   hostAvatarUrl?: string | null;
   guests: StreamGuestSeat[];
+  streamId: string;
+  hostId: string;
   isHost?: boolean;
-  onGuestLongPress?: (guest: StreamGuestSeat) => void;
-  onHostLongPress?: () => void;
+  onRefresh: () => void;
   onEmptySeatPress?: () => void;
 }
 
@@ -181,11 +183,15 @@ export default function GuestSeatGrid({
   hostName,
   hostAvatarUrl,
   guests,
+  streamId,
+  hostId,
   isHost = false,
-  onGuestLongPress,
-  onHostLongPress,
+  onRefresh,
   onEmptySeatPress,
 }: GuestSeatGridProps) {
+  const [selectedGuest, setSelectedGuest] = useState<StreamGuestSeat | null>(null);
+  const [showActionMenu, setShowActionMenu] = useState(false);
+
   const activeGuests = guests.filter((g) => !g.left_at);
   const totalParticipants = activeGuests.length + 1; // +1 for host
 
@@ -250,15 +256,27 @@ export default function GuestSeatGrid({
   // Add empty seats if host
   const emptySeatsCount = isHost ? Math.min(9 - activeGuests.length, layout.columns * layout.rows - participants.length) : 0;
 
+  const handleGuestLongPress = (guest: StreamGuestSeat) => {
+    if (isHost) {
+      setSelectedGuest(guest);
+      setShowActionMenu(true);
+    }
+  };
+
+  const handleHostLongPress = () => {
+    // Host can't perform actions on themselves
+    console.log('Host long-pressed');
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.grid}>
         {participants.map((participant, index) => {
           const handleLongPress = () => {
-            if (participant.isHost && onHostLongPress) {
-              onHostLongPress();
-            } else if (participant.guest && onGuestLongPress) {
-              onGuestLongPress(participant.guest);
+            if (participant.isHost) {
+              handleHostLongPress();
+            } else if (participant.guest) {
+              handleGuestLongPress(participant.guest);
             }
           };
 
@@ -276,6 +294,18 @@ export default function GuestSeatGrid({
         })}
         {isHost && Array.from({ length: emptySeatsCount }).map((_, index) => renderEmptySeat(index))}
       </View>
+
+      {/* Guest Action Menu */}
+      {isHost && (
+        <GuestActionMenuModal
+          visible={showActionMenu}
+          onClose={() => setShowActionMenu(false)}
+          guest={selectedGuest}
+          streamId={streamId}
+          hostId={hostId}
+          onRefresh={onRefresh}
+        />
+      )}
     </View>
   );
 }

@@ -13,6 +13,7 @@ import {
   Image,
   Switch,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -50,7 +51,7 @@ interface TimedOutUser {
 
 const { width, height } = Dimensions.get('window');
 const PANEL_WIDTH = Math.min(width * 0.9, 400);
-const PANEL_HEIGHT = height * 0.8;
+const PANEL_HEIGHT = height * 0.85;
 
 export default function HostControlDashboard({
   streamId,
@@ -70,7 +71,7 @@ export default function HostControlDashboard({
   const [loading, setLoading] = useState(false);
 
   // Draggable panel state
-  const pan = useRef(new Animated.ValueXY({ x: width - PANEL_WIDTH - 20, y: 60 })).current;
+  const pan = useRef(new Animated.ValueXY({ x: 20, y: 60 })).current;
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -78,7 +79,6 @@ export default function HostControlDashboard({
         useNativeDriver: false,
       }),
       onPanResponderRelease: () => {
-        // Snap to edges if needed
         pan.flattenOffset();
       },
     })
@@ -116,7 +116,7 @@ export default function HostControlDashboard({
       });
 
       return () => {
-        channel.unsubscribe();
+        supabase.removeChannel(channel);
       };
     }
   }, [visible, streamId, loadData]);
@@ -173,7 +173,7 @@ export default function HostControlDashboard({
           onPress: async () => {
             const success = await streamGuestService.removeGuest(streamId, guest.user_id!, hostId);
             if (success) {
-              Alert.alert('Success', `${guest.profiles?.display_name || 'Guest'} removed from stream`);
+              Alert.alert('✅ Success', `${guest.profiles?.display_name || 'Guest'} removed from stream`);
               loadData();
             }
           },
@@ -186,6 +186,7 @@ export default function HostControlDashboard({
     const newState = !guest.mic_enabled;
     const success = await streamGuestService.updateMicStatus(streamId, guest.user_id!, newState);
     if (success) {
+      Alert.alert('✅ Success', `${guest.profiles?.display_name || 'Guest'} ${newState ? 'unmuted' : 'muted'}`);
       loadData();
     }
   };
@@ -194,6 +195,7 @@ export default function HostControlDashboard({
     const newState = !guest.camera_enabled;
     const success = await streamGuestService.updateCameraStatus(streamId, guest.user_id!, newState);
     if (success) {
+      Alert.alert('✅ Success', `${guest.profiles?.display_name || 'Guest'} camera ${newState ? 'enabled' : 'disabled'}`);
       loadData();
     }
   };
@@ -208,7 +210,7 @@ export default function HostControlDashboard({
     );
     if (success) {
       Alert.alert(
-        'Success',
+        '✅ Success',
         `${guest.profiles?.display_name || 'Guest'} is ${newState ? 'now a moderator' : 'no longer a moderator'}`
       );
       loadData();
@@ -220,6 +222,7 @@ export default function HostControlDashboard({
     const success = await streamGuestService.toggleSeatsLock(streamId, hostId, true);
     if (success) {
       setSeatsLocked(true);
+      Alert.alert('✅ Success', 'All seats locked');
     }
   };
 
@@ -227,40 +230,65 @@ export default function HostControlDashboard({
     const success = await streamGuestService.toggleSeatsLock(streamId, hostId, false);
     if (success) {
       setSeatsLocked(false);
+      Alert.alert('✅ Success', 'All seats unlocked');
     }
   };
 
   // Admin actions
   const handleUnban = async (bannedUser: BannedUser) => {
-    try {
-      const { error } = await supabase
-        .from('banned_users')
-        .delete()
-        .eq('id', bannedUser.id);
+    Alert.alert(
+      'Unban User',
+      `Are you sure you want to unban ${bannedUser.profiles?.display_name || 'this user'}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Unban',
+          onPress: async () => {
+            try {
+              const { error } = await supabase
+                .from('banned_users')
+                .delete()
+                .eq('id', bannedUser.id);
 
-      if (error) throw error;
-      Alert.alert('Success', 'User unbanned');
-      loadBannedUsers();
-    } catch (error) {
-      console.error('Error unbanning user:', error);
-      Alert.alert('Error', 'Failed to unban user');
-    }
+              if (error) throw error;
+              Alert.alert('✅ Success', 'User unbanned');
+              loadBannedUsers();
+            } catch (error) {
+              console.error('Error unbanning user:', error);
+              Alert.alert('❌ Error', 'Failed to unban user');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleRemoveTimeout = async (timedOutUser: TimedOutUser) => {
-    try {
-      const { error } = await supabase
-        .from('timed_out_users')
-        .delete()
-        .eq('id', timedOutUser.id);
+    Alert.alert(
+      'Remove Timeout',
+      `Remove timeout for ${timedOutUser.profiles?.display_name || 'this user'}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          onPress: async () => {
+            try {
+              const { error } = await supabase
+                .from('timed_out_users')
+                .delete()
+                .eq('id', timedOutUser.id);
 
-      if (error) throw error;
-      Alert.alert('Success', 'Timeout removed');
-      loadTimedOutUsers();
-    } catch (error) {
-      console.error('Error removing timeout:', error);
-      Alert.alert('Error', 'Failed to remove timeout');
-    }
+              if (error) throw error;
+              Alert.alert('✅ Success', 'Timeout removed');
+              loadTimedOutUsers();
+            } catch (error) {
+              console.error('Error removing timeout:', error);
+              Alert.alert('❌ Error', 'Failed to remove timeout');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleClearAllTimeouts = async () => {
@@ -280,11 +308,11 @@ export default function HostControlDashboard({
                 .eq('stream_id', streamId);
 
               if (error) throw error;
-              Alert.alert('Success', 'All timeouts cleared');
+              Alert.alert('✅ Success', 'All timeouts cleared');
               setTimedOutUsers([]);
             } catch (error) {
               console.error('Error clearing timeouts:', error);
-              Alert.alert('Error', 'Failed to clear timeouts');
+              Alert.alert('❌ Error', 'Failed to clear timeouts');
             }
           },
         },
@@ -313,11 +341,11 @@ export default function HostControlDashboard({
                   );
                 }
               }
-              Alert.alert('Success', 'All moderators revoked');
+              Alert.alert('✅ Success', 'All moderators revoked');
               loadData();
             } catch (error) {
               console.error('Error revoking moderators:', error);
-              Alert.alert('Error', 'Failed to revoke all moderators');
+              Alert.alert('❌ Error', 'Failed to revoke all moderators');
             }
           },
         },
@@ -639,7 +667,7 @@ export default function HostControlDashboard({
               </View>
               <ScrollView style={styles.modalScroll}>
                 {loading ? (
-                  <Text style={styles.emptyText}>Loading...</Text>
+                  <ActivityIndicator size="large" color={colors.gradientEnd} style={styles.loader} />
                 ) : bannedUsers.length === 0 ? (
                   <Text style={styles.emptyText}>No banned users</Text>
                 ) : (
@@ -699,7 +727,7 @@ export default function HostControlDashboard({
               </View>
               <ScrollView style={styles.modalScroll}>
                 {loading ? (
-                  <Text style={styles.emptyText}>Loading...</Text>
+                  <ActivityIndicator size="large" color={colors.gradientEnd} style={styles.loader} />
                 ) : timedOutUsers.length === 0 ? (
                   <Text style={styles.emptyText}>No timed out users</Text>
                 ) : (
@@ -1022,6 +1050,9 @@ const styles = StyleSheet.create({
   },
   modalScroll: {
     padding: 16,
+  },
+  loader: {
+    paddingVertical: 40,
   },
   userCard: {
     backgroundColor: colors.backgroundAlt,
