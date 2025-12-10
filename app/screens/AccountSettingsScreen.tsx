@@ -378,28 +378,12 @@ export default function AccountSettingsScreen() {
                 size={20}
                 color={colors.brandPrimary}
               />
-              <Text style={[styles.settingText, { color: colors.text }]}>Stream Dashboard</Text>
-            </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron_right"
-              size={20}
-              color={colors.textSecondary}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.settingItem, { borderBottomColor: colors.divider }]} 
-            onPress={() => router.push('/screens/VIPClubDashboardScreen')}
-          >
-            <View style={styles.settingLeft}>
-              <IconSymbol
-                ios_icon_name="crown.fill"
-                android_material_icon_name="workspace_premium"
-                size={20}
-                color="#FFD700"
-              />
-              <Text style={[styles.settingText, { color: colors.text }]}>VIP Members</Text>
+              <View>
+                <Text style={[styles.settingText, { color: colors.text }]}>Stream Dashboard</Text>
+                <Text style={[styles.settingSubtext, { color: colors.textSecondary }]}>
+                  Manage VIP club, moderators & more
+                </Text>
+              </View>
             </View>
             <IconSymbol
               ios_icon_name="chevron.right"
