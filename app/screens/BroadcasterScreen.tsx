@@ -22,10 +22,13 @@ import ModeratorControlPanel from '@/components/ModeratorControlPanel';
 import StreamHealthDashboard from '@/components/StreamHealthDashboard';
 import ConnectionStatusIndicator from '@/components/ConnectionStatusIndicator';
 import ModerationHistoryModal from '@/components/ModerationHistoryModal';
+import ContentLabelModal, { ContentLabel } from '@/components/ContentLabelModal';
+import ContentLabelBadge from '@/components/ContentLabelBadge';
 import { moderationService } from '@/app/services/moderationService';
 import { viewerTrackingService } from '@/app/services/viewerTrackingService';
 import { liveStreamArchiveService } from '@/app/services/liveStreamArchiveService';
 import { commentService } from '@/app/services/commentService';
+import { contentSafetyService } from '@/app/services/contentSafetyService';
 import { useStreamConnection } from '@/hooks/useStreamConnection';
 
 interface StreamData {
@@ -74,6 +77,8 @@ export default function BroadcasterScreen() {
   const [showHealthDashboard, setShowHealthDashboard] = useState(true);
   const [totalGifts, setTotalGifts] = useState(0);
   const [showModerationHistory, setShowModerationHistory] = useState(false);
+  const [showContentLabelModal, setShowContentLabelModal] = useState(false);
+  const [contentLabel, setContentLabel] = useState<ContentLabel | null>(null);
   const realtimeChannelRef = useRef<any>(null);
   const giftChannelRef = useRef<any>(null);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -289,6 +294,13 @@ export default function BroadcasterScreen() {
     endStream();
   };
 
+  const handleContentLabelSelected = (label: ContentLabel) => {
+    setContentLabel(label);
+    setShowContentLabelModal(false);
+    // Proceed to start stream
+    startStreamWithLabel(label);
+  };
+
   const startStream = async () => {
     if (!streamTitle.trim()) {
       Alert.alert('Error', 'Please enter a stream title');
@@ -300,10 +312,29 @@ export default function BroadcasterScreen() {
       return;
     }
 
+    // Validate stream start (check for suspensions and strikes)
+    const validation = await contentSafetyService.validateStreamStart(user.id);
+    if (!validation.canStream) {
+      Alert.alert(
+        'Cannot Start Stream',
+        validation.reason || 'You are not allowed to stream at this time.',
+        [{ text: 'OK' }]
+      );
+      setShowSetup(false);
+      return;
+    }
+
+    // Show content label selection modal
+    setShowContentLabelModal(true);
+  };
+
+  const startStreamWithLabel = async (label: ContentLabel) => {
+    if (!user) return;
+
     setIsLoading(true);
 
     try {
-      console.log('🎬 Starting live stream with title:', streamTitle);
+      console.log('🎬 Starting live stream with title:', streamTitle, 'and label:', label);
       
       const result = await cloudflareService.startLive({ 
         title: streamTitle, 
@@ -311,6 +342,9 @@ export default function BroadcasterScreen() {
       });
 
       console.log('✅ Stream created successfully:', result);
+
+      // Set content label on stream
+      await contentSafetyService.setStreamContentLabel(result.stream.id, label);
 
       // Create archive record
       const startTime = new Date().toISOString();
@@ -435,6 +469,7 @@ export default function BroadcasterScreen() {
       setSelectedFilter('none');
       setShowFilters(false);
       setArchiveId(null);
+      setContentLabel(null);
       streamStartTime.current = null;
 
       Alert.alert(
@@ -543,6 +578,9 @@ export default function BroadcasterScreen() {
             <View style={styles.topBar}>
               <View style={styles.topLeft}>
                 <LiveBadge size="small" />
+                {contentLabel && (
+                  <ContentLabelBadge label={contentLabel} size="small" />
+                )}
                 <View style={styles.watermark}>
                   <Text style={styles.watermarkText}>ROAST LIVE</Text>
                 </View>
@@ -572,6 +610,19 @@ export default function BroadcasterScreen() {
                 </View>
               </View>
             </View>
+
+            {/* Content Warning Banner */}
+            {contentLabel && (contentLabel === 'roast_mode' || contentLabel === 'adult_only') && (
+              <View style={styles.warningBanner}>
+                <IconSymbol
+                  ios_icon_name="exclamationmark.triangle.fill"
+                  android_material_icon_name="warning"
+                  size={14}
+                  color={colors.text}
+                />
+                <Text style={styles.warningText}>Viewer discretion advised</Text>
+              </View>
+            )}
 
             {/* Stream Health Dashboard */}
             <StreamHealthDashboard
@@ -724,6 +775,16 @@ export default function BroadcasterScreen() {
         />
       )}
 
+      {/* Content Label Selection Modal */}
+      <ContentLabelModal
+        visible={showContentLabelModal}
+        onSelect={handleContentLabelSelected}
+        onCancel={() => {
+          setShowContentLabelModal(false);
+          setShowSetup(false);
+        }}
+      />
+
       {/* Setup Modal */}
       <Modal
         visible={showSetup}
@@ -868,7 +929,9 @@ const styles = StyleSheet.create({
   topLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
+    flexWrap: 'wrap',
+    flex: 1,
   },
   watermark: {
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
@@ -900,6 +963,23 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 14,
     fontWeight: '600',
+  },
+  warningBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(164, 0, 40, 0.9)',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginTop: 8,
+    marginHorizontal: 20,
+    borderRadius: 8,
+    gap: 8,
+  },
+  warningText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.text,
   },
   filterToggle: {
     position: 'absolute',
