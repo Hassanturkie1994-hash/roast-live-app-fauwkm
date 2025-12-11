@@ -1,8 +1,7 @@
 
 module.exports = ({ config }) => {
-  config._internalSkipAppJson = true;
-
-  return {
+  // Prevent EAS from modifying this dynamic config
+  const expoConfig = {
     name: "Roast Live",
     slug: "roast-live",
     version: "1.0.0",
@@ -76,7 +75,9 @@ module.exports = ({ config }) => {
     },
 
     extra: {
-      eas: { projectId: "b1994843-ea99-4a51-8db1-d1049a44b5b7" },
+      eas: { 
+        projectId: "b1994843-ea99-4a51-8db1-d1049a44b5b7" 
+      },
       EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
       EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
       CLOUDFLARE_R2_PUBLIC_BASE_URL:
@@ -84,11 +85,21 @@ module.exports = ({ config }) => {
       CLOUDFLARE_ACCOUNT_ID: process.env.CLOUDFLARE_ACCOUNT_ID,
       SUPABASE_FUNCTIONS_URL:
         process.env.SUPABASE_FUNCTIONS_URL ||
-        process.env.EXPO_PUBLIC_SUPABASE_URL + "/functions/v1"
+        (process.env.EXPO_PUBLIC_SUPABASE_URL ? process.env.EXPO_PUBLIC_SUPABASE_URL + "/functions/v1" : "")
     },
 
     autolinking: {
       exclude: ["react-native-nodemediaclient"]
-    }
+    },
+
+    owner: "hasselite"
   };
+
+  // Mark this config to prevent EAS from trying to write to it
+  expoConfig._internal = {
+    isDebug: false,
+    skipAppJson: true
+  };
+
+  return expoConfig;
 };
