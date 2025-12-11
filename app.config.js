@@ -76,7 +76,7 @@ module.exports = ({ config }) => {
 
     extra: {
       eas: { 
-        projectId: "b1994843-ea99-4a51-8db1-d1049a44b5b7" 
+        projectId: "fb484f3b-ad66-438e-b8a8-0620a968d51b" 
       },
       EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
       EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
